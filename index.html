@@ -1581,7 +1581,13 @@
 
       // Presence: track online users
       trackPresence(userId, displayName, onPresenceChange) {
-        if (this.isDemo || !this.sb) return () => {};
+        if (this.isDemo || !this.sb) {
+          // Demo: Fake einige User als online
+          const fakeOnline = new Set([1, 3, 5]);
+          fakeOnline.add(Number(userId));
+          setTimeout(() => onPresenceChange(fakeOnline), 500);
+          return () => {};
+        }
         const presenceChannel = this.sb.channel('online-users', {
           config: { presence: { key: userId } }
         });
@@ -1700,6 +1706,71 @@
         } catch (err) {
           console.error('createGroupConversation error:', err);
           return null;
+        }
+      }
+
+      // === AUTH METHODS ===
+
+      // Magic Link senden
+      async sendMagicLink(email) {
+        if (this.isDemo) return { error: null };
+        try {
+          const { error } = await this.sb.auth.signInWithOtp({
+            email,
+            options: {
+              emailRedirectTo: window.location.origin + window.location.pathname
+            }
+          });
+          if (error) throw error;
+          return { error: null };
+        } catch (err) {
+          console.error('sendMagicLink error:', err);
+          return { error: err.message || 'Magic Link konnte nicht gesendet werden.' };
+        }
+      }
+
+      // Aktuelle Session prüfen
+      async getSession() {
+        if (this.isDemo || !this.sb) return null;
+        try {
+          const { data: { session } } = await this.sb.auth.getSession();
+          return session;
+        } catch (err) {
+          console.error('getSession error:', err);
+          return null;
+        }
+      }
+
+      // Auth-User in users-Tabelle auflösen
+      async resolveAuthUser(authUser) {
+        if (!authUser || this.isDemo) return null;
+        try {
+          // Suche User in der users-Tabelle per E-Mail
+          const { data, error } = await this.sb.from('users').select('*').eq('email', authUser.email).single();
+          if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows
+          return data || null;
+        } catch (err) {
+          console.error('resolveAuthUser error:', err);
+          return null;
+        }
+      }
+
+      // Auth-State-Listener
+      onAuthStateChange(callback) {
+        if (this.isDemo || !this.sb) return () => {};
+        const { data: { subscription } } = this.sb.auth.onAuthStateChange((event, session) => {
+          callback(event, session);
+        });
+        return () => subscription?.unsubscribe();
+      }
+
+      // Logout
+      async signOut() {
+        if (this.isDemo || !this.sb) return;
+        try {
+          await this.sb.auth.signOut();
+        } catch (err) {
+          console.error('signOut error:', err);
         }
       }
 
@@ -1851,10 +1922,37 @@
     function SetupScreen({ onSetupComplete }) {
       const [error, setError] = useState('');
       const [loading, setLoading] = useState(false);
+      const [email, setEmail] = useState('');
+      const [magicLinkSent, setMagicLinkSent] = useState(false);
+      const [checkingSession, setCheckingSession] = useState(true);
 
-      const handleConnect = async (useDemo) => {
-        if (useDemo) {
-          onSetupComplete({ isDemo: true });
+      // Beim Laden: Prüfe ob bereits eine Supabase-Session existiert
+      useEffect(() => {
+        const checkExistingSession = async () => {
+          try {
+            const { createClient } = window.supabase;
+            const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            const { data: { session } } = await client.auth.getSession();
+            if (session && session.user) {
+              // Session gefunden → Auto-Login
+              const ds = new DataService(client);
+              const appUser = await ds.resolveAuthUser(session.user);
+              if (appUser) {
+                onSetupComplete({ isDemo: false, client, authUser: appUser });
+                return;
+              }
+            }
+          } catch (err) {
+            console.warn('Session check failed:', err);
+          }
+          setCheckingSession(false);
+        };
+        checkExistingSession();
+      }, []);
+
+      const handleMagicLink = async () => {
+        if (!email.trim() || !email.includes('@')) {
+          setError('Bitte eine gültige E-Mail-Adresse eingeben.');
           return;
         }
         setLoading(true);
@@ -1862,40 +1960,100 @@
         try {
           const { createClient } = window.supabase;
           const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-          const { data, error: dbError } = await client.from('users').select('id').limit(1);
-          if (dbError) {
-            setError('Verbindung fehlgeschlagen: ' + dbError.message);
+          const ds = new DataService(client);
+          const { error: linkErr } = await ds.sendMagicLink(email.trim());
+          if (linkErr) {
+            setError(linkErr);
             setLoading(false);
             return;
           }
-          onSetupComplete({ isDemo: false, client });
+          setMagicLinkSent(true);
+          setLoading(false);
+
+          // Lausche auf Auth-Callback (Magic Link Rückkehr)
+          client.auth.onAuthStateChange(async (event, session) => {
+            if (event === 'SIGNED_IN' && session?.user) {
+              const appUser = await ds.resolveAuthUser(session.user);
+              if (appUser) {
+                onSetupComplete({ isDemo: false, client, authUser: appUser });
+              } else {
+                setError('Dein Account wurde gefunden, aber kein Benutzerprofil in der App. Bitte wende dich an den Administrator.');
+                setMagicLinkSent(false);
+              }
+            }
+          });
         } catch (err) {
           setError('Verbindung fehlgeschlagen: ' + err.message);
           setLoading(false);
         }
       };
 
+      const handleDemo = () => {
+        onSetupComplete({ isDemo: true });
+      };
+
+      if (checkingSession) {
+        return React.createElement('div', { className: 'setup-screen' },
+          React.createElement('img', { src: KRS_LOGO, alt: 'KRS Logo', style: { width: '80px', height: '80px', objectFit: 'contain', marginBottom: '12px' } }),
+          React.createElement('h1', null, 'KRS Connect'),
+          React.createElement('p', { style: { color: 'var(--text-secondary)' } }, 'Anmeldung wird geprüft...')
+        );
+      }
+
+      if (magicLinkSent) {
+        return React.createElement('div', { className: 'setup-screen' },
+          React.createElement('img', { src: KRS_LOGO, alt: 'KRS Logo', style: { width: '80px', height: '80px', objectFit: 'contain', marginBottom: '12px' } }),
+          React.createElement('h1', null, '📧 E-Mail prüfen!'),
+          React.createElement('p', { style: { color: 'var(--text-secondary)', marginBottom: '8px', maxWidth: '400px', textAlign: 'center', lineHeight: '1.5' } },
+            'Ein Anmeldelink wurde an ', React.createElement('strong', null, email), ' gesendet.'),
+          React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: '13px', maxWidth: '400px', textAlign: 'center', lineHeight: '1.5' } },
+            'Klicke auf den Link in der E-Mail, um dich anzumelden. Der Link ist 1 Stunde gültig.'),
+          React.createElement('button', {
+            onClick: () => { setMagicLinkSent(false); setEmail(''); },
+            style: { marginTop: '24px', padding: '8px 24px', fontSize: '13px', background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border)' }
+          }, '← Zurück')
+        );
+      }
+
       return React.createElement('div', { className: 'setup-screen' },
         React.createElement('img', { src: KRS_LOGO, alt: 'KRS Logo', style: { width: '80px', height: '80px', objectFit: 'contain', marginBottom: '12px' } }),
         React.createElement('h1', null, 'KRS Connect'),
         React.createElement('p', { style: { color: 'var(--text-secondary)', marginBottom: '24px' } }, 'Kommunikationsplattform der Kurpfalz-Realschule Schriesheim'),
+
+        // Magic Link Login
+        React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', maxWidth: '320px', marginBottom: '16px' } },
+          React.createElement('input', {
+            type: 'email',
+            placeholder: 'E-Mail-Adresse (Schul-Mail)',
+            value: email,
+            onChange: (e) => setEmail(e.target.value),
+            onKeyDown: (e) => e.key === 'Enter' && handleMagicLink(),
+            disabled: loading,
+            style: { padding: '12px 16px', fontSize: '15px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', outline: 'none', textAlign: 'center' }
+          }),
+          React.createElement('button', {
+            onClick: handleMagicLink,
+            disabled: loading || !email.trim(),
+            style: { padding: '12px 40px', fontSize: '16px' }
+          }, loading ? 'Link wird gesendet...' : '🔗 Anmeldelink senden')
+        ),
+
+        React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: '12px', marginBottom: '16px' } }, 'Kein Passwort nötig — du bekommst einen Link per E-Mail.'),
+
+        // Demo-Modus
         React.createElement('button', {
-          onClick: () => handleConnect(false),
-          disabled: loading,
-          style: { padding: '12px 40px', fontSize: '16px', marginBottom: '12px' }
-        }, loading ? 'Verbindung wird hergestellt...' : 'Anmelden'),
-        React.createElement('button', {
-          onClick: () => handleConnect(true),
+          onClick: handleDemo,
           disabled: loading,
           style: { padding: '8px 24px', fontSize: '13px', background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border)' }
         }, 'Demo-Modus'),
-        error && React.createElement('p', { style: { color: 'var(--danger)', marginTop: '10px', fontSize: '13px' } }, error)
+        error && React.createElement('p', { style: { color: 'var(--danger)', marginTop: '10px', fontSize: '13px', maxWidth: '320px', textAlign: 'center' } }, error)
       );
     }
 
     function UserSelection({ users, onUserSelected, loading }) {
       return React.createElement('div', { className: 'setup-screen' },
         React.createElement('h1', null, 'Wer bist du?'),
+        React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: '13px', marginBottom: '16px' } }, 'Demo-Modus: Wähle einen Benutzer'),
         loading
           ? React.createElement('p', { style: { color: 'var(--text-muted)' } }, 'Lade Benutzer...')
           : React.createElement('div', { className: 'user-grid' },
@@ -2961,7 +3119,10 @@
         });
       };
 
-      const handleSetupComplete = async ({ isDemo: demoMode, client }) => {
+      // Pending auth user (wird nach Setup+Render automatisch eingeloggt)
+      const [pendingAuthUser, setPendingAuthUser] = useState(null);
+
+      const handleSetupComplete = async ({ isDemo: demoMode, client, authUser }) => {
         setIsDemo(demoMode);
         if (client) setSupabaseClient(client);
         // User-Liste sofort laden
@@ -2975,7 +3136,20 @@
         }
         setLoadingUsers(false);
         setSetupComplete(true);
+
+        // Wenn Auth-User mitgegeben wurde (Magic Link Login), als Pending merken
+        if (authUser && !demoMode) {
+          setPendingAuthUser(authUser);
+        }
       };
+
+      // Pending Auth-User automatisch einloggen sobald dataService bereit ist
+      useEffect(() => {
+        if (pendingAuthUser && dataService && !dataService.isDemo && setupComplete) {
+          handleUserSelected(pendingAuthUser);
+          setPendingAuthUser(null);
+        }
+      }, [pendingAuthUser, dataService, setupComplete]);
 
       const handleUserSelected = async (selectedUser) => {
         setUser(selectedUser);
@@ -3137,6 +3311,12 @@
         };
       }, [user, dataService, selectedConversation]);
 
+      // Tab-Titel mit Unread-Count aktualisieren
+      useEffect(() => {
+        const totalUnread = unreadChatCount + Array.from(unreadPostChannels.values()).reduce((a, b) => a + b, 0);
+        document.title = totalUnread > 0 ? `(${totalUnread}) KRS Connect` : 'KRS Connect';
+      }, [unreadChatCount, unreadPostChannels]);
+
       // Auto-request notification permission on first load
       useEffect(() => {
         if (!user) return;
@@ -3161,9 +3341,9 @@
         return () => clearTimeout(timer);
       }, [user, dataService, notificationsEnabled, notificationPermission, sendBrowserNotification]);
 
-      // Presence tracking — show who is online
+      // Presence tracking — show who is online (auch im Demo-Modus)
       useEffect(() => {
-        if (!user || !dataService || dataService.isDemo) return;
+        if (!user || !dataService) return;
         const cleanup = dataService.trackPresence(user.id, user.display_name, (onlineIds) => {
           setOnlineUsers(onlineIds);
         });
@@ -3271,8 +3451,11 @@
         }
       };
 
-      const handleLogout = () => {
+      const handleLogout = async () => {
         dataService.cleanup();
+        if (!isDemo) {
+          await dataService.signOut();
+        }
         setSetupComplete(false);
         setUser(null);
         setView('teams');
