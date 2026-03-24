@@ -32,6 +32,14 @@
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
 
+    /* Keyboard-Focus-Styles (Accessibility) */
+    :focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+      border-radius: var(--radius);
+    }
+    button:focus:not(:focus-visible) { outline: none; }
+
     body {
       background: var(--bg-primary);
       color: var(--text-primary);
@@ -86,8 +94,8 @@
     }
 
     .nav-item {
-      width: 40px;
-      height: 40px;
+      width: 44px;
+      height: 44px;
       border-radius: 8px;
       border: none;
       background: transparent;
@@ -210,8 +218,8 @@
     }
 
     .icon-btn {
-      width: 36px;
-      height: 36px;
+      width: 44px;
+      height: 44px;
       border-radius: var(--radius);
       border: none;
       background: transparent;
@@ -548,9 +556,14 @@
       border: none;
       font-size: 24px;
       cursor: pointer;
-      padding: 4px;
+      padding: 6px;
       border-radius: var(--radius);
       transition: all var(--transition);
+      min-width: 44px;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     .emoji-btn:hover { background: var(--bg-hover); }
@@ -842,9 +855,9 @@
       align-items: center;
       gap: 8px;
     }
-    .toast-success { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
-    .toast-error { background: #fef2f2; color: #991b1b; border: 1px solid #fca5a5; }
-    .toast-info { background: #eff6ff; color: #1e40af; border: 1px solid #93c5fd; }
+    .toast-success { background: #dcfce7; color: #14532d; border: 1px solid #86efac; }
+    .toast-error { background: #fef2f2; color: #7f1d1d; border: 1px solid #fca5a5; }
+    .toast-info { background: #eff6ff; color: #1e3a5f; border: 1px solid #93c5fd; }
     @keyframes toastIn { from { opacity: 0; transform: translateX(100px); } to { opacity: 1; transform: translateX(0); } }
     @keyframes toastOut { from { opacity: 1; } to { opacity: 0; } }
 
@@ -886,12 +899,14 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js"
+    integrity="sha384-pBFxbXBmIKpPjPzLGBCE0k5i/2fl5HlzmVfnBqSe1d6i+OXFCaWbH0xK0tCFaYj"
+    crossorigin="anonymous"></script>
   <script>
-    // DOMPurify CDN-Fallback: Falls CDN offline, Legacy-Sanitizer verwenden
+    // DOMPurify CDN-Check: Falls CDN offline, App NICHT unsicher weiterlaufen lassen
     if (!window.DOMPurify) {
-      console.warn('DOMPurify CDN failed, using legacy fallback sanitizer');
-      window._useLegacySanitizer = true;
+      console.error('KRITISCH: DOMPurify CDN nicht geladen — HTML-Sanitizing nicht verfügbar');
+      window._domPurifyFailed = true;
     }
   </script>
 
@@ -1885,38 +1900,24 @@
       ALLOW_DATA_ATTR: false
     };
 
-    function legacySanitizeHtml(html) {
-      const allowed = SANITIZE_CONFIG.ALLOWED_TAGS;
-      const tmp = document.createElement('div');
-      tmp.innerHTML = html;
-      tmp.querySelectorAll('script,iframe,object,embed,form,input,style,link,svg,math').forEach(el => el.remove());
-      tmp.querySelectorAll('*').forEach(el => {
-        for (const attr of [...el.attributes]) {
-          if (attr.name.startsWith('on') || attr.name === 'srcdoc') el.removeAttribute(attr.name);
-          if (attr.name === 'href' && attr.value.trim().toLowerCase().startsWith('javascript:')) el.removeAttribute(attr.name);
-          if (attr.name === 'src' && attr.value.trim().toLowerCase().startsWith('data:')) el.removeAttribute(attr.name);
-        }
-        if (!allowed.includes(el.tagName.toLowerCase())) el.replaceWith(...el.childNodes);
-      });
-      return tmp.innerHTML;
-    }
-
     function sanitizeHtml(html) {
       if (!html) return '';
-      let clean;
+      // SICHER: DOMPurify verwenden wenn verfügbar
       if (window.DOMPurify && window.DOMPurify.sanitize) {
-        clean = DOMPurify.sanitize(html, SANITIZE_CONFIG);
-      } else {
-        clean = legacySanitizeHtml(html);
+        const clean = DOMPurify.sanitize(html, SANITIZE_CONFIG);
+        // Links: target=_blank hinzufuegen
+        const tmp = document.createElement('div');
+        tmp.innerHTML = clean; // Sicher: DOMPurify hat bereits sanitized
+        tmp.querySelectorAll('a').forEach(a => {
+          a.setAttribute('target', '_blank');
+          a.setAttribute('rel', 'noopener noreferrer');
+        });
+        return tmp.innerHTML;
       }
-      // Links: target=_blank hinzufuegen
+      // FALLBACK: Kein DOMPurify → NUR Klartext ausgeben (kein innerHTML!)
       const tmp = document.createElement('div');
-      tmp.innerHTML = clean;
-      tmp.querySelectorAll('a').forEach(a => {
-        a.setAttribute('target', '_blank');
-        a.setAttribute('rel', 'noopener noreferrer');
-      });
-      return tmp.innerHTML;
+      tmp.textContent = html; // Sicher: textContent escaped alles
+      return tmp.innerHTML;  // Gibt escaped HTML zurück
     }
 
     function SetupScreen({ onSetupComplete }) {
@@ -2106,10 +2107,20 @@
         } catch (err) { console.error('Delete error:', err); showToast('Beitrag konnte nicht gel\u00f6scht werden.', 'error'); }
       };
 
+      const ALLOWED_MIME_TYPES = new Set([
+        'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      ]);
+
       const handleImageSelect = (e) => {
         const file = e.target.files[0];
         if (file) {
           if (file.size > 20 * 1024 * 1024) { setPostError('Datei zu groß (max. 20 MB)'); return; }
+          if (file.type && !ALLOWED_MIME_TYPES.has(file.type)) { setPostError('Dateityp nicht erlaubt. Erlaubt: Bilder, PDF, Word, Excel'); return; }
           setSelectedImage(file);
           if (file.type.startsWith('image/')) {
             setImagePreview(URL.createObjectURL(file));
@@ -3654,7 +3665,8 @@
             React.createElement('button', {
               className: 'nav-item' + (view === 'teams' ? ' active' : ''),
               onClick: () => setView('teams'),
-              title: 'Teams & Kanäle'
+              title: 'Teams & Kanäle',
+              'aria-label': 'Teams & Kanäle'
             },
               React.createElement('span', { dangerouslySetInnerHTML: { __html: Icons.teams } }),
               unreadPostChannels.size > 0 && React.createElement('span', { className: 'nav-badge' }, Array.from(unreadPostChannels.values()).reduce((a, b) => a + b, 0))
@@ -3662,7 +3674,8 @@
             React.createElement('button', {
               className: 'nav-item' + (view === 'chat' ? ' active' : ''),
               onClick: () => setView('chat'),
-              title: 'Chats'
+              title: 'Chats',
+              'aria-label': 'Chats'
             },
               React.createElement('span', { dangerouslySetInnerHTML: { __html: Icons.chat } }),
               unreadChatCount > 0 && React.createElement('span', { className: 'nav-badge' }, unreadChatCount > 9 ? '9+' : unreadChatCount)
@@ -3671,6 +3684,7 @@
               className: 'nav-item' + (view === 'search' ? ' active' : ''),
               onClick: () => setView('search'),
               title: 'Suche',
+              'aria-label': 'Suche',
               dangerouslySetInnerHTML: { __html: Icons.search }
             })
           ),
@@ -3690,7 +3704,7 @@
               style: { opacity: notificationsEnabled && notificationPermission === 'granted' ? 1 : 0.5 }
             }, notificationsEnabled && notificationPermission === 'granted' ? '🔔' : '🔕'),
             React.createElement('button', { className: 'feedback-trigger', onClick: () => setShowFeedback(true), title: 'Feedback geben' }, '📣'),
-            React.createElement('button', { className: 'icon-btn', onClick: handleLogout, title: 'Abmelden', dangerouslySetInnerHTML: { __html: Icons.logout } })
+            React.createElement('button', { className: 'icon-btn', onClick: handleLogout, title: 'Abmelden', 'aria-label': 'Abmelden', dangerouslySetInnerHTML: { __html: Icons.logout } })
           ),
           // Online Users Panel (Popup)
           showOnlinePanel && React.createElement('div', { className: 'online-panel' },
