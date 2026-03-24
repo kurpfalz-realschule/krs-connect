@@ -899,14 +899,19 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js"
-    integrity="sha384-pBFxbXBmIKpPjPzLGBCE0k5i/2fl5HlzmVfnBqSe1d6i+OXFCaWbH0xK0tCFaYj"
-    crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js"></script>
   <script>
-    // DOMPurify CDN-Check: Falls CDN offline, App NICHT unsicher weiterlaufen lassen
+    // DOMPurify CDN-Check mit Fallback
     if (!window.DOMPurify) {
-      console.error('KRITISCH: DOMPurify CDN nicht geladen — HTML-Sanitizing nicht verfügbar');
-      window._domPurifyFailed = true;
+      console.warn('DOMPurify CDN 1 fehlgeschlagen, lade Fallback...');
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/dompurify@3.0.9/dist/purify.min.js';
+      s.onload = function() { console.log('DOMPurify Fallback geladen'); };
+      s.onerror = function() {
+        console.error('KRITISCH: DOMPurify konnte von keinem CDN geladen werden');
+        window._domPurifyFailed = true;
+      };
+      document.head.appendChild(s);
     }
   </script>
 
