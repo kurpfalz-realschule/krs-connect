@@ -1231,6 +1231,59 @@
         }
       }
 
+      // Get unread counts for channels by comparing latest post time with lastRead from localStorage
+      async getChannelUnreadCounts(channelIds, userId) {
+        if (this.isDemo) return new Map(); // Demo uses mock unread values
+        try {
+          const counts = new Map();
+          for (const chId of channelIds) {
+            const lastRead = localStorage.getItem(`krs-lastread-ch-${chId}`) || '1970-01-01';
+            const { count, error } = await this.sb.from('posts')
+              .select('*', { count: 'exact', head: true })
+              .eq('channel_id', chId)
+              .is('parent_id', null)
+              .neq('author_id', userId)
+              .gt('created_at', lastRead);
+            if (!error && count > 0) counts.set(chId, count);
+          }
+          return counts;
+        } catch (err) {
+          console.error('getChannelUnreadCounts error:', err);
+          return new Map();
+        }
+      }
+
+      // Get unread counts for conversations
+      async getConversationUnreadCounts(conversations, userId) {
+        if (this.isDemo) return new Map(); // Demo uses mock unread values
+        try {
+          const counts = new Map();
+          for (const conv of conversations) {
+            const lastRead = localStorage.getItem(`krs-lastread-conv-${conv.id}`) || '1970-01-01';
+            const { count, error } = await this.sb.from('messages')
+              .select('*', { count: 'exact', head: true })
+              .eq('conversation_id', conv.id)
+              .neq('sender_id', userId)
+              .gt('created_at', lastRead);
+            if (!error && count > 0) counts.set(conv.id, count);
+          }
+          return counts;
+        } catch (err) {
+          console.error('getConversationUnreadCounts error:', err);
+          return new Map();
+        }
+      }
+
+      // Mark channel as read
+      static markChannelRead(channelId) {
+        localStorage.setItem(`krs-lastread-ch-${channelId}`, new Date().toISOString());
+      }
+
+      // Mark conversation as read
+      static markConversationRead(conversationId) {
+        localStorage.setItem(`krs-lastread-conv-${conversationId}`, new Date().toISOString());
+      }
+
       async getPosts(channelId, limit = 50, offset = 0) {
         if (this.isDemo) return MOCK_POSTS[channelId] || [];
         try {
@@ -3185,9 +3238,18 @@
             });
           }
           setChannelTeamMap(ctMap);
-          if (initialUnreads.size > 0) setUnreadPostChannels(initialUnreads);
+          // For Supabase mode: calculate unreads from localStorage lastRead timestamps
+          if (!dataService.isDemo) {
+            const allChannelIds = Array.from(ctMap.keys());
+            const supaUnreads = await dataService.getChannelUnreadCounts(allChannelIds, selectedUser.id);
+            if (supaUnreads.size > 0) setUnreadPostChannels(supaUnreads);
+          } else if (initialUnreads.size > 0) {
+            setUnreadPostChannels(initialUnreads);
+          }
           if (channelsData.length > 0) {
             setSelectedChannel(channelsData[0]);
+            // Mark the first channel as read right away
+            DataService.markChannelRead(channelsData[0].id);
           }
           // Check user's role in this team
           if (!dataService.isDemo) {
@@ -3201,9 +3263,23 @@
         // Load conversations + all users for chat
         const convData = await dataService.getConversations(selectedUser.id);
         setConversations(convData || []);
-        // Initialize unread chat count from conversation data
-        const totalChatUnread = (convData || []).reduce((sum, c) => sum + (c.unread || 0), 0);
-        if (totalChatUnread > 0) setUnreadChatCount(totalChatUnread);
+        // Initialize unread chat count
+        if (!dataService.isDemo && convData?.length > 0) {
+          const convUnreads = await dataService.getConversationUnreadCounts(convData, selectedUser.id);
+          let totalUnread = 0;
+          const enrichedConvs = (convData || []).map(c => {
+            const unread = convUnreads.get(c.id) || 0;
+            totalUnread += unread;
+            return unread > 0 ? { ...c, unread } : c;
+          });
+          if (totalUnread > 0) {
+            setConversations(enrichedConvs);
+            setUnreadChatCount(totalUnread);
+          }
+        } else {
+          const totalChatUnread = (convData || []).reduce((sum, c) => sum + (c.unread || 0), 0);
+          if (totalChatUnread > 0) setUnreadChatCount(totalChatUnread);
+        }
         const usersData = await dataService.getUsers();
         setAllUsers(usersData || MOCK_USERS);
       };
@@ -3423,6 +3499,8 @@
       // Clear unread when opening a conversation
       const handleConversationSelect = (conv) => {
         setSelectedConversation(conv);
+        // Mark as read in localStorage (for Supabase mode)
+        DataService.markConversationRead(conv.id);
         if (conv.unread > 0) {
           setUnreadChatCount(prev => Math.max(0, prev - conv.unread));
           setConversations(prev => prev.map(c =>
@@ -3435,6 +3513,8 @@
       const handleChannelSelect = (ch) => {
         setSelectedChannel(ch);
         setMobileSidebarOpen(false);
+        // Mark as read in localStorage (for Supabase mode)
+        DataService.markChannelRead(ch.id);
         setUnreadPostChannels(prev => {
           const next = new Map(prev);
           next.delete(ch.id);
