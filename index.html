@@ -3046,6 +3046,8 @@
       // Unread notifications
       const [unreadChatCount, setUnreadChatCount] = useState(0);
       const [unreadPostChannels, setUnreadPostChannels] = useState(new Map());
+      // Mapping: channelId → teamId (für Team-Badges)
+      const [channelTeamMap, setChannelTeamMap] = useState(new Map());
 
       // Browser Notifications
       const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
@@ -3172,6 +3174,18 @@
           setSelectedTeam(firstTeam);
           const channelsData = await dataService.getChannels(firstTeam.id);
           setChannels(channelsData);
+          // Initialize unread badges from ALL teams' channels + build channelTeamMap
+          const initialUnreads = new Map();
+          const ctMap = new Map();
+          for (const t of teamsData) {
+            const chans = t.id === firstTeam.id ? channelsData : await dataService.getChannels(t.id);
+            chans.forEach(ch => {
+              ctMap.set(ch.id, t.id);
+              if (ch.unread > 0) initialUnreads.set(ch.id, ch.unread);
+            });
+          }
+          setChannelTeamMap(ctMap);
+          if (initialUnreads.size > 0) setUnreadPostChannels(initialUnreads);
           if (channelsData.length > 0) {
             setSelectedChannel(channelsData[0]);
           }
@@ -3187,6 +3201,9 @@
         // Load conversations + all users for chat
         const convData = await dataService.getConversations(selectedUser.id);
         setConversations(convData || []);
+        // Initialize unread chat count from conversation data
+        const totalChatUnread = (convData || []).reduce((sum, c) => sum + (c.unread || 0), 0);
+        if (totalChatUnread > 0) setUnreadChatCount(totalChatUnread);
         const usersData = await dataService.getUsers();
         setAllUsers(usersData || MOCK_USERS);
       };
@@ -3340,17 +3357,59 @@
         }
       }, [user]);
 
-      // Demo-Modus: Test-Notification nach 15 Sekunden
+      // Demo-Modus: Simulierte Nachrichten für Unread-Badges
       useEffect(() => {
-        if (!user || !dataService?.isDemo || !notificationsEnabled || notificationPermission !== 'granted') return;
-        const timer = setTimeout(() => {
-          sendBrowserNotification(
-            '💬 Daniel S.',
-            'Kannst du morgen die Vertretung für die 3. Stunde übernehmen?'
-          );
-        }, 15000);
-        return () => clearTimeout(timer);
-      }, [user, dataService, notificationsEnabled, notificationPermission, sendBrowserNotification]);
+        if (!user || !dataService?.isDemo) return;
+        const demoMessages = [
+          { type: 'chat', convId: 1, from: 'Daniel S.', text: 'Hast du kurz Zeit?' },
+          { type: 'chat', convId: 3, from: 'Sandra M.', text: 'Arbeitsblatt ist fertig!' },
+          { type: 'post', channelId: 2, from: 'Petra C.', text: 'Neue Info zum Elternabend' },
+          { type: 'post', channelId: 7, from: 'Lisa W.', text: 'SMV-Treffen verschoben' },
+          { type: 'chat', convId: 2, from: 'Martina F.', text: 'Danke dir!' },
+          { type: 'post', channelId: 21, from: 'Thomas K.', text: 'iPad-Update steht an' },
+        ];
+        let idx = 0;
+
+        // Erste simulierte Nachricht nach 20 Sekunden, dann alle 25-40 Sek
+        const scheduleNext = () => {
+          const delay = 20000 + Math.random() * 20000;
+          return setTimeout(() => {
+            const msg = demoMessages[idx % demoMessages.length];
+            idx++;
+            if (msg.type === 'chat') {
+              // Nur zählen wenn diese Conversation NICHT gerade offen ist
+              if (!selectedConversation || selectedConversation.id !== msg.convId) {
+                setUnreadChatCount(prev => prev + 1);
+                setConversations(prev => prev.map(c =>
+                  c.id === msg.convId
+                    ? { ...c, unread: (c.unread || 0) + 1, lastMessage: msg.text, time: 'Jetzt' }
+                    : c
+                ));
+              }
+            } else {
+              // Nur zählen wenn dieser Channel NICHT gerade angesehen wird
+              if (!selectedChannel || selectedChannel.id !== msg.channelId) {
+                setUnreadPostChannels(prev => {
+                  const next = new Map(prev);
+                  next.set(msg.channelId, (next.get(msg.channelId) || 0) + 1);
+                  return next;
+                });
+              }
+            }
+            // Browser-Notification senden wenn erlaubt
+            if (notificationsEnabled && notificationPermission === 'granted') {
+              sendBrowserNotification(
+                msg.type === 'chat' ? `💬 ${msg.from}` : `📢 ${msg.from}`,
+                msg.text
+              );
+            }
+            timerId = scheduleNext();
+          }, delay);
+        };
+
+        let timerId = scheduleNext();
+        return () => clearTimeout(timerId);
+      }, [user, dataService, selectedConversation, selectedChannel, notificationsEnabled, notificationPermission]);
 
       // Presence tracking — show who is online (auch im Demo-Modus)
       useEffect(() => {
@@ -3387,6 +3446,19 @@
         setSelectedTeam(team);
         const channelsData = await dataService.getChannels(team.id);
         setChannels(channelsData);
+        // Merge new channel unreads into Map + update channelTeamMap
+        setChannelTeamMap(prev => {
+          const next = new Map(prev);
+          channelsData.forEach(ch => next.set(ch.id, team.id));
+          return next;
+        });
+        setUnreadPostChannels(prev => {
+          const next = new Map(prev);
+          channelsData.forEach(ch => {
+            if (ch.unread > 0 && !next.has(ch.id)) next.set(ch.id, ch.unread);
+          });
+          return next;
+        });
         if (channelsData.length > 0) {
           setSelectedChannel(channelsData[0]);
         }
@@ -3539,7 +3611,13 @@
                       style: { display: 'flex', gap: '8px', alignItems: 'center', width: '100%' }
                     },
                       React.createElement('div', { style: { width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: team.icon_color, borderRadius: 'var(--radius)', color: 'white', fontSize: '12px', fontWeight: '600' } }, team.icon_text),
-                      React.createElement('span', { className: 'list-item-text' }, team.name)
+                      React.createElement('span', { className: 'list-item-text' }, team.name),
+                      (() => {
+                        const teamUnread = Array.from(unreadPostChannels.entries())
+                          .filter(([chId]) => channelTeamMap.get(chId) === team.id)
+                          .reduce((sum, [, count]) => sum + count, 0);
+                        return teamUnread > 0 ? React.createElement('span', { className: 'unread-badge', style: { marginLeft: 'auto' } }, teamUnread) : null;
+                      })()
                     ),
                     React.createElement('button', { className: 'team-hide-btn', onClick: (e) => { e.stopPropagation(); toggleTeamVisibility(team.id); }, title: 'Team ausblenden' }, '👁')
                   )
