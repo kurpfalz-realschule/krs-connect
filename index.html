@@ -891,6 +891,59 @@
       .toast { max-width: 100%; }
       .feedback-modal { padding: 16px; }
     }
+
+    /* Lightbox Overlay */
+    .lightbox-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,.88); z-index: 10000;
+      display: flex; align-items: center; justify-content: center;
+      animation: lbFadeIn .2s; cursor: zoom-out;
+    }
+    .lightbox-overlay img.lightbox-img {
+      max-width: 90vw; max-height: 82vh;
+      border-radius: 8px;
+      box-shadow: 0 8px 40px rgba(0,0,0,.5);
+      object-fit: contain; cursor: default;
+    }
+    .lightbox-caption {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      color: #fff; font-size: 14px; font-weight: 500;
+      background: rgba(0,0,0,.6); padding: 8px 20px;
+      border-radius: 20px; white-space: nowrap;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .lightbox-caption a {
+      color: #fff; text-decoration: none; display: flex; align-items: center; gap: 4px;
+      opacity: 0.8; transition: opacity .2s;
+    }
+    .lightbox-caption a:hover { opacity: 1; }
+    .lightbox-nav {
+      position: fixed; top: 50%; transform: translateY(-50%);
+      width: 48px; height: 48px;
+      background: rgba(255,255,255,.15); border: none; border-radius: 50%;
+      color: #fff; font-size: 24px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .2s;
+    }
+    .lightbox-nav:hover { background: rgba(255,255,255,.3); }
+    .lightbox-prev { left: 20px; }
+    .lightbox-next { right: 20px; }
+    .lightbox-close {
+      position: fixed; top: 20px; right: 20px;
+      width: 48px; height: 48px;
+      background: rgba(255,255,255,.15); border: none; border-radius: 50%;
+      color: #fff; font-size: 22px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .lightbox-close:hover { background: rgba(255,255,255,.3); }
+    @keyframes lbFadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @media (max-width: 768px) {
+      .lightbox-nav { width: 40px; height: 40px; font-size: 20px; }
+      .lightbox-prev { left: 8px; }
+      .lightbox-next { right: 8px; }
+      .lightbox-close { top: 12px; right: 12px; width: 40px; height: 40px; }
+      .lightbox-caption { font-size: 12px; padding: 6px 14px; bottom: 16px; }
+    }
   </style>
 </head>
 <body>
@@ -913,6 +966,108 @@
       };
       document.head.appendChild(s);
     }
+  </script>
+
+  <script>
+    // ============================================================
+    // LIGHTBOX — Fullscreen-Bildanzeige mit Navigation & Download
+    // ============================================================
+    (function() {
+      var _lbImgs = [], _lbIdx = 0, _lbKeyHandler = null, _lbTouchStartX = 0;
+
+      window.openLightbox = function(images, startIdx) {
+        _lbImgs = images;
+        _lbIdx = startIdx || 0;
+        renderLB();
+      };
+
+      function renderLB() {
+        var ov = document.querySelector('.lightbox-overlay');
+        if (ov) ov.remove();
+
+        ov = document.createElement('div');
+        ov.className = 'lightbox-overlay';
+        ov.onclick = function(e) { if (e.target === ov) closeLB(); };
+
+        var img = _lbImgs[_lbIdx];
+        var imgUrl = typeof img === 'string' ? img : img.url;
+        var imgName = typeof img === 'string' ? imgUrl.split('/').pop().split('?')[0] : (img.name || 'Bild');
+
+        // Close button
+        var closeBtn = document.createElement('button');
+        closeBtn.className = 'lightbox-close';
+        closeBtn.setAttribute('aria-label', 'Schließen');
+        closeBtn.textContent = '✕';
+        closeBtn.onclick = closeLB;
+        ov.appendChild(closeBtn);
+
+        // Nav prev
+        if (_lbImgs.length > 1) {
+          var prevBtn = document.createElement('button');
+          prevBtn.className = 'lightbox-nav lightbox-prev';
+          prevBtn.setAttribute('aria-label', 'Vorheriges Bild');
+          prevBtn.textContent = '‹';
+          prevBtn.onclick = function(e) { e.stopPropagation(); lbPrev(); };
+          ov.appendChild(prevBtn);
+        }
+
+        // Image
+        var imgEl = document.createElement('img');
+        imgEl.className = 'lightbox-img';
+        imgEl.src = imgUrl;
+        imgEl.alt = imgName;
+        imgEl.onclick = function(e) { e.stopPropagation(); };
+        ov.appendChild(imgEl);
+
+        // Nav next
+        if (_lbImgs.length > 1) {
+          var nextBtn = document.createElement('button');
+          nextBtn.className = 'lightbox-nav lightbox-next';
+          nextBtn.setAttribute('aria-label', 'Nächstes Bild');
+          nextBtn.textContent = '›';
+          nextBtn.onclick = function(e) { e.stopPropagation(); lbNext(); };
+          ov.appendChild(nextBtn);
+        }
+
+        // Caption with download + share
+        var caption = document.createElement('div');
+        caption.className = 'lightbox-caption';
+        var countText = _lbImgs.length > 1 ? ((_lbIdx + 1) + '/' + _lbImgs.length + ' — ') : '';
+        caption.innerHTML = countText + '<a href="' + imgUrl + '" download="' + imgName.replace(/"/g, '&quot;') + '" title="Herunterladen" onclick="event.stopPropagation()">⬇ Download</a>';
+        ov.appendChild(caption);
+
+        // Touch-Swipe
+        ov.addEventListener('touchstart', function(e) { _lbTouchStartX = e.touches[0].clientX; });
+        ov.addEventListener('touchend', function(e) {
+          var diff = _lbTouchStartX - e.changedTouches[0].clientX;
+          if (Math.abs(diff) > 50) { diff > 0 ? lbNext() : lbPrev(); }
+        });
+
+        document.body.appendChild(ov);
+
+        // Keyboard
+        if (_lbKeyHandler) document.removeEventListener('keydown', _lbKeyHandler);
+        _lbKeyHandler = function(e) {
+          if (!document.querySelector('.lightbox-overlay')) return;
+          if (e.key === 'Escape') closeLB();
+          if (e.key === 'ArrowRight') lbNext();
+          if (e.key === 'ArrowLeft') lbPrev();
+        };
+        document.addEventListener('keydown', _lbKeyHandler);
+      }
+
+      function lbNext() { _lbIdx = (_lbIdx + 1) % _lbImgs.length; renderLB(); }
+      function lbPrev() { _lbIdx = (_lbIdx - 1 + _lbImgs.length) % _lbImgs.length; renderLB(); }
+
+      function closeLB() {
+        var ov = document.querySelector('.lightbox-overlay');
+        if (ov) ov.remove();
+        if (_lbKeyHandler) {
+          document.removeEventListener('keydown', _lbKeyHandler);
+          _lbKeyHandler = null;
+        }
+      }
+    })();
   </script>
 
   <script type="module">
@@ -2324,7 +2479,7 @@
               const docs = files.filter(f => !images.includes(f));
               return React.createElement('div', { style: { margin: '8px 0' } },
                 images.length > 0 && React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: docs.length > 0 ? '6px' : 0 } },
-                  images.map((img, i) => React.createElement('img', { key: i, src: img.url, style: { maxWidth: images.length === 1 ? '100%' : '48%', maxHeight: images.length === 1 ? '400px' : '200px', borderRadius: 'var(--radius)', cursor: 'pointer', objectFit: 'cover' }, onClick: () => window.open(img.url, '_blank') }))
+                  images.map((img, i) => React.createElement('img', { key: i, src: img.url, style: { maxWidth: images.length === 1 ? '100%' : '48%', maxHeight: images.length === 1 ? '400px' : '200px', borderRadius: 'var(--radius)', cursor: 'pointer', objectFit: 'cover' }, onClick: () => window.openLightbox(images, i) }))
                 ),
                 docs.length > 0 && React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px' } },
                   docs.map((doc, i) => React.createElement('a', { key: i, href: doc.url, target: '_blank', style: { display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 12px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', color: 'var(--accent)', textDecoration: 'none', fontSize: '13px' } },
@@ -2913,7 +3068,7 @@
                   const docs = files.filter(f => !imgs.includes(f));
                   return React.createElement(React.Fragment, null,
                     imgs.length > 0 && React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '4px' } },
-                      imgs.map((img, i) => React.createElement('img', { key: i, src: img.url, style: { maxWidth: imgs.length === 1 ? '240px' : '120px', maxHeight: imgs.length === 1 ? '200px' : '100px', borderRadius: '8px', cursor: 'pointer', display: 'block', objectFit: 'cover' }, onClick: () => window.open(img.url, '_blank') }))
+                      imgs.map((img, i) => React.createElement('img', { key: i, src: img.url, style: { maxWidth: imgs.length === 1 ? '240px' : '120px', maxHeight: imgs.length === 1 ? '200px' : '100px', borderRadius: '8px', cursor: 'pointer', display: 'block', objectFit: 'cover' }, onClick: () => window.openLightbox(imgs, i) }))
                     ),
                     docs.length > 0 && docs.map((doc, i) => React.createElement('a', { key: i, href: doc.url, target: '_blank', style: { display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 10px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', color: 'var(--accent)', textDecoration: 'none', fontSize: '12px', marginBottom: '4px', marginRight: '4px' } },
                       React.createElement('span', null, '📎'),
