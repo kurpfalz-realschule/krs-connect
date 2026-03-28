@@ -2131,8 +2131,7 @@
       const [newPostContent, setNewPostContent] = useState('');
       const [saving, setSaving] = useState(false);
       const [postError, setPostError] = useState('');
-      const [selectedImage, setSelectedImage] = useState(null);
-      const [imagePreview, setImagePreview] = useState(null);
+      const [selectedFiles, setSelectedFiles] = useState([]);  // Array of { file, preview }
       const [showPostForm, setShowPostForm] = useState(false);
       const fileInputRef = useRef(null);
       const [editingPost, setEditingPost] = useState(null);
@@ -2170,47 +2169,69 @@
         'application/pdf',
         'application/msword',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-powerpoint',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
         'application/vnd.ms-excel',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'text/plain'
       ]);
 
-      const handleImageSelect = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-          if (file.size > 20 * 1024 * 1024) { setPostError('Datei zu groß (max. 20 MB)'); return; }
-          if (file.type && !ALLOWED_MIME_TYPES.has(file.type)) { setPostError('Dateityp nicht erlaubt. Erlaubt: Bilder, PDF, Word, Excel'); return; }
-          setSelectedImage(file);
-          if (file.type.startsWith('image/')) {
-            setImagePreview(URL.createObjectURL(file));
-          } else {
-            setImagePreview(null);
-          }
+      const handleFileSelect = (e) => {
+        const newFiles = Array.from(e.target.files);
+        const validFiles = [];
+        for (const file of newFiles) {
+          if (file.size > 20 * 1024 * 1024) { setPostError('Datei "' + file.name + '" zu groß (max. 20 MB)'); continue; }
+          if (file.type && !ALLOWED_MIME_TYPES.has(file.type)) { setPostError('Dateityp von "' + file.name + '" nicht erlaubt.'); continue; }
+          const preview = file.type.startsWith('image/') ? URL.createObjectURL(file) : null;
+          validFiles.push({ file, preview });
         }
+        if (validFiles.length > 0) {
+          setSelectedFiles(prev => {
+            if (prev.length + validFiles.length > 10) { setPostError('Maximal 10 Dateien pro Beitrag'); return prev; }
+            return [...prev, ...validFiles];
+          });
+        }
+        if (fileInputRef.current) fileInputRef.current.value = '';
       };
 
-      const removeImage = () => {
-        setSelectedImage(null);
-        setImagePreview(null);
+      const removeFile = (index) => {
+        setSelectedFiles(prev => {
+          const removed = prev[index];
+          if (removed?.preview) URL.revokeObjectURL(removed.preview);
+          return prev.filter((_, i) => i !== index);
+        });
+      };
+
+      const clearAllFiles = () => {
+        selectedFiles.forEach(f => { if (f.preview) URL.revokeObjectURL(f.preview); });
+        setSelectedFiles([]);
         if (fileInputRef.current) fileInputRef.current.value = '';
       };
 
       const handleCreatePost = async (e) => {
         e.preventDefault();
-        if (!newPostContent.trim() && !selectedImage) return;
+        if (!newPostContent.trim() && selectedFiles.length === 0) return;
         setSaving(true);
         setPostError('');
         try {
-          let imageUrl = null;
-          if (selectedImage) {
-            imageUrl = await dataService.uploadImage(selectedImage);
-            if (!imageUrl) { setPostError('Bild konnte nicht hochgeladen werden.'); setSaving(false); return; }
+          // Upload all selected files
+          let fileUrls = [];
+          if (selectedFiles.length > 0) {
+            for (const sf of selectedFiles) {
+              const url = await dataService.uploadFile(sf.file);
+              if (url) fileUrls.push({ url, name: sf.file.name, type: sf.file.type });
+            }
+            if (fileUrls.length === 0) { setPostError('Dateien konnten nicht hochgeladen werden.'); setSaving(false); return; }
           }
-          const newPost = await dataService.createPost(channelId, user.id, newPostContent || '📷 Bild', newPostTitle || undefined, imageUrl);
+          // Store as JSON array string in image_url field, or single URL for backward compat
+          const imageUrlValue = fileUrls.length === 1 ? fileUrls[0].url : fileUrls.length > 1 ? JSON.stringify(fileUrls) : null;
+          const contentText = newPostContent || (fileUrls.length > 0 ? ('📎 ' + fileUrls.length + ' Datei' + (fileUrls.length > 1 ? 'en' : '')) : '');
+          const newPost = await dataService.createPost(channelId, user.id, contentText, newPostTitle || undefined, imageUrlValue);
           if (newPost) {
             setPosts(prev => [newPost, ...prev]);
             setNewPostTitle('');
             setNewPostContent('');
-            removeImage();
+            clearAllFiles();
             setShowPostForm(false);
           } else {
             setPostError('Post konnte nicht erstellt werden.');
@@ -2232,22 +2253,28 @@
           showPostForm && React.createElement('form', { onSubmit: handleCreatePost, style: { background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '14px' } },
             React.createElement('input', { type: 'text', placeholder: 'Titel (optional)', value: newPostTitle, onChange: e => setNewPostTitle(e.target.value), style: { display: 'block', width: '100%', padding: '8px 0', marginBottom: '8px', border: 'none', borderBottom: '1px solid var(--border)', background: 'transparent', color: 'var(--text-primary)', fontSize: '15px', fontWeight: '600', outline: 'none' } }),
             React.createElement('textarea', { placeholder: 'Was möchtest du teilen?', value: newPostContent, onChange: e => setNewPostContent(e.target.value), autoFocus: true, style: { display: 'block', width: '100%', padding: '8px 0', border: 'none', background: 'transparent', color: 'var(--text-primary)', fontSize: '14px', minHeight: '60px', fontFamily: 'inherit', resize: 'none', outline: 'none' } }),
-            // File preview area
-            (imagePreview || selectedImage) && React.createElement('div', { style: { position: 'relative', display: 'inline-block', marginBottom: '10px' } },
-              imagePreview
-                ? React.createElement('img', { src: imagePreview, style: { maxWidth: '200px', maxHeight: '150px', borderRadius: 'var(--radius)', border: '1px solid var(--border)' } })
-                : React.createElement('div', { style: { padding: '8px 12px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' } },
-                    React.createElement('span', null, '📎'),
-                    React.createElement('span', null, selectedImage.name)
-                  ),
-              React.createElement('button', { type: 'button', onClick: removeImage, style: { position: 'absolute', top: '-8px', right: '-8px', width: '24px', height: '24px', borderRadius: '50%', background: 'var(--danger)', color: 'white', border: 'none', cursor: 'pointer', fontSize: '14px', lineHeight: '24px', textAlign: 'center', padding: 0 } }, '✕')
+            // File preview area (multi-file grid)
+            selectedFiles.length > 0 && React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' } },
+              selectedFiles.map((sf, idx) =>
+                React.createElement('div', { key: idx, style: { position: 'relative', display: 'inline-block' } },
+                  sf.preview
+                    ? React.createElement('img', { src: sf.preview, style: { width: '80px', height: '80px', objectFit: 'cover', borderRadius: 'var(--radius)', border: '1px solid var(--border)' } })
+                    : React.createElement('div', { style: { width: '80px', height: '80px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', fontSize: '10px', color: 'var(--text-muted)', padding: '4px', textAlign: 'center', overflow: 'hidden' } },
+                        React.createElement('span', { style: { fontSize: '20px', marginBottom: '2px' } }, '📎'),
+                        React.createElement('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70px' } }, sf.file.name)
+                      ),
+                  React.createElement('button', { type: 'button', onClick: () => removeFile(idx), style: { position: 'absolute', top: '-6px', right: '-6px', width: '20px', height: '20px', borderRadius: '50%', background: 'var(--danger)', color: 'white', border: 'none', cursor: 'pointer', fontSize: '12px', lineHeight: '20px', textAlign: 'center', padding: 0 } }, '✕')
+                )
+              ),
+              selectedFiles.length > 1 && React.createElement('button', { type: 'button', onClick: clearAllFiles, style: { alignSelf: 'flex-end', fontSize: '11px', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' } }, 'Alle entfernen')
             ),
             // Action bar
             React.createElement('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--border)' } },
-              React.createElement('input', { ref: fileInputRef, type: 'file', accept: 'image/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt', onChange: handleImageSelect, style: { display: 'none' } }),
-              React.createElement('button', { type: 'button', onClick: () => fileInputRef.current?.click(), title: 'Datei anhängen', style: { padding: '6px 8px', background: 'transparent', border: 'none', borderRadius: 'var(--radius)', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }, dangerouslySetInnerHTML: { __html: Icons.paperclip } }),
+              React.createElement('input', { ref: fileInputRef, type: 'file', multiple: true, accept: 'image/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt', onChange: handleFileSelect, style: { display: 'none' } }),
+              React.createElement('button', { type: 'button', onClick: () => fileInputRef.current?.click(), title: 'Dateien anhängen (max. 10)', style: { padding: '6px 8px', background: 'transparent', border: 'none', borderRadius: 'var(--radius)', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }, dangerouslySetInnerHTML: { __html: Icons.paperclip } }),
+              selectedFiles.length > 0 && React.createElement('span', { style: { fontSize: '11px', color: 'var(--text-muted)' } }, selectedFiles.length + '/10'),
               React.createElement('div', { style: { flex: 1 } }),
-              React.createElement('button', { type: 'button', onClick: () => { setShowPostForm(false); setNewPostTitle(''); setNewPostContent(''); removeImage(); }, style: { padding: '6px 14px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '13px' } }, 'Abbrechen'),
+              React.createElement('button', { type: 'button', onClick: () => { setShowPostForm(false); setNewPostTitle(''); setNewPostContent(''); clearAllFiles(); }, style: { padding: '6px 14px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '13px' } }, 'Abbrechen'),
               React.createElement('button', { type: 'submit', disabled: saving, style: { padding: '6px 16px', background: saving ? 'var(--text-muted)' : 'var(--accent)', color: 'white', border: 'none', borderRadius: 'var(--radius)', cursor: saving ? 'not-allowed' : 'pointer', fontSize: '13px', fontWeight: '500' } }, saving ? 'Wird gesendet...' : 'Posten')
             ),
             postError && React.createElement('p', { style: { color: 'var(--danger)', fontSize: '12px', margin: '6px 0 0' } }, postError)
@@ -2285,14 +2312,28 @@
                   post.title && React.createElement('div', { className: 'post-title' }, post.title),
                   React.createElement('div', { className: 'post-content', dangerouslySetInnerHTML: { __html: sanitizeHtml(post.content) } })
                 ),
-            post.image_url && React.createElement('div', { className: 'post-image', style: { margin: '8px 0' } },
-              /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i.test(post.image_url)
-                ? React.createElement('img', { src: post.image_url, style: { maxWidth: '100%', maxHeight: '400px', borderRadius: 'var(--radius)', cursor: 'pointer' }, onClick: () => window.open(post.image_url, '_blank') })
-                : React.createElement('a', { href: post.image_url, target: '_blank', style: { display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 12px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', color: 'var(--accent)', textDecoration: 'none', fontSize: '13px', marginBottom: '4px' } },
+            post.image_url && (() => {
+              // Parse multi-file JSON or single URL
+              let files = [];
+              try {
+                const parsed = JSON.parse(post.image_url);
+                if (Array.isArray(parsed)) files = parsed;
+              } catch { /* single URL */ }
+              if (files.length === 0) files = [{ url: post.image_url, name: post.image_url.split('/').pop().split('?')[0] || 'Datei', type: '' }];
+              const images = files.filter(f => /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i.test(f.url) || (f.type && f.type.startsWith('image/')));
+              const docs = files.filter(f => !images.includes(f));
+              return React.createElement('div', { style: { margin: '8px 0' } },
+                images.length > 0 && React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: docs.length > 0 ? '6px' : 0 } },
+                  images.map((img, i) => React.createElement('img', { key: i, src: img.url, style: { maxWidth: images.length === 1 ? '100%' : '48%', maxHeight: images.length === 1 ? '400px' : '200px', borderRadius: 'var(--radius)', cursor: 'pointer', objectFit: 'cover' }, onClick: () => window.open(img.url, '_blank') }))
+                ),
+                docs.length > 0 && React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px' } },
+                  docs.map((doc, i) => React.createElement('a', { key: i, href: doc.url, target: '_blank', style: { display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 12px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', color: 'var(--accent)', textDecoration: 'none', fontSize: '13px' } },
                     React.createElement('span', null, '📎'),
-                    React.createElement('span', null, post.image_url.split('/').pop().split('?')[0] || 'Datei herunterladen')
-                  )
-            ),
+                    React.createElement('span', null, doc.name || 'Datei herunterladen')
+                  ))
+                )
+              );
+            })(),
             post.reactions && post.reactions.length > 0 && React.createElement('div', { className: 'post-reactions' },
               post.reactions.map(r =>
                 React.createElement('div', { key: r.emoji, className: 'reaction' }, r.emoji + ' ' + r.count)
@@ -2734,8 +2775,7 @@
     function ChatPanel({ conversation, messages, setMessages, dataService, currentUser, onBack, onlineUsers, hasMore, onLoadMore, loadingMore }) {
       const [input, setInput] = useState('');
       const [sending, setSending] = useState(false);
-      const [chatImage, setChatImage] = useState(null);
-      const [chatImagePreview, setChatImagePreview] = useState(null);
+      const [chatFiles, setChatFiles] = useState([]);  // Array of { file, preview }
       const messagesEndRef = useRef(null);
       const chatFileRef = useRef(null);
 
@@ -2745,35 +2785,65 @@
         }
       }, [messages]);
 
-      const handleChatImageSelect = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-          if (file.size > 20 * 1024 * 1024) { alert('Datei zu groß (max. 20 MB)'); return; }
-          setChatImage(file);
-          if (file.type.startsWith('image/')) {
-            setChatImagePreview(URL.createObjectURL(file));
-          } else {
-            setChatImagePreview(null);
-          }
+      const CHAT_ALLOWED_TYPES = new Set([
+        'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-powerpoint',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'text/plain'
+      ]);
+
+      const handleChatFileSelect = (e) => {
+        const newFiles = Array.from(e.target.files);
+        const validFiles = [];
+        for (const file of newFiles) {
+          if (file.size > 20 * 1024 * 1024) { showToast('Datei "' + file.name + '" zu groß (max. 20 MB)', 'error'); continue; }
+          if (file.type && !CHAT_ALLOWED_TYPES.has(file.type)) { showToast('Dateityp von "' + file.name + '" nicht erlaubt.', 'error'); continue; }
+          const preview = file.type.startsWith('image/') ? URL.createObjectURL(file) : null;
+          validFiles.push({ file, preview });
         }
+        if (validFiles.length > 0) {
+          setChatFiles(prev => {
+            if (prev.length + validFiles.length > 10) { showToast('Maximal 10 Dateien pro Nachricht', 'error'); return prev; }
+            return [...prev, ...validFiles];
+          });
+        }
+        if (chatFileRef.current) chatFileRef.current.value = '';
       };
 
-      const removeChatImage = () => {
-        setChatImage(null);
-        setChatImagePreview(null);
+      const removeChatFile = (index) => {
+        setChatFiles(prev => {
+          const removed = prev[index];
+          if (removed?.preview) URL.revokeObjectURL(removed.preview);
+          return prev.filter((_, i) => i !== index);
+        });
+      };
+
+      const clearChatFiles = () => {
+        chatFiles.forEach(f => { if (f.preview) URL.revokeObjectURL(f.preview); });
+        setChatFiles([]);
         if (chatFileRef.current) chatFileRef.current.value = '';
       };
 
       const handleSend = async (e) => {
         e.preventDefault();
-        if ((!input.trim() && !chatImage) || sending) return;
+        if ((!input.trim() && chatFiles.length === 0) || sending) return;
         setSending(true);
         try {
-          let imageUrl = null;
-          if (chatImage) {
-            imageUrl = await dataService.uploadImage(chatImage);
+          let fileUrls = [];
+          if (chatFiles.length > 0) {
+            for (const sf of chatFiles) {
+              const url = await dataService.uploadFile(sf.file);
+              if (url) fileUrls.push({ url, name: sf.file.name, type: sf.file.type });
+            }
           }
-          const sentMsg = await dataService.sendMessage(conversation.id, currentUser.id, input || (imageUrl ? '📷 Bild' : ''), imageUrl);
+          const imageUrlValue = fileUrls.length === 1 ? fileUrls[0].url : fileUrls.length > 1 ? JSON.stringify(fileUrls) : null;
+          const contentText = input || (fileUrls.length > 0 ? ('📎 ' + fileUrls.length + ' Datei' + (fileUrls.length > 1 ? 'en' : '')) : '');
+          const sentMsg = await dataService.sendMessage(conversation.id, currentUser.id, contentText, imageUrlValue);
           if (sentMsg && setMessages) {
             setMessages(prev => {
               if (prev.some(m => m.id === sentMsg.id)) return prev;
@@ -2781,7 +2851,7 @@
             });
           }
           setInput('');
-          removeChatImage();
+          clearChatFiles();
         } catch (err) {
           console.error('Send failed:', err);
           showToast('Nachricht konnte nicht gesendet werden. Bitte pr\u00fcfe deine Verbindung.', 'error');
@@ -2835,16 +2905,23 @@
             },
               !isOwn(msg) && React.createElement(Avatar, { user: msg.sender, size: 28 }),
               React.createElement('div', { className: 'chat-bubble ' + (isOwn(msg) ? 'own' : 'other') },
-                msg.image_url && (
-                  /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i.test(msg.image_url)
-                    ? React.createElement('img', { src: msg.image_url, style: { maxWidth: '240px', maxHeight: '200px', borderRadius: '8px', marginBottom: '4px', cursor: 'pointer', display: 'block' }, onClick: () => window.open(msg.image_url, '_blank') })
-                    : React.createElement('a', { href: msg.image_url, target: '_blank', style: { display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 12px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', color: 'var(--accent)', textDecoration: 'none', fontSize: '13px', marginBottom: '4px' } },
-                        React.createElement('span', null, '📎'),
-                        React.createElement('span', null, msg.image_url.split('/').pop().split('?')[0] || 'Datei herunterladen')
-                      )
-                ),
-                msg.content && msg.content !== '📷 Bild' && React.createElement('div', { className: 'chat-text' }, msg.content),
-                !msg.content && !msg.image_url && React.createElement('div', { className: 'chat-text' }, msg.content),
+                msg.image_url && (() => {
+                  let files = [];
+                  try { const p = JSON.parse(msg.image_url); if (Array.isArray(p)) files = p; } catch {}
+                  if (files.length === 0) files = [{ url: msg.image_url, name: msg.image_url.split('/').pop().split('?')[0] || 'Datei', type: '' }];
+                  const imgs = files.filter(f => /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i.test(f.url) || (f.type && f.type.startsWith('image/')));
+                  const docs = files.filter(f => !imgs.includes(f));
+                  return React.createElement(React.Fragment, null,
+                    imgs.length > 0 && React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '4px' } },
+                      imgs.map((img, i) => React.createElement('img', { key: i, src: img.url, style: { maxWidth: imgs.length === 1 ? '240px' : '120px', maxHeight: imgs.length === 1 ? '200px' : '100px', borderRadius: '8px', cursor: 'pointer', display: 'block', objectFit: 'cover' }, onClick: () => window.open(img.url, '_blank') }))
+                    ),
+                    docs.length > 0 && docs.map((doc, i) => React.createElement('a', { key: i, href: doc.url, target: '_blank', style: { display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 10px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', color: 'var(--accent)', textDecoration: 'none', fontSize: '12px', marginBottom: '4px', marginRight: '4px' } },
+                      React.createElement('span', null, '📎'),
+                      React.createElement('span', null, doc.name || 'Datei herunterladen')
+                    ))
+                  );
+                })(),
+                msg.content && !msg.content.startsWith('📎 ') && msg.content !== '📷 Bild' && React.createElement('div', { className: 'chat-text' }, msg.content),
                 React.createElement('div', { className: 'chat-time' }, formatDate(msg.created_at))
               )
             )
@@ -2854,15 +2931,23 @@
           ),
           React.createElement('div', { ref: messagesEndRef })
         ),
-        chatImagePreview && React.createElement('div', { style: { padding: '8px 16px', borderTop: '1px solid var(--border)', background: 'var(--bg-secondary)' } },
-          React.createElement('div', { style: { position: 'relative', display: 'inline-block' } },
-            React.createElement('img', { src: chatImagePreview, style: { maxWidth: '120px', maxHeight: '80px', borderRadius: '8px' } }),
-            React.createElement('button', { type: 'button', onClick: removeChatImage, style: { position: 'absolute', top: '-6px', right: '-6px', width: '20px', height: '20px', borderRadius: '50%', background: 'var(--danger)', color: 'white', border: 'none', cursor: 'pointer', fontSize: '12px', lineHeight: '20px', textAlign: 'center', padding: 0 } }, '✕')
-          )
+        chatFiles.length > 0 && React.createElement('div', { style: { padding: '8px 16px', borderTop: '1px solid var(--border)', background: 'var(--bg-secondary)', display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' } },
+          chatFiles.map((sf, idx) =>
+            React.createElement('div', { key: idx, style: { position: 'relative', display: 'inline-block' } },
+              sf.preview
+                ? React.createElement('img', { src: sf.preview, style: { width: '60px', height: '60px', objectFit: 'cover', borderRadius: '8px' } })
+                : React.createElement('div', { style: { width: '60px', height: '60px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-tertiary)', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '9px', color: 'var(--text-muted)', padding: '2px', textAlign: 'center' } },
+                    React.createElement('span', { style: { fontSize: '16px' } }, '📎'),
+                    React.createElement('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '54px' } }, sf.file.name)
+                  ),
+              React.createElement('button', { type: 'button', onClick: () => removeChatFile(idx), style: { position: 'absolute', top: '-4px', right: '-4px', width: '18px', height: '18px', borderRadius: '50%', background: 'var(--danger)', color: 'white', border: 'none', cursor: 'pointer', fontSize: '10px', lineHeight: '18px', textAlign: 'center', padding: 0 } }, '✕')
+            )
+          ),
+          chatFiles.length > 1 && React.createElement('button', { type: 'button', onClick: clearChatFiles, style: { fontSize: '10px', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' } }, 'Alle entfernen')
         ),
         React.createElement('form', { className: 'chat-input-bar', onSubmit: handleSend },
-          React.createElement('input', { ref: chatFileRef, type: 'file', accept: 'image/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt', onChange: handleChatImageSelect, style: { display: 'none' } }),
-          React.createElement('button', { type: 'button', onClick: () => chatFileRef.current?.click(), title: 'Datei senden', className: 'chat-image-btn', style: { background: 'none', border: 'none', cursor: 'pointer', padding: '6px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }, dangerouslySetInnerHTML: { __html: Icons.paperclip } }),
+          React.createElement('input', { ref: chatFileRef, type: 'file', multiple: true, accept: 'image/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt', onChange: handleChatFileSelect, style: { display: 'none' } }),
+          React.createElement('button', { type: 'button', onClick: () => chatFileRef.current?.click(), title: 'Dateien senden (max. 10)', className: 'chat-image-btn', style: { background: 'none', border: 'none', cursor: 'pointer', padding: '6px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }, dangerouslySetInnerHTML: { __html: Icons.paperclip } }),
           React.createElement('input', {
             type: 'text',
             placeholder: 'Nachricht schreiben...',
@@ -2873,7 +2958,7 @@
           React.createElement('button', {
             type: 'submit',
             className: 'chat-send-btn',
-            disabled: sending || (!input.trim() && !chatImage),
+            disabled: sending || (!input.trim() && chatFiles.length === 0),
             dangerouslySetInnerHTML: { __html: Icons.send }
           })
         )
@@ -3431,13 +3516,13 @@
             // Update conversation unread badge
             setConversations(prev => prev.map(c =>
               c.id === newMsg.conversation_id
-                ? { ...c, unread: (c.unread || 0) + 1, lastMessage: newMsg.content || '📷 Bild', time: 'Jetzt' }
+                ? { ...c, unread: (c.unread || 0) + 1, lastMessage: newMsg.content || '📎 Datei', time: 'Jetzt' }
                 : c
             ));
             // Browser-Notification
             sendBrowserNotification(
               '💬 Neue Nachricht',
-              newMsg.content || '📷 Bild',
+              newMsg.content || '📎 Datei',
               () => { /* focus kommt automatisch */ }
             );
           })
