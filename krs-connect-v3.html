@@ -2769,13 +2769,18 @@
       const [magicLinkSent, setMagicLinkSent] = useState(false);
       const [checkingSession, setCheckingSession] = useState(true);
 
-      // Beim Laden: Prüfe ob bereits eine Supabase-Session existiert
+      // Beim Laden: Prüfe ob bereits eine Supabase-Session existiert (mit Timeout)
       useEffect(() => {
         const checkExistingSession = async () => {
           try {
             const { createClient } = window.supabase;
             const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-            const { data: { session } } = await client.auth.getSession();
+            // Timeout: Wenn Supabase nicht in 6s antwortet → Login-Screen zeigen
+            const sessionPromise = client.auth.getSession();
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Supabase timeout')), 6000)
+            );
+            const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);
             if (session && session.user) {
               // Session gefunden → Auto-Login
               const ds = new DataService(client);
@@ -2786,7 +2791,7 @@
               }
             }
           } catch (err) {
-            console.warn('Session check failed:', err);
+            console.warn('Session check failed (timeout or error):', err);
           }
           setCheckingSession(false);
         };
