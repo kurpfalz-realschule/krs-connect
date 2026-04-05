@@ -22,6 +22,8 @@
       --success: #22C55E;
       --warning: #F59E0B;
       --danger: #EF4444;
+      --danger-bg: #FEE2E2;
+      --danger-text: #B91C1C;
       --border: #E2E4E8;
       --shadow: rgba(0,0,0,0.06);
       --radius: 8px;
@@ -75,7 +77,7 @@
       width: 40px;
       height: 40px;
       border-radius: 8px;
-      background: white;
+      background: var(--bg-secondary);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -334,14 +336,86 @@
     .reaction {
       background: var(--bg-hover);
       border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 4px 10px;
-      font-size: 13px;
+      border-radius: 22px;
+      padding: 6px 12px;
+      font-size: 14px;
       cursor: pointer;
       transition: all var(--transition);
+      min-height: 36px;
+      min-width: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
     }
 
     .reaction:hover { background: var(--accent-light); border-color: var(--accent); }
+    .reaction.own { background: var(--accent-light); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+    .reaction.add-reaction { background: transparent; border-style: dashed; color: var(--text-muted); font-size: 18px; padding: 6px 12px; min-width: 44px; min-height: 36px; }
+    .reaction.add-reaction:hover { background: var(--bg-hover); border-style: solid; color: var(--text-secondary); }
+
+    /* Mention Autocomplete */
+    .mention-autocomplete {
+      position: absolute;
+      bottom: 100%;
+      left: 0;
+      right: 0;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: 0 -4px 16px var(--shadow);
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 200;
+      margin-bottom: 4px;
+    }
+    .mention-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 14px;
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+      color: var(--text-primary);
+    }
+    .mention-item:hover, .mention-item.active { background: var(--accent-light); }
+    .mention-tag { color: var(--accent); font-weight: 600; }
+
+    /* Skeleton Loading */
+    @keyframes shimmer { 0% { background-position: -200px 0; } 100% { background-position: 200px 0; } }
+    .skeleton { background: linear-gradient(90deg, var(--bg-tertiary) 25%, var(--bg-hover) 50%, var(--bg-tertiary) 75%); background-size: 400px 100%; animation: shimmer 1.5s infinite; border-radius: var(--radius); }
+    .skeleton-line { height: 14px; margin-bottom: 8px; }
+    .skeleton-circle { border-radius: 50%; }
+    .skeleton-card { padding: 16px; margin-bottom: 8px; border: 1px solid var(--border); border-radius: var(--radius-lg); }
+    .mention-tag-all { color: var(--danger); font-weight: 700; background: rgba(239,68,68,0.1); padding: 1px 6px; border-radius: 4px; }
+
+    /* Accordion / Aufklappmenü */
+    .accordion { border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 8px; overflow: hidden; }
+    .accordion-header { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--bg-tertiary); cursor: pointer; border: none; width: 100%; font-size: 14px; font-weight: 600; color: var(--text-primary); transition: background var(--transition); }
+    .accordion-header:hover { background: var(--bg-hover); }
+    .accordion-chevron { transition: transform 0.2s ease; font-size: 12px; color: var(--text-muted); }
+    .accordion-chevron.open { transform: rotate(90deg); }
+    .accordion-body { max-height: 0; overflow: hidden; transition: max-height 0.25s ease; }
+    .accordion-body.open { max-height: 2000px; }
+    .accordion-body-inner { padding: 8px 14px; }
+
+    /* Wiki-Popup */
+    .wiki-popup-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,.5); z-index: 10000; display: flex; align-items: center; justify-content: center; animation: fadeIn .2s; }
+    .wiki-popup { background: var(--bg-secondary); border-radius: 12px; width: 90%; max-width: 800px; height: 80vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,.3); overflow: hidden; }
+    .wiki-popup-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; background: var(--bg-tertiary); border-bottom: 1px solid var(--border); }
+    .wiki-popup-header h3 { font-size: 14px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0; }
+    .wiki-popup-header a { font-size: 12px; color: var(--accent); text-decoration: none; white-space: nowrap; }
+    .wiki-popup-close { width: 32px; height: 32px; border: none; background: var(--bg-hover); border-radius: 50%; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-primary); flex-shrink: 0; }
+    .wiki-popup-close:hover { background: var(--bg-active); }
+    .wiki-popup iframe { flex: 1; border: none; width: 100%; }
+    .wiki-popup-error { flex: 1; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 12px; color: var(--text-muted); padding: 40px; text-align: center; }
+    .wiki-popup-error a { color: var(--accent); }
+    .wiki-link { color: var(--accent); cursor: pointer; text-decoration: none; font-size: 12px; display: inline-flex; align-items: center; gap: 4px; }
+    .wiki-link:hover { text-decoration: underline; }
 
     .post-footer {
       display: flex;
@@ -510,7 +584,8 @@
       border-radius: var(--radius-lg);
       box-shadow: 0 10px 40px var(--shadow);
       width: 340px;
-      max-height: 400px;
+      max-width: calc(100vw - 32px);
+      max-height: min(400px, 60vh);
       display: flex;
       flex-direction: column;
       z-index: 501;
@@ -666,7 +741,7 @@
       padding: 20px;
       border-radius: var(--radius);
       border: 1px solid var(--border);
-      background: white;
+      background: var(--bg-secondary);
       cursor: pointer;
       transition: all var(--transition);
     }
@@ -802,6 +877,18 @@
     .hidden-teams-toggle:hover { color: var(--text-primary); }
 
     /* Responsive */
+    /* Tablet Breakpoint (iPad 768-1024px) */
+    @media (min-width: 769px) and (max-width: 1024px) {
+      .sidebar-content { width: 220px; min-width: 220px; }
+      .content { flex: 1; min-width: 0; }
+      .thread-panel { width: 320px; min-width: 320px; }
+      .emoji-picker { width: 280px; min-width: 280px; }
+      .post-card { padding: 12px 14px; }
+      .channel-header h2 { font-size: 16px; }
+      .sidebar-bottom { gap: 2px; }
+      .sidebar-bottom .feedback-trigger { padding: 4px; font-size: 16px; min-width: 36px; min-height: 36px; }
+    }
+
     @media (max-width: 768px) {
       .app-layout { flex-direction: column; height: 100vh; }
       .sidebar { width: 100%; height: 56px; flex-direction: row; padding: 0 8px; gap: 4px; order: 2; border-top: 1px solid var(--border); border-right: none; }
@@ -891,10 +978,63 @@
       .toast { max-width: 100%; }
       .feedback-modal { padding: 16px; }
     }
+
+    /* Lightbox Overlay */
+    .lightbox-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,.88); z-index: 10000;
+      display: flex; align-items: center; justify-content: center;
+      animation: lbFadeIn .2s; cursor: zoom-out;
+    }
+    .lightbox-overlay img.lightbox-img {
+      max-width: 90vw; max-height: 82vh;
+      border-radius: 8px;
+      box-shadow: 0 8px 40px rgba(0,0,0,.5);
+      object-fit: contain; cursor: default;
+    }
+    .lightbox-caption {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      color: #fff; font-size: 14px; font-weight: 500;
+      background: rgba(0,0,0,.6); padding: 8px 20px;
+      border-radius: 20px; white-space: nowrap;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .lightbox-caption a {
+      color: #fff; text-decoration: none; display: flex; align-items: center; gap: 4px;
+      opacity: 0.8; transition: opacity .2s;
+    }
+    .lightbox-caption a:hover { opacity: 1; }
+    .lightbox-nav {
+      position: fixed; top: 50%; transform: translateY(-50%);
+      width: 48px; height: 48px;
+      background: rgba(255,255,255,.15); border: none; border-radius: 50%;
+      color: #fff; font-size: 24px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .2s;
+    }
+    .lightbox-nav:hover { background: rgba(255,255,255,.3); }
+    .lightbox-prev { left: 20px; }
+    .lightbox-next { right: 20px; }
+    .lightbox-close {
+      position: fixed; top: 20px; right: 20px;
+      width: 48px; height: 48px;
+      background: rgba(255,255,255,.15); border: none; border-radius: 50%;
+      color: #fff; font-size: 22px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .lightbox-close:hover { background: rgba(255,255,255,.3); }
+    @keyframes lbFadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @media (max-width: 768px) {
+      .lightbox-nav { width: 40px; height: 40px; font-size: 20px; }
+      .lightbox-prev { left: 8px; }
+      .lightbox-next { right: 8px; }
+      .lightbox-close { top: 12px; right: 12px; width: 40px; height: 40px; }
+      .lightbox-caption { font-size: 12px; padding: 6px 14px; bottom: 16px; }
+    }
   </style>
 </head>
 <body>
-  <div id="app"></div>
+  <div id="app"><div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#5A5F72"><div style="width:40px;height:40px;border:3px solid #E2E4E8;border-top-color:#5B7B94;border-radius:50%;animation:spin 0.8s linear infinite"></div><div>KRS Connect wird geladen...</div><style>@keyframes spin{to{transform:rotate(360deg)}}</style></div></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -913,6 +1053,108 @@
       };
       document.head.appendChild(s);
     }
+  </script>
+
+  <script>
+    // ============================================================
+    // LIGHTBOX — Fullscreen-Bildanzeige mit Navigation & Download
+    // ============================================================
+    (function() {
+      var _lbImgs = [], _lbIdx = 0, _lbKeyHandler = null, _lbTouchStartX = 0;
+
+      window.openLightbox = function(images, startIdx) {
+        _lbImgs = images;
+        _lbIdx = startIdx || 0;
+        renderLB();
+      };
+
+      function renderLB() {
+        var ov = document.querySelector('.lightbox-overlay');
+        if (ov) ov.remove();
+
+        ov = document.createElement('div');
+        ov.className = 'lightbox-overlay';
+        ov.onclick = function(e) { if (e.target === ov) closeLB(); };
+
+        var img = _lbImgs[_lbIdx];
+        var imgUrl = typeof img === 'string' ? img : img.url;
+        var imgName = typeof img === 'string' ? imgUrl.split('/').pop().split('?')[0] : (img.name || 'Bild');
+
+        // Close button
+        var closeBtn = document.createElement('button');
+        closeBtn.className = 'lightbox-close';
+        closeBtn.setAttribute('aria-label', 'Schließen');
+        closeBtn.textContent = '✕';
+        closeBtn.onclick = closeLB;
+        ov.appendChild(closeBtn);
+
+        // Nav prev
+        if (_lbImgs.length > 1) {
+          var prevBtn = document.createElement('button');
+          prevBtn.className = 'lightbox-nav lightbox-prev';
+          prevBtn.setAttribute('aria-label', 'Vorheriges Bild');
+          prevBtn.textContent = '‹';
+          prevBtn.onclick = function(e) { e.stopPropagation(); lbPrev(); };
+          ov.appendChild(prevBtn);
+        }
+
+        // Image
+        var imgEl = document.createElement('img');
+        imgEl.className = 'lightbox-img';
+        imgEl.src = imgUrl;
+        imgEl.alt = imgName;
+        imgEl.onclick = function(e) { e.stopPropagation(); };
+        ov.appendChild(imgEl);
+
+        // Nav next
+        if (_lbImgs.length > 1) {
+          var nextBtn = document.createElement('button');
+          nextBtn.className = 'lightbox-nav lightbox-next';
+          nextBtn.setAttribute('aria-label', 'Nächstes Bild');
+          nextBtn.textContent = '›';
+          nextBtn.onclick = function(e) { e.stopPropagation(); lbNext(); };
+          ov.appendChild(nextBtn);
+        }
+
+        // Caption with download + share
+        var caption = document.createElement('div');
+        caption.className = 'lightbox-caption';
+        var countText = _lbImgs.length > 1 ? ((_lbIdx + 1) + '/' + _lbImgs.length + ' — ') : '';
+        caption.innerHTML = countText + '<a href="' + imgUrl + '" download="' + imgName.replace(/"/g, '&quot;') + '" title="Herunterladen" onclick="event.stopPropagation()">⬇ Download</a>';
+        ov.appendChild(caption);
+
+        // Touch-Swipe
+        ov.addEventListener('touchstart', function(e) { _lbTouchStartX = e.touches[0].clientX; });
+        ov.addEventListener('touchend', function(e) {
+          var diff = _lbTouchStartX - e.changedTouches[0].clientX;
+          if (Math.abs(diff) > 50) { diff > 0 ? lbNext() : lbPrev(); }
+        });
+
+        document.body.appendChild(ov);
+
+        // Keyboard
+        if (_lbKeyHandler) document.removeEventListener('keydown', _lbKeyHandler);
+        _lbKeyHandler = function(e) {
+          if (!document.querySelector('.lightbox-overlay')) return;
+          if (e.key === 'Escape') closeLB();
+          if (e.key === 'ArrowRight') lbNext();
+          if (e.key === 'ArrowLeft') lbPrev();
+        };
+        document.addEventListener('keydown', _lbKeyHandler);
+      }
+
+      function lbNext() { _lbIdx = (_lbIdx + 1) % _lbImgs.length; renderLB(); }
+      function lbPrev() { _lbIdx = (_lbIdx - 1 + _lbImgs.length) % _lbImgs.length; renderLB(); }
+
+      function closeLB() {
+        var ov = document.querySelector('.lightbox-overlay');
+        if (ov) ov.remove();
+        if (_lbKeyHandler) {
+          document.removeEventListener('keydown', _lbKeyHandler);
+          _lbKeyHandler = null;
+        }
+      }
+    })();
   </script>
 
   <script type="module">
@@ -1241,14 +1483,18 @@
         if (this.isDemo) return new Map(); // Demo uses mock unread values
         try {
           const counts = new Map();
-          for (const chId of channelIds) {
+          // Parallel statt sequenziell (kein N+1 mehr)
+          const results = await Promise.all(channelIds.map(chId => {
             const lastRead = localStorage.getItem(`krs-lastread-ch-${chId}`) || '1970-01-01';
-            const { count, error } = await this.sb.from('posts')
+            return this.sb.from('posts')
               .select('*', { count: 'exact', head: true })
               .eq('channel_id', chId)
               .is('parent_id', null)
               .neq('author_id', userId)
-              .gt('created_at', lastRead);
+              .gt('created_at', lastRead)
+              .then(res => ({ chId, count: res.count, error: res.error }));
+          }));
+          for (const { chId, count, error } of results) {
             if (!error && count > 0) counts.set(chId, count);
           }
           return counts;
@@ -1263,14 +1509,18 @@
         if (this.isDemo) return new Map(); // Demo uses mock unread values
         try {
           const counts = new Map();
-          for (const conv of conversations) {
+          // Parallel statt sequenziell
+          const results = await Promise.all(conversations.map(conv => {
             const lastRead = localStorage.getItem(`krs-lastread-conv-${conv.id}`) || '1970-01-01';
-            const { count, error } = await this.sb.from('messages')
+            return this.sb.from('messages')
               .select('*', { count: 'exact', head: true })
               .eq('conversation_id', conv.id)
               .neq('sender_id', userId)
-              .gt('created_at', lastRead);
-            if (!error && count > 0) counts.set(conv.id, count);
+              .gt('created_at', lastRead)
+              .then(res => ({ convId: conv.id, count: res.count, error: res.error }));
+          }));
+          for (const { convId, count, error } of results) {
+            if (!error && count > 0) counts.set(convId, count);
           }
           return counts;
         } catch (err) {
@@ -1339,10 +1589,10 @@
         return this.uploadFile(file);
       }
 
-      async createPost(channelId, authorId, content, title = null, imageUrl = null) {
+      async createPost(channelId, authorId, content, title = null, imageUrl = null, isUrgent = false) {
         if (this.isDemo) {
           const author = MOCK_USERS.find(u => u.id === authorId);
-          const post = { id: 'p' + Date.now(), channel_id: channelId, author, content, title, image_url: imageUrl, reactions: [], replies: 0, reply_users: [], created_at: new Date().toLocaleString('de-DE') };
+          const post = { id: 'p' + Date.now(), channel_id: channelId, author, content, title, image_url: imageUrl, is_urgent: isUrgent, reactions: [], replies: 0, reply_users: [], created_at: new Date().toLocaleString('de-DE') };
           if (!MOCK_POSTS[channelId]) MOCK_POSTS[channelId] = [];
           MOCK_POSTS[channelId].unshift(post);
           return post;
@@ -1350,6 +1600,7 @@
         try {
           const insertObj = { channel_id: channelId, author_id: authorId, content, title };
           if (imageUrl) insertObj.image_url = imageUrl;
+          if (isUrgent) insertObj.is_urgent = true;
           const { data, error } = await this.sb.from('posts').insert(insertObj).select('*, author:users(*)').single();
           if (error) throw error;
           return data;
@@ -1392,6 +1643,187 @@
         } catch (err) { console.error('deletePost error:', err); showToast('Beitrag konnte nicht gel\u00f6scht werden. Bitte versuche es erneut.', 'error'); return false; }
       }
 
+      // ── Reactions ──────────────────────────────
+      async getReactions(targetType, targetIds) {
+        // Returns Map<targetId, [{emoji, users: [userId,...], count}]>
+        const result = new Map();
+        if (!targetIds || targetIds.length === 0) return result;
+        if (this.isDemo) {
+          // Demo: Reactions direkt von den Mock-Posts lesen
+          if (targetType === 'post') {
+            const allPosts = Object.values(MOCK_POSTS).flat();
+            for (const id of targetIds) {
+              const post = allPosts.find(p => p.id === id);
+              if (post && post.reactions && post.reactions.length > 0) {
+                result.set(id, post.reactions);
+              }
+            }
+          }
+          return result;
+        }
+        try {
+          const { data, error } = await this.sb.from('reactions')
+            .select('target_id, emoji, user_id')
+            .eq('target_type', targetType)
+            .in('target_id', targetIds);
+          if (error) throw error;
+          // Group by target_id + emoji
+          for (const r of (data || [])) {
+            if (!result.has(r.target_id)) result.set(r.target_id, {});
+            const byEmoji = result.get(r.target_id);
+            if (!byEmoji[r.emoji]) byEmoji[r.emoji] = [];
+            byEmoji[r.emoji].push(r.user_id);
+          }
+          // Convert to array format
+          const formatted = new Map();
+          for (const [tid, byEmoji] of result) {
+            formatted.set(tid, Object.entries(byEmoji).map(([emoji, users]) => ({ emoji, users, count: users.length })));
+          }
+          return formatted;
+        } catch (err) {
+          console.error('getReactions error:', err);
+          return result;
+        }
+      }
+
+      // ── Read Receipts (Lesebestätigungen) ──────────────
+      async markPostRead(postId, userId) {
+        if (this.isDemo) return true;
+        try {
+          await this.sb.from('post_reads').upsert({ post_id: postId, user_id: userId }, { onConflict: 'post_id,user_id' });
+          return true;
+        } catch (err) { return false; }
+      }
+
+      async getPostReads(postIds) {
+        // Returns Map<postId, [{user_id, display_name, read_at}]>
+        const result = new Map();
+        if (!postIds || postIds.length === 0) return result;
+        if (this.isDemo) {
+          // Demo: Simuliere 2-3 Leser pro Post
+          for (const id of postIds) {
+            const readers = MOCK_USERS.slice(0, Math.floor(Math.random() * 3) + 1).map(u => ({
+              user_id: u.id, display_name: u.display_name, read_at: new Date().toISOString()
+            }));
+            result.set(id, readers);
+          }
+          return result;
+        }
+        try {
+          const { data, error } = await this.sb.from('post_reads')
+            .select('post_id, user_id, read_at, users(display_name)')
+            .in('post_id', postIds);
+          if (error) throw error;
+          for (const r of (data || [])) {
+            if (!result.has(r.post_id)) result.set(r.post_id, []);
+            result.get(r.post_id).push({
+              user_id: r.user_id,
+              display_name: r.users?.display_name || 'Unbekannt',
+              read_at: r.read_at
+            });
+          }
+          return result;
+        } catch (err) {
+          console.error('getPostReads error:', err);
+          return result;
+        }
+      }
+
+      // ── Profile Update ──────────────────────────────
+      async updateProfile(userId, updates) {
+        // Whitelist: Nur erlaubte Felder durchlassen
+        const ALLOWED_FIELDS = ['display_name', 'avatar_color', 'avatar_url', 'status'];
+        const safeUpdates = {};
+        for (const key of Object.keys(updates)) {
+          if (ALLOWED_FIELDS.includes(key)) safeUpdates[key] = updates[key];
+        }
+        if (Object.keys(safeUpdates).length === 0) return null;
+
+        if (this.isDemo) {
+          const user = MOCK_USERS.find(u => u.id === userId);
+          if (user) Object.assign(user, safeUpdates);
+          return user;
+        }
+        try {
+          const { data, error } = await this.sb.from('users').update(safeUpdates).eq('id', userId).select().single();
+          if (error) throw error;
+          return data;
+        } catch (err) {
+          console.error('updateProfile error:', err);
+          showToast('Profil konnte nicht aktualisiert werden.', 'error');
+          return null;
+        }
+      }
+
+      // ── Pinned Posts ──────────────────────────────
+      async togglePin(postId, isPinned) {
+        if (this.isDemo) {
+          for (const chPosts of Object.values(MOCK_POSTS)) {
+            const post = chPosts.find(p => p.id === postId);
+            if (post) { post.is_pinned = !isPinned; return { ...post }; }
+          }
+          return null;
+        }
+        try {
+          const { data, error } = await this.sb.from('posts')
+            .update({ is_pinned: !isPinned })
+            .eq('id', postId)
+            .select('*, author:users(*)')
+            .single();
+          if (error) throw error;
+          return data;
+        } catch (err) {
+          console.error('togglePin error:', err);
+          showToast('Post konnte nicht angeheftet werden.', 'error');
+          return null;
+        }
+      }
+
+      async toggleReaction(targetType, targetId, userId, emoji) {
+        // Emoji-Validierung: nur echte Emojis (1-8 Zeichen Unicode), kein HTML/Script
+        if (!emoji || emoji.length > 8 || /<|>|&|"|'/.test(emoji)) {
+          console.error('Invalid emoji rejected:', emoji);
+          return false;
+        }
+        if (this.isDemo) {
+          // Toggle in mock data
+          const postsArray = targetType === 'post' ? Object.values(MOCK_POSTS).flat() : [];
+          const target = postsArray.find(p => p.id === targetId);
+          if (target) {
+            if (!target.reactions) target.reactions = [];
+            const existing = target.reactions.find(r => r.emoji === emoji);
+            if (existing) {
+              if (existing.users.includes(userId)) {
+                existing.users = existing.users.filter(u => u !== userId);
+                existing.count = existing.users.length;
+                if (existing.count === 0) target.reactions = target.reactions.filter(r => r.emoji !== emoji);
+              } else {
+                existing.users.push(userId);
+                existing.count = existing.users.length;
+              }
+            } else {
+              target.reactions.push({ emoji, users: [userId], count: 1 });
+            }
+          }
+          return true;
+        }
+        try {
+          // Atomarer Toggle via PostgreSQL RPC (keine Race Condition)
+          const { data, error } = await this.sb.rpc('toggle_reaction', {
+            p_target_type: targetType,
+            p_target_id: targetId,
+            p_user_id: userId,
+            p_emoji: emoji
+          });
+          if (error) throw error;
+          return true;
+        } catch (err) {
+          console.error('toggleReaction error:', err);
+          showToast('Reaktion konnte nicht gespeichert werden.', 'error');
+          return false;
+        }
+      }
+
       async getReplies(postId) {
         if (this.isDemo) return MOCK_REPLIES[postId] || [];
         try {
@@ -1426,25 +1858,30 @@
       async getConversations(userId) {
         if (this.isDemo) return [...MOCK_CONVERSATIONS];
         try {
-          // 1. Finde alle Konversationen des Users
-          const { data: memberships, error: err1 } = await this.sb.from('conversation_members').select('conversation_id').eq('user_id', userId);
+          // 1. Finde alle Konversationen des Users (mit Join statt 2 separate Queries)
+          const { data: memberships, error: err1 } = await this.sb
+            .from('conversation_members')
+            .select('conversation_id, conversations(*)')
+            .eq('user_id', userId);
           if (err1) throw err1;
           if (!memberships?.length) return [];
+
           const convIds = memberships.map(m => m.conversation_id);
-          const { data: convs, error } = await this.sb.from('conversations').select('*').in('id', convIds);
-          if (error) throw error;
-          if (!convs?.length) return [];
+          const convs = memberships.map(m => m.conversations).filter(Boolean);
+          if (!convs.length) return [];
 
-          // 2. Lade alle Teilnehmer dieser Konversationen
-          const { data: allMembers } = await this.sb.from('conversation_members').select('conversation_id, user_id, users(*)').in('conversation_id', convIds);
-
-          // 3. Lade letzte Nachricht pro Konversation
-          const { data: lastMsgs } = await this.sb.from('messages').select('conversation_id, content, created_at').in('conversation_id', convIds).order('created_at', { ascending: false });
+          // 2+3. Lade Teilnehmer UND letzte Nachrichten parallel
+          const [membersRes, msgsRes] = await Promise.all([
+            this.sb.from('conversation_members').select('conversation_id, user_id, users(*)').in('conversation_id', convIds),
+            this.sb.from('messages').select('conversation_id, content, created_at').in('conversation_id', convIds).order('created_at', { ascending: false })
+          ]);
+          const allMembers = membersRes.data || [];
+          const lastMsgs = msgsRes.data || [];
 
           // 4. Reichere Konversationen an
           return convs.map(conv => {
-            const members = (allMembers || []).filter(m => m.conversation_id === conv.id);
-            const lastMsg = (lastMsgs || []).find(m => m.conversation_id === conv.id);
+            const members = allMembers.filter(m => m.conversation_id === conv.id);
+            const lastMsg = lastMsgs.find(m => m.conversation_id === conv.id);
             const convObj = {
               ...conv,
               lastMessage: lastMsg?.content || '',
@@ -1648,6 +2085,44 @@
           };
         } catch (err) {
           console.error('subscribeToConversation error:', err);
+          return () => {};
+        }
+      }
+
+      subscribeToReplies(parentId, onNewReply) {
+        if (this.isDemo) return () => {};
+        // Smart: Alte Reply-Subscriptions aufräumen
+        this.subscriptions = this.subscriptions.filter(s => {
+          if (s._krsType === 'replies') {
+            try { s.unsubscribe(); if (this.sb) this.sb.removeChannel(s); } catch(e) {}
+            return false;
+          }
+          return true;
+        });
+        try {
+          const sub = this.sb.channel('replies-' + parentId)
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'posts', filter: `parent_id=eq.${parentId}` },
+              async (payload) => {
+                const reply = payload.new;
+                if (reply.author_id && !reply.author) {
+                  try {
+                    const { data: author } = await this.sb.from('users').select('*').eq('id', reply.author_id).single();
+                    reply.author = author;
+                  } catch (e) {
+                    reply.author = { display_name: 'Unbekannt', avatar_color: '#999' };
+                  }
+                }
+                onNewReply(reply);
+              })
+            .subscribe();
+          sub._krsType = 'replies'; // Mark type for smart cleanup
+          this.subscriptions.push(sub);
+          return () => {
+            try { sub.unsubscribe(); if (this.sb) this.sb.removeChannel(sub); } catch(e) {}
+            this.subscriptions = this.subscriptions.filter(s => s !== sub);
+          };
+        } catch (err) {
+          console.error('subscribeToReplies error:', err);
           return () => {};
         }
       }
@@ -1890,9 +2365,281 @@
       return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
     }
 
+    function SkeletonPosts({ count = 3 }) {
+      return React.createElement(React.Fragment, null,
+        Array.from({ length: count }, (_, i) =>
+          React.createElement('div', { key: i, className: 'skeleton-card' },
+            React.createElement('div', { style: { display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '12px' } },
+              React.createElement('div', { className: 'skeleton skeleton-circle', style: { width: '36px', height: '36px', flexShrink: 0 } }),
+              React.createElement('div', { style: { flex: 1 } },
+                React.createElement('div', { className: 'skeleton skeleton-line', style: { width: '120px' } }),
+                React.createElement('div', { className: 'skeleton skeleton-line', style: { width: '80px', height: '10px' } })
+              )
+            ),
+            React.createElement('div', { className: 'skeleton skeleton-line', style: { width: '90%' } }),
+            React.createElement('div', { className: 'skeleton skeleton-line', style: { width: '70%' } }),
+            React.createElement('div', { className: 'skeleton skeleton-line', style: { width: '50%' } })
+          )
+        )
+      );
+    }
+
+    function SkeletonUsers({ count = 6 }) {
+      return React.createElement('div', { className: 'user-grid' },
+        Array.from({ length: count }, (_, i) =>
+          React.createElement('div', { key: i, style: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '12px' } },
+            React.createElement('div', { className: 'skeleton skeleton-circle', style: { width: '48px', height: '48px' } }),
+            React.createElement('div', { className: 'skeleton skeleton-line', style: { width: (50 + i * 10) + 'px', margin: 0 } })
+          )
+        )
+      );
+    }
+
+    function SkeletonMembers({ count = 4 }) {
+      return React.createElement(React.Fragment, null,
+        Array.from({ length: count }, (_, i) =>
+          React.createElement('div', { key: i, style: { display: 'flex', gap: '10px', alignItems: 'center', padding: '8px 0' } },
+            React.createElement('div', { className: 'skeleton skeleton-circle', style: { width: '32px', height: '32px', flexShrink: 0 } }),
+            React.createElement('div', { className: 'skeleton skeleton-line', style: { width: (80 + i * 20) + 'px', margin: 0 } })
+          )
+        )
+      );
+    }
+
+    function SkeletonChatList({ count = 5 }) {
+      return React.createElement(React.Fragment, null,
+        Array.from({ length: count }, (_, i) =>
+          React.createElement('div', { key: i, style: { display: 'flex', gap: '12px', alignItems: 'center', padding: '12px 16px' } },
+            React.createElement('div', { className: 'skeleton skeleton-circle', style: { width: '40px', height: '40px', flexShrink: 0 } }),
+            React.createElement('div', { style: { flex: 1 } },
+              React.createElement('div', { className: 'skeleton skeleton-line', style: { width: (100 + i * 15) + 'px' } }),
+              React.createElement('div', { className: 'skeleton skeleton-line', style: { width: '60%', height: '10px' } })
+            )
+          )
+        )
+      );
+    }
+
+    function SkeletonChannels({ count = 5 }) {
+      return React.createElement(React.Fragment, null,
+        Array.from({ length: count }, (_, i) =>
+          React.createElement('div', { key: i, style: { display: 'flex', gap: '10px', alignItems: 'center', padding: '10px 16px' } },
+            React.createElement('div', { className: 'skeleton', style: { width: '20px', height: '20px', borderRadius: '4px', flexShrink: 0 } }),
+            React.createElement('div', { className: 'skeleton skeleton-line', style: { width: (60 + i * 15) + 'px', margin: 0 } })
+          )
+        )
+      );
+    }
+
+    // ============================================================
+    // ACCORDION — Wiederverwendbare Aufklapp-Komponente
+    // ============================================================
+    function Accordion({ title, icon, defaultOpen = false, badge, children }) {
+      const [isOpen, setIsOpen] = useState(defaultOpen);
+      return React.createElement('div', { className: 'accordion' },
+        React.createElement('button', {
+          className: 'accordion-header',
+          onClick: () => setIsOpen(prev => !prev),
+          'aria-expanded': isOpen,
+          'aria-label': (isOpen ? 'Zuklappen: ' : 'Aufklappen: ') + title
+        },
+          React.createElement('span', { className: 'accordion-chevron' + (isOpen ? ' open' : '') }, '▶'),
+          icon && React.createElement('span', null, icon),
+          React.createElement('span', { style: { flex: 1, textAlign: 'left' } }, title),
+          badge != null && badge > 0 && React.createElement('span', { className: 'unread-badge', style: { fontSize: '11px' } }, badge)
+        ),
+        React.createElement('div', { className: 'accordion-body' + (isOpen ? ' open' : '') },
+          React.createElement('div', { className: 'accordion-body-inner' }, children)
+        )
+      );
+    }
+
+    // ============================================================
+    // WIKI-POPUP — Wikipedia/Info-Overlay mit iFrame
+    // ============================================================
+    let _wikiKeyHandler = null;
+
+    function isValidPopupUrl(url) {
+      try { const u = new URL(url); return u.protocol === 'https:'; } catch (e) { return false; }
+    }
+
+    function openWikiPopup(url, title) {
+      if (!isValidPopupUrl(url)) { console.warn('Wiki-Popup: Ungültige URL:', url); return; }
+      const existing = document.querySelector('.wiki-popup-overlay');
+      if (existing) existing.remove();
+
+      const overlay = document.createElement('div');
+      overlay.className = 'wiki-popup-overlay';
+      overlay.onclick = e => { if (e.target === overlay) closeWikiPopup(); };
+
+      const popup = document.createElement('div');
+      popup.className = 'wiki-popup';
+
+      const header = document.createElement('div');
+      header.className = 'wiki-popup-header';
+      const h3 = document.createElement('h3');
+      h3.textContent = '📖 ' + title;
+      const actions = document.createElement('div');
+      actions.style.cssText = 'display:flex;align-items:center;gap:12px';
+      const extLink = document.createElement('a');
+      extLink.href = url; extLink.target = '_blank'; extLink.rel = 'noopener';
+      extLink.textContent = '↗ In neuem Tab öffnen';
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'wiki-popup-close'; closeBtn.textContent = '✕';
+      closeBtn.setAttribute('aria-label', 'Schließen'); closeBtn.onclick = closeWikiPopup;
+      actions.appendChild(extLink); actions.appendChild(closeBtn);
+      header.appendChild(h3); header.appendChild(actions);
+
+      const iframe = document.createElement('iframe');
+      iframe.src = url; iframe.sandbox = 'allow-same-origin allow-popups allow-scripts';
+      iframe.setAttribute('loading', 'lazy');
+      const loadTimeout = setTimeout(() => { showWikiError(popup, url, title); }, 8000);
+      iframe.onload = () => clearTimeout(loadTimeout);
+      iframe.onerror = () => { clearTimeout(loadTimeout); showWikiError(popup, url, title); };
+
+      popup.appendChild(header); popup.appendChild(iframe);
+      overlay.appendChild(popup); document.body.appendChild(overlay);
+
+      if (_wikiKeyHandler) document.removeEventListener('keydown', _wikiKeyHandler);
+      _wikiKeyHandler = function(e) { if (e.key === 'Escape') closeWikiPopup(); };
+      document.addEventListener('keydown', _wikiKeyHandler);
+    }
+
+    function closeWikiPopup() {
+      const overlay = document.querySelector('.wiki-popup-overlay');
+      if (overlay) overlay.remove();
+      if (_wikiKeyHandler) { document.removeEventListener('keydown', _wikiKeyHandler); _wikiKeyHandler = null; }
+    }
+
+    function showWikiError(popup, url, title) {
+      const iframe = popup.querySelector('iframe');
+      if (iframe) iframe.remove();
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'wiki-popup-error';
+      const icon = document.createElement('div');
+      icon.style.fontSize = '48px'; icon.textContent = '📖';
+      const p = document.createElement('p');
+      p.textContent = 'Die Seite konnte nicht im Popup geladen werden.';
+      const a = document.createElement('a');
+      a.href = url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = '↗ Direkt in neuem Tab öffnen';
+      errorDiv.appendChild(icon); errorDiv.appendChild(p); errorDiv.appendChild(a);
+      popup.appendChild(errorDiv);
+    }
+
+    // Wiki-Link als React-Komponente
+    function WikiLink({ url, title, label }) {
+      return React.createElement('a', {
+        className: 'wiki-link',
+        href: '#',
+        onClick: (e) => { e.preventDefault(); openWikiPopup(url, title || label); },
+        title: 'Info: ' + (title || label)
+      }, '📖 ', label || title);
+    }
+
     function Avatar({ user, size = 36 }) {
+      if (user.avatar_url) {
+        return React.createElement('img', {
+          src: user.avatar_url,
+          className: 'avatar',
+          style: { width: size, height: size, borderRadius: '50%', objectFit: 'cover' },
+          alt: user.display_name
+        });
+      }
       const style = { width: size, height: size, fontSize: size * 0.38, background: user.avatar_color };
       return React.createElement('div', { className: 'avatar', style }, getInitials(user.display_name));
+    }
+
+    // ── Mention Textarea with @ Autocomplete ──
+    function MentionTextarea({ value, onChange, allUsers, placeholder, autoFocus, style }) {
+      const [mentionQuery, setMentionQuery] = useState(null);
+      const [mentionIdx, setMentionIdx] = useState(0);
+      const textareaRef = useRef(null);
+
+      const filteredUsers = useMemo(() => {
+        if (mentionQuery === null || !allUsers) return [];
+        const q = mentionQuery.toLowerCase();
+        // @alle als ersten Eintrag anbieten
+        const specialEntries = [];
+        if ('alle'.startsWith(q) || q === '') {
+          specialEntries.push({ id: '__all__', display_name: 'alle', avatar_color: '#D4762C', _isSpecial: true, _label: '@alle — Alle benachrichtigen' });
+        }
+        const userMatches = allUsers.filter(u => u.display_name?.toLowerCase().includes(q) || u.username?.toLowerCase().includes(q)).slice(0, 7);
+        return [...specialEntries, ...userMatches];
+      }, [mentionQuery, allUsers]);
+
+      const handleInput = (e) => {
+        const val = e.target.value;
+        onChange(val);
+        // Detect @mention trigger
+        const pos = e.target.selectionStart;
+        const textBefore = val.substring(0, pos);
+        const atMatch = textBefore.match(/@(\w*)$/);
+        if (atMatch) {
+          setMentionQuery(atMatch[1]);
+          setMentionIdx(0);
+        } else {
+          setMentionQuery(null);
+        }
+      };
+
+      const insertMention = (user) => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+        const pos = textarea.selectionStart;
+        const textBefore = value.substring(0, pos);
+        const textAfter = value.substring(pos);
+        const atPos = textBefore.lastIndexOf('@');
+        const newText = textBefore.substring(0, atPos) + '@' + user.display_name + ' ' + textAfter;
+        onChange(newText);
+        setMentionQuery(null);
+        setTimeout(() => {
+          const newPos = atPos + user.display_name.length + 2;
+          textarea.focus();
+          textarea.setSelectionRange(newPos, newPos);
+        }, 0);
+      };
+
+      const handleKeyDown = (e) => {
+        if (mentionQuery !== null && filteredUsers.length > 0) {
+          if (e.key === 'ArrowDown') { e.preventDefault(); setMentionIdx(i => Math.min(i + 1, filteredUsers.length - 1)); }
+          else if (e.key === 'ArrowUp') { e.preventDefault(); setMentionIdx(i => Math.max(i - 1, 0)); }
+          else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); insertMention(filteredUsers[mentionIdx]); }
+          else if (e.key === 'Escape') { e.preventDefault(); setMentionQuery(null); }
+        }
+      };
+
+      return React.createElement('div', { style: { position: 'relative' } },
+        mentionQuery !== null && filteredUsers.length > 0 && React.createElement('div', { className: 'mention-autocomplete', role: 'listbox', 'aria-label': 'Erwähnungen' },
+          filteredUsers.map((u, i) =>
+            React.createElement('button', {
+              key: u.id, className: 'mention-item' + (i === mentionIdx ? ' active' : ''),
+              role: 'option', 'aria-selected': i === mentionIdx,
+              style: { minHeight: '44px' },
+              onMouseDown: (e) => { e.preventDefault(); insertMention(u); },
+              onTouchEnd: (e) => { e.preventDefault(); insertMention(u); }
+            },
+              u._isSpecial
+                ? React.createElement('span', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+                    React.createElement('span', { style: { width: '24px', height: '24px', borderRadius: '50%', background: u.avatar_color, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '12px', fontWeight: '700' } }, '📢'),
+                    React.createElement('span', { style: { fontWeight: '600' } }, u._label)
+                  )
+                : React.createElement(React.Fragment, null,
+                    React.createElement(Avatar, { user: u, size: 24 }),
+                    React.createElement('span', null, u.display_name)
+                  )
+            )
+          )
+        ),
+        React.createElement('textarea', {
+          ref: textareaRef,
+          placeholder: placeholder || 'Was möchtest du teilen?',
+          value: value,
+          onChange: handleInput,
+          onKeyDown: handleKeyDown,
+          autoFocus: autoFocus,
+          style: style || { display: 'block', width: '100%', padding: '8px 0', border: 'none', background: 'transparent', color: 'var(--text-primary)', fontSize: '14px', minHeight: '60px', fontFamily: 'inherit', resize: 'none', outline: 'none' }
+        })
+      );
     }
 
     function EmojiPicker({ onSelect, onClose, position }) {
@@ -1912,8 +2659,14 @@
         return result;
       }, [search]);
 
+      // Auf kleinen Screens zentriert positionieren
+      const isSmallScreen = window.innerWidth <= 1024;
+      const pickerStyle = isSmallScreen
+        ? { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }
+        : { bottom: position?.bottom || '60px', right: position?.right || '24px' };
+
       return React.createElement('div', { className: 'emoji-picker-overlay', onClick: onClose },
-        React.createElement('div', { className: 'emoji-picker', style: { bottom: position?.bottom || '60px', right: position?.right || '24px' }, onClick: e => e.stopPropagation() },
+        React.createElement('div', { className: 'emoji-picker', style: pickerStyle, onClick: e => e.stopPropagation() },
           React.createElement('div', { className: 'emoji-picker-header' },
             React.createElement('input', { type: 'text', placeholder: 'Emoji suchen...', value: search, onChange: e => setSearch(e.target.value), autoFocus: true })
           ),
@@ -1958,24 +2711,55 @@
       ALLOW_DATA_ATTR: false
     };
 
+    function highlightMentions(containerEl) {
+      // DOM-basiert statt Regex+HTML (XSS-sicher)
+      // Iteriert über TextNodes und wrapped @Mentions in <span>
+      const walker = document.createTreeWalker(containerEl, NodeFilter.SHOW_TEXT, null);
+      const mentionRegex = /@([\wäöüÄÖÜß]+(?:\s[\wäöüÄÖÜß.]+)?)/g;
+      const textNodes = [];
+      while (walker.nextNode()) textNodes.push(walker.currentNode);
+      for (const node of textNodes) {
+        const text = node.nodeValue;
+        if (!mentionRegex.test(text)) continue;
+        mentionRegex.lastIndex = 0;
+        const frag = document.createDocumentFragment();
+        let lastIdx = 0;
+        let match;
+        while ((match = mentionRegex.exec(text)) !== null) {
+          if (match.index > lastIdx) frag.appendChild(document.createTextNode(text.slice(lastIdx, match.index)));
+          const span = document.createElement('span');
+          span.className = match[1].toLowerCase() === 'alle' ? 'mention-tag-all' : 'mention-tag';
+          span.textContent = match[0]; // textContent = XSS-sicher
+          frag.appendChild(span);
+          lastIdx = mentionRegex.lastIndex;
+        }
+        if (lastIdx < text.length) frag.appendChild(document.createTextNode(text.slice(lastIdx)));
+        node.parentNode.replaceChild(frag, node);
+      }
+    }
+
     function sanitizeHtml(html) {
       if (!html) return '';
-      // SICHER: DOMPurify verwenden wenn verfügbar
+      const tmp = document.createElement('div');
+
       if (window.DOMPurify && window.DOMPurify.sanitize) {
-        const clean = DOMPurify.sanitize(html, SANITIZE_CONFIG);
-        // Links: target=_blank hinzufuegen
-        const tmp = document.createElement('div');
-        tmp.innerHTML = clean; // Sicher: DOMPurify hat bereits sanitized
+        // SICHER: DOMPurify verfügbar
+        tmp.innerHTML = DOMPurify.sanitize(html, SANITIZE_CONFIG);
         tmp.querySelectorAll('a').forEach(a => {
           a.setAttribute('target', '_blank');
           a.setAttribute('rel', 'noopener noreferrer');
         });
-        return tmp.innerHTML;
+      } else if (window._domPurifyFailed) {
+        // KRITISCH: Beide CDNs fehlgeschlagen → nur Klartext
+        tmp.textContent = html;
+      } else {
+        // DOMPurify noch nicht geladen (async) → Klartext als sicherer Fallback
+        tmp.textContent = html;
       }
-      // FALLBACK: Kein DOMPurify → NUR Klartext ausgeben (kein innerHTML!)
-      const tmp = document.createElement('div');
-      tmp.textContent = html; // Sicher: textContent escaped alles
-      return tmp.innerHTML;  // Gibt escaped HTML zurück
+
+      // DOM-basiertes Mention-Highlighting (kein innerHTML-Manipulation)
+      highlightMentions(tmp);
+      return tmp.innerHTML;
     }
 
     function SetupScreen({ onSetupComplete }) {
@@ -2010,8 +2794,9 @@
       }, []);
 
       const handleMagicLink = async () => {
-        if (!email.trim() || !email.includes('@')) {
-          setError('Bitte eine gültige E-Mail-Adresse eingeben.');
+        const emailRegex = /^[^\s@]{1,64}@[^\s@]{1,255}\.[a-z]{2,}$/i;
+        if (!email.trim() || !emailRegex.test(email.trim())) {
+          setError('Bitte eine gültige E-Mail-Adresse eingeben (z.\u00a0B. vorname.name@schule.de).');
           return;
         }
         setLoading(true);
@@ -2114,7 +2899,7 @@
         React.createElement('h1', null, 'Wer bist du?'),
         React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: '13px', marginBottom: '16px' } }, 'Demo-Modus: Wähle einen Benutzer'),
         loading
-          ? React.createElement('p', { style: { color: 'var(--text-muted)' } }, 'Lade Benutzer...')
+          ? React.createElement(SkeletonUsers, { count: 6 })
           : React.createElement('div', { className: 'user-grid' },
               users.map(user =>
                 React.createElement('button', { key: user.id, className: 'user-btn', onClick: () => onUserSelected(user) },
@@ -2126,17 +2911,97 @@
       );
     }
 
-    function PostList({ posts, setPosts, channelId, dataService, user, onOpenThread, hasMore, onLoadMore, loadingMore }) {
+    function PostList({ posts, setPosts, channelId, dataService, user, allUsers, onOpenThread, hasMore, onLoadMore, loadingMore }) {
       const [newPostTitle, setNewPostTitle] = useState('');
       const [newPostContent, setNewPostContent] = useState('');
       const [saving, setSaving] = useState(false);
       const [postError, setPostError] = useState('');
       const [selectedFiles, setSelectedFiles] = useState([]);  // Array of { file, preview }
       const [showPostForm, setShowPostForm] = useState(false);
+      const [isUrgent, setIsUrgent] = useState(false);
       const fileInputRef = useRef(null);
       const [editingPost, setEditingPost] = useState(null);
       const [editContent, setEditContent] = useState('');
       const [editTitle, setEditTitle] = useState('');
+      const [emojiPickerPostId, setEmojiPickerPostId] = useState(null);
+      const [readReceipts, setReadReceipts] = useState(new Map()); // Map<postId, [{user_id, display_name}]>
+      const [expandedReads, setExpandedReads] = useState(null); // postId or null
+      // DSGVO: Read Receipts nur mit explizitem Opt-in
+      const [readReceiptsEnabled, setReadReceiptsEnabled] = useState(() => {
+        try { return localStorage.getItem('krs-read-receipts') === 'enabled'; } catch(e) { return false; }
+      });
+      const toggleReadReceipts = useCallback(() => {
+        setReadReceiptsEnabled(prev => {
+          const next = !prev;
+          try { localStorage.setItem('krs-read-receipts', next ? 'enabled' : 'disabled'); } catch(e) {}
+          return next;
+        });
+      }, []);
+
+      // Load reactions for loaded posts (Supabase mode)
+      useEffect(() => {
+        if (posts.length === 0 || dataService.isDemo) return;
+        const postIds = posts.filter(p => p.id && typeof p.id === 'number').map(p => p.id);
+        if (postIds.length === 0) return;
+        // Load reactions + read receipts in parallel
+        Promise.all([
+          dataService.getReactions('post', postIds),
+          dataService.getPostReads(postIds)
+        ]).then(([reactionsMap, readsMap]) => {
+          if (readsMap.size > 0) setReadReceipts(readsMap);
+          if (reactionsMap.size > 0) {
+            setPosts(prev => prev.map(p => {
+              const r = reactionsMap.get(p.id);
+              return r ? { ...p, reactions: r } : p;
+            }));
+          }
+        });
+      }, [posts.length, dataService]);
+
+      // Mark posts as read when they are displayed (nur mit Opt-in)
+      useEffect(() => {
+        if (!user || posts.length === 0 || !readReceiptsEnabled) return;
+        const parentPosts = posts.filter(p => !p.parent_id && p.id);
+        for (const post of parentPosts) {
+          if (post.author_id !== user.id) { // Eigene Posts nicht markieren
+            dataService.markPostRead(post.id, user.id);
+          }
+        }
+      }, [posts, user, dataService, readReceiptsEnabled]);
+
+      const handleTogglePin = async (post) => {
+        const updated = await dataService.togglePin(post.id, !!post.is_pinned);
+        if (updated) {
+          setPosts(prev => prev.map(p => p.id === post.id ? { ...p, is_pinned: !post.is_pinned } : p));
+          showToast(post.is_pinned ? 'Post losgelöst' : 'Post angeheftet 📌', 'success');
+        }
+      };
+
+      const handleToggleReaction = async (postId, emoji) => {
+        const ok = await dataService.toggleReaction('post', postId, user.id, emoji);
+        if (!ok) return;
+        // Optimistic update
+        setPosts(prev => prev.map(p => {
+          if (p.id !== postId) return p;
+          let reactions = [...(p.reactions || [])];
+          const idx = reactions.findIndex(r => r.emoji === emoji);
+          if (idx >= 0) {
+            const r = reactions[idx];
+            if (r.users.includes(user.id)) {
+              r.users = r.users.filter(u => u !== user.id);
+              r.count = r.users.length;
+              if (r.count === 0) reactions.splice(idx, 1);
+              else reactions[idx] = { ...r };
+            } else {
+              reactions[idx] = { ...r, users: [...r.users, user.id], count: r.count + 1 };
+            }
+          } else {
+            reactions.push({ emoji, users: [user.id], count: 1 });
+          }
+          return { ...p, reactions };
+        }));
+        setEmojiPickerPostId(null);
+      };
 
       const handleEditPost = (post) => {
         setEditingPost(post.id);
@@ -2226,11 +3091,12 @@
           // Store as JSON array string in image_url field, or single URL for backward compat
           const imageUrlValue = fileUrls.length === 1 ? fileUrls[0].url : fileUrls.length > 1 ? JSON.stringify(fileUrls) : null;
           const contentText = newPostContent || (fileUrls.length > 0 ? ('📎 ' + fileUrls.length + ' Datei' + (fileUrls.length > 1 ? 'en' : '')) : '');
-          const newPost = await dataService.createPost(channelId, user.id, contentText, newPostTitle || undefined, imageUrlValue);
+          const newPost = await dataService.createPost(channelId, user.id, contentText, newPostTitle || undefined, imageUrlValue, isUrgent);
           if (newPost) {
             setPosts(prev => [newPost, ...prev]);
             setNewPostTitle('');
             setNewPostContent('');
+            setIsUrgent(false);
             clearAllFiles();
             setShowPostForm(false);
           } else {
@@ -2252,7 +3118,7 @@
           // Expanded form (only when clicked)
           showPostForm && React.createElement('form', { onSubmit: handleCreatePost, style: { background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '14px' } },
             React.createElement('input', { type: 'text', placeholder: 'Titel (optional)', value: newPostTitle, onChange: e => setNewPostTitle(e.target.value), style: { display: 'block', width: '100%', padding: '8px 0', marginBottom: '8px', border: 'none', borderBottom: '1px solid var(--border)', background: 'transparent', color: 'var(--text-primary)', fontSize: '15px', fontWeight: '600', outline: 'none' } }),
-            React.createElement('textarea', { placeholder: 'Was möchtest du teilen?', value: newPostContent, onChange: e => setNewPostContent(e.target.value), autoFocus: true, style: { display: 'block', width: '100%', padding: '8px 0', border: 'none', background: 'transparent', color: 'var(--text-primary)', fontSize: '14px', minHeight: '60px', fontFamily: 'inherit', resize: 'none', outline: 'none' } }),
+            React.createElement(MentionTextarea, { value: newPostContent, onChange: setNewPostContent, allUsers: allUsers, autoFocus: true }),
             // File preview area (multi-file grid)
             selectedFiles.length > 0 && React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' } },
               selectedFiles.map((sf, idx) =>
@@ -2271,8 +3137,16 @@
             // Action bar
             React.createElement('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--border)' } },
               React.createElement('input', { ref: fileInputRef, type: 'file', multiple: true, accept: 'image/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt', onChange: handleFileSelect, style: { display: 'none' } }),
-              React.createElement('button', { type: 'button', onClick: () => fileInputRef.current?.click(), title: 'Dateien anhängen (max. 10)', style: { padding: '6px 8px', background: 'transparent', border: 'none', borderRadius: 'var(--radius)', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }, dangerouslySetInnerHTML: { __html: Icons.paperclip } }),
+              React.createElement('button', { type: 'button', onClick: () => fileInputRef.current?.click(), title: 'Dateien anhängen (max. 10)', 'aria-label': 'Dateien anhängen', style: { padding: '6px 8px', background: 'transparent', border: 'none', borderRadius: 'var(--radius)', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }, dangerouslySetInnerHTML: { __html: Icons.paperclip } }),
               selectedFiles.length > 0 && React.createElement('span', { style: { fontSize: '11px', color: 'var(--text-muted)' } }, selectedFiles.length + '/10'),
+              // Dringend-Button nur für Admins sichtbar
+              userTeamRole === 'admin' && React.createElement('button', {
+                type: 'button',
+                onClick: () => setIsUrgent(u => !u),
+                title: isUrgent ? 'Dringend-Markierung entfernen' : 'Als dringend markieren',
+                'aria-label': isUrgent ? 'Dringend-Markierung entfernen' : 'Als dringend markieren',
+                style: { padding: '4px 10px', background: isUrgent ? 'var(--danger-bg, #FEE2E2)' : 'transparent', border: isUrgent ? '1px solid var(--danger)' : '1px solid transparent', borderRadius: '16px', cursor: 'pointer', fontSize: '13px', color: isUrgent ? 'var(--danger-text, #B91C1C)' : 'var(--text-muted)', fontWeight: isUrgent ? '600' : '400', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: '4px', minHeight: '44px' }
+              }, '🚨', isUrgent ? ' Dringend' : ''),
               React.createElement('div', { style: { flex: 1 } }),
               React.createElement('button', { type: 'button', onClick: () => { setShowPostForm(false); setNewPostTitle(''); setNewPostContent(''); clearAllFiles(); }, style: { padding: '6px 14px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '13px' } }, 'Abbrechen'),
               React.createElement('button', { type: 'submit', disabled: saving, style: { padding: '6px 16px', background: saving ? 'var(--text-muted)' : 'var(--accent)', color: 'white', border: 'none', borderRadius: 'var(--radius)', cursor: saving ? 'not-allowed' : 'pointer', fontSize: '13px', fontWeight: '500' } }, saving ? 'Wird gesendet...' : 'Posten')
@@ -2280,12 +3154,19 @@
             postError && React.createElement('p', { style: { color: 'var(--danger)', fontSize: '12px', margin: '6px 0 0' } }, postError)
           )
         ),
-        posts.map(post => {
+        [...posts].sort((a, b) => (b.is_pinned ? 1 : 0) - (a.is_pinned ? 1 : 0)).map(post => {
           const author = post.author || { display_name: 'Unbekannt', avatar_color: '#999' };
           const replyCount = post.replies ?? post.reply_count ?? 0;
           const isOwner = user && (post.author_id === user.id || user.role === 'admin');
           const isEditing = editingPost === post.id;
-          return React.createElement('div', { key: post.id, className: 'post' },
+          const postStyle = post.is_urgent
+            ? { borderLeft: '3px solid var(--danger)', background: 'rgba(239,68,68,0.04)' }
+            : post.is_pinned
+              ? { borderLeft: '3px solid var(--accent-orange)', background: 'rgba(212,118,44,0.04)' }
+              : {};
+          return React.createElement('div', { key: post.id, className: 'post', style: postStyle },
+            post.is_urgent && React.createElement('div', { style: { fontSize: '11px', color: 'var(--danger-text, #B91C1C)', fontWeight: '700', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--danger-bg, #FEE2E2)', padding: '4px 10px', borderRadius: '4px', width: 'fit-content' } }, '🚨 DRINGEND'),
+            post.is_pinned && !post.is_urgent && React.createElement('div', { style: { fontSize: '11px', color: 'var(--accent-orange)', fontWeight: '600', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '4px' } }, '📌 Angeheftet'),
             React.createElement('div', { className: 'post-header', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' } },
               React.createElement('div', { style: { display: 'flex', gap: '10px', alignItems: 'center' } },
                 React.createElement(Avatar, { user: author, size: 36 }),
@@ -2294,9 +3175,12 @@
                   React.createElement('div', { className: 'post-time' }, formatDate(post.created_at), post.edited_at && ' (bearbeitet)')
                 )
               ),
-              isOwner && !isEditing && React.createElement('div', { style: { display: 'flex', gap: '4px' } },
-                React.createElement('button', { onClick: () => handleEditPost(post), title: 'Bearbeiten', style: { background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px', color: 'var(--text-muted)', fontSize: '14px', borderRadius: 'var(--radius)' } }, '✏️'),
-                React.createElement('button', { onClick: () => handleDeletePost(post.id), title: 'Löschen', style: { background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px', color: 'var(--text-muted)', fontSize: '14px', borderRadius: 'var(--radius)' } }, '🗑️')
+              !isEditing && React.createElement('div', { style: { display: 'flex', gap: '4px' } },
+                // Pin: Admin oder Autor darf pinnen
+                (isOwner || user.role === 'admin') && React.createElement('button', { onClick: () => handleTogglePin(post), title: post.is_pinned ? 'Loslösen' : 'Anheften', 'aria-label': post.is_pinned ? 'Post loslösen' : 'Post anheften', style: { background: 'none', border: 'none', cursor: 'pointer', padding: '8px', color: post.is_pinned ? 'var(--accent-orange)' : 'var(--text-muted)', fontSize: '14px', borderRadius: 'var(--radius)', minWidth: '36px', minHeight: '36px' } }, '📌'),
+                // Edit/Delete: Nur Autor
+                isOwner && React.createElement('button', { onClick: () => handleEditPost(post), title: 'Bearbeiten', 'aria-label': 'Post bearbeiten', style: { background: 'none', border: 'none', cursor: 'pointer', padding: '8px', color: 'var(--text-muted)', fontSize: '14px', borderRadius: 'var(--radius)', minWidth: '36px', minHeight: '36px' } }, '✏️'),
+                isOwner && React.createElement('button', { onClick: () => handleDeletePost(post.id), title: 'Löschen', 'aria-label': 'Post löschen', style: { background: 'none', border: 'none', cursor: 'pointer', padding: '8px', color: 'var(--text-muted)', fontSize: '14px', borderRadius: 'var(--radius)', minWidth: '36px', minHeight: '36px' } }, '🗑️')
               )
             ),
             isEditing
@@ -2324,7 +3208,7 @@
               const docs = files.filter(f => !images.includes(f));
               return React.createElement('div', { style: { margin: '8px 0' } },
                 images.length > 0 && React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: docs.length > 0 ? '6px' : 0 } },
-                  images.map((img, i) => React.createElement('img', { key: i, src: img.url, style: { maxWidth: images.length === 1 ? '100%' : '48%', maxHeight: images.length === 1 ? '400px' : '200px', borderRadius: 'var(--radius)', cursor: 'pointer', objectFit: 'cover' }, onClick: () => window.open(img.url, '_blank') }))
+                  images.map((img, i) => React.createElement('img', { key: i, src: img.url, style: { maxWidth: images.length === 1 ? '100%' : '48%', maxHeight: images.length === 1 ? '400px' : '200px', borderRadius: 'var(--radius)', cursor: 'pointer', objectFit: 'cover' }, onClick: () => window.openLightbox(images, i) }))
                 ),
                 docs.length > 0 && React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px' } },
                   docs.map((doc, i) => React.createElement('a', { key: i, href: doc.url, target: '_blank', style: { display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 12px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', color: 'var(--accent)', textDecoration: 'none', fontSize: '13px' } },
@@ -2334,13 +3218,41 @@
                 )
               );
             })(),
-            post.reactions && post.reactions.length > 0 && React.createElement('div', { className: 'post-reactions' },
-              post.reactions.map(r =>
-                React.createElement('div', { key: r.emoji, className: 'reaction' }, r.emoji + ' ' + r.count)
-              )
+            React.createElement('div', { className: 'post-reactions' },
+              (post.reactions || []).map(r =>
+                React.createElement('button', {
+                  key: r.emoji,
+                  className: 'reaction' + (r.users && r.users.includes(user?.id) ? ' own' : ''),
+                  onClick: () => handleToggleReaction(post.id, r.emoji),
+                  title: r.users ? r.users.length + ' Reaktion' + (r.users.length !== 1 ? 'en' : '') : ''
+                }, r.emoji + ' ' + r.count)
+              ),
+              React.createElement('button', {
+                className: 'reaction add-reaction',
+                onClick: () => setEmojiPickerPostId(emojiPickerPostId === post.id ? null : post.id),
+                title: 'Reaktion hinzufügen'
+              }, '+'),
+              emojiPickerPostId === post.id && React.createElement(EmojiPicker, {
+                onSelect: (emoji) => handleToggleReaction(post.id, emoji),
+                onClose: () => setEmojiPickerPostId(null)
+              })
             ),
-            React.createElement('div', { className: 'post-footer' },
-              React.createElement('button', { onClick: () => onOpenThread(post) }, '💬 Antworten (' + replyCount + ')')
+            React.createElement('div', { className: 'post-footer', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' } },
+              React.createElement('button', { onClick: () => onOpenThread(post) }, '💬 Antworten (' + replyCount + ')'),
+              (() => {
+                const readers = readReceipts.get(post.id);
+                if (!readers || readers.length === 0) return null;
+                const isExpanded = expandedReads === post.id;
+                return React.createElement('button', {
+                  onClick: () => setExpandedReads(isExpanded ? null : post.id),
+                  style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px', padding: '2px 6px' }
+                },
+                  '✓✓ ',
+                  isExpanded
+                    ? readers.map(r => r.display_name).join(', ')
+                    : 'Gelesen von ' + readers.length
+                );
+              })()
             )
           );
         }),
@@ -2371,7 +3283,7 @@
         React.createElement('div', { className: 'thread-panel', onClick: e => e.stopPropagation() },
           React.createElement('div', { className: 'thread-header' },
             React.createElement('h3', null, 'Antworten'),
-            React.createElement('button', { className: 'icon-btn', onClick: onClose, dangerouslySetInnerHTML: { __html: Icons.x } })
+            React.createElement('button', { className: 'icon-btn', onClick: onClose, 'aria-label': 'Thread schließen', dangerouslySetInnerHTML: { __html: Icons.x } })
           ),
           React.createElement('div', { className: 'thread-body' },
             React.createElement('div', { className: 'post' },
@@ -2572,36 +3484,42 @@
           React.createElement('div', { className: 'modal-body' },
             error && React.createElement('div', { style: { background: 'var(--danger-light, #fee)', color: 'var(--danger, #c33)', padding: '10px 12px', borderRadius: 'var(--radius)', marginBottom: '15px', fontSize: '13px' } }, error),
             React.createElement('div', { style: { marginBottom: '20px' } },
-              React.createElement('h4', { style: { fontSize: '14px', fontWeight: '600', marginBottom: '10px' } }, 'Aktuelle Mitglieder'),
-              React.createElement('div', { className: 'member-list' },
-                loading ? 'Lade Mitglieder...' : (
-                  members.length > 0 ? members.map(member =>
-                    React.createElement('div', { key: member.id, className: 'member-item' },
-                      React.createElement(Avatar, { user: member, size: 32 }),
-                      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', flex: 1 } },
-                        React.createElement('div', { className: 'member-name' }, member.display_name),
-                        React.createElement('span', {
-                          style: { fontSize: '11px', padding: '2px 6px', borderRadius: '4px',
-                            background: member.role === 'admin' ? 'var(--accent-light)' : 'var(--bg-tertiary)',
-                            color: member.role === 'admin' ? 'var(--accent)' : 'var(--text-muted)' }
-                        }, member.role === 'admin' ? 'Admin' : 'Mitglied')
-                      ),
-                      isAdmin && member.id !== currentUser.id && React.createElement('button', {
-                        type: 'button',
-                        style: { background: 'none', border: 'none', cursor: 'pointer', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', color: member.role === 'admin' ? 'var(--accent)' : 'var(--text-muted)', transition: 'all 0.15s' },
-                        onClick: () => handleToggleRole(member.id, member.role),
-                        title: member.role === 'admin' ? 'Zum Mitglied machen' : 'Zum Admin machen'
-                      }, member.role === 'admin' ? '↓ Mitglied' : '↑ Admin'),
-                      isAdmin && member.id !== currentUser.id && member.role !== 'admin' && React.createElement('button', {
-                        type: 'button',
-                        className: 'member-remove',
-                        onClick: () => handleRemove(member.id),
-                        title: 'Entfernen'
-                      }, '✕')
-                    )
-                  ) : 'Keine Mitglieder'
-                )
-              )
+              loading ? React.createElement(SkeletonMembers, { count: 4 }) : (() => {
+                const admins = members.filter(m => m.role === 'admin');
+                const regularMembers = members.filter(m => m.role !== 'admin');
+                const renderMember = (member) => React.createElement('div', { key: member.id, className: 'member-item' },
+                  React.createElement(Avatar, { user: member, size: 32 }),
+                  React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', flex: 1 } },
+                    React.createElement('div', { className: 'member-name' }, member.display_name),
+                    React.createElement('span', {
+                      style: { fontSize: '11px', padding: '2px 6px', borderRadius: '4px',
+                        background: member.role === 'admin' ? 'var(--accent-light)' : 'var(--bg-tertiary)',
+                        color: member.role === 'admin' ? 'var(--accent)' : 'var(--text-muted)' }
+                    }, member.role === 'admin' ? 'Admin' : 'Mitglied')
+                  ),
+                  isAdmin && member.id !== currentUser.id && React.createElement('button', {
+                    type: 'button',
+                    style: { background: 'none', border: 'none', cursor: 'pointer', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', color: member.role === 'admin' ? 'var(--accent)' : 'var(--text-muted)', transition: 'all 0.15s' },
+                    onClick: () => handleToggleRole(member.id, member.role),
+                    title: member.role === 'admin' ? 'Zum Mitglied machen' : 'Zum Admin machen'
+                  }, member.role === 'admin' ? '↓ Mitglied' : '↑ Admin'),
+                  isAdmin && member.id !== currentUser.id && member.role !== 'admin' && React.createElement('button', {
+                    type: 'button',
+                    className: 'member-remove',
+                    onClick: () => handleRemove(member.id),
+                    title: 'Entfernen'
+                  }, '✕')
+                );
+                return React.createElement(React.Fragment, null,
+                  admins.length > 0 && React.createElement(Accordion, { title: 'Admins (' + admins.length + ')', icon: '👑', defaultOpen: true },
+                    admins.map(renderMember)
+                  ),
+                  regularMembers.length > 0 && React.createElement(Accordion, { title: 'Mitglieder (' + regularMembers.length + ')', icon: '👥', defaultOpen: true },
+                    regularMembers.map(renderMember)
+                  ),
+                  members.length === 0 && 'Keine Mitglieder'
+                );
+              })()
             ),
             isAdmin && React.createElement('div', null,
               React.createElement('h4', { style: { fontSize: '14px', fontWeight: '600', marginBottom: '10px' } }, 'Mitglied hinzufügen'),
@@ -2674,6 +3592,7 @@
             className: 'new-chat-btn',
             onClick: () => { setShowNewChat(!showNewChat); setChatSearch(''); },
             title: 'Neuer Chat',
+            'aria-label': showNewChat ? 'Abbrechen' : 'Neuer Chat',
             dangerouslySetInnerHTML: { __html: showNewChat ? Icons.x : Icons.plus }
           })
         ),
@@ -2875,7 +3794,7 @@
 
       return React.createElement('div', { className: 'chat-panel' },
         React.createElement('div', { className: 'chat-header' },
-          onBack && React.createElement('button', { className: 'back-btn', onClick: onBack, dangerouslySetInnerHTML: { __html: Icons.back } }),
+          onBack && React.createElement('button', { className: 'back-btn', onClick: onBack, 'aria-label': 'Zurück', dangerouslySetInnerHTML: { __html: Icons.back } }),
           isGroupChat ? React.createElement('div', null,
             React.createElement('span', { className: 'chat-header-name' }, conversation.name || 'Gruppenchat'),
             React.createElement('div', { style: { fontSize: '11px', color: 'var(--text-muted)', fontWeight: '500' } }, (conversation.members?.length || 0) + ' Mitglieder')
@@ -2913,7 +3832,7 @@
                   const docs = files.filter(f => !imgs.includes(f));
                   return React.createElement(React.Fragment, null,
                     imgs.length > 0 && React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '4px' } },
-                      imgs.map((img, i) => React.createElement('img', { key: i, src: img.url, style: { maxWidth: imgs.length === 1 ? '240px' : '120px', maxHeight: imgs.length === 1 ? '200px' : '100px', borderRadius: '8px', cursor: 'pointer', display: 'block', objectFit: 'cover' }, onClick: () => window.open(img.url, '_blank') }))
+                      imgs.map((img, i) => React.createElement('img', { key: i, src: img.url, style: { maxWidth: imgs.length === 1 ? '240px' : '120px', maxHeight: imgs.length === 1 ? '200px' : '100px', borderRadius: '8px', cursor: 'pointer', display: 'block', objectFit: 'cover' }, onClick: () => window.openLightbox(imgs, i) }))
                     ),
                     docs.length > 0 && docs.map((doc, i) => React.createElement('a', { key: i, href: doc.url, target: '_blank', style: { display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 10px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', color: 'var(--accent)', textDecoration: 'none', fontSize: '12px', marginBottom: '4px', marginRight: '4px' } },
                       React.createElement('span', null, '📎'),
@@ -2947,7 +3866,7 @@
         ),
         React.createElement('form', { className: 'chat-input-bar', onSubmit: handleSend },
           React.createElement('input', { ref: chatFileRef, type: 'file', multiple: true, accept: 'image/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt', onChange: handleChatFileSelect, style: { display: 'none' } }),
-          React.createElement('button', { type: 'button', onClick: () => chatFileRef.current?.click(), title: 'Dateien senden (max. 10)', className: 'chat-image-btn', style: { background: 'none', border: 'none', cursor: 'pointer', padding: '6px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }, dangerouslySetInnerHTML: { __html: Icons.paperclip } }),
+          React.createElement('button', { type: 'button', onClick: () => chatFileRef.current?.click(), title: 'Dateien senden (max. 10)', 'aria-label': 'Dateien senden', className: 'chat-image-btn', style: { background: 'none', border: 'none', cursor: 'pointer', padding: '6px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }, dangerouslySetInnerHTML: { __html: Icons.paperclip } }),
           React.createElement('input', {
             type: 'text',
             placeholder: 'Nachricht schreiben...',
@@ -2959,6 +3878,7 @@
             type: 'submit',
             className: 'chat-send-btn',
             disabled: sending || (!input.trim() && chatFiles.length === 0),
+            'aria-label': 'Nachricht senden',
             dangerouslySetInnerHTML: { __html: Icons.send }
           })
         )
@@ -2969,10 +3889,15 @@
     // APP COMPONENT
     // ============================================================
 
-    function SearchView({ dataService, user }) {
+    function SearchView({ dataService, user, allUsers, teams }) {
       const [query, setQuery] = useState('');
       const [results, setResults] = useState(null);
       const [searching, setSearching] = useState(false);
+      const [filterAuthor, setFilterAuthor] = useState('');
+      const [filterDateFrom, setFilterDateFrom] = useState('');
+      const [filterDateTo, setFilterDateTo] = useState('');
+      const [filterChannel, setFilterChannel] = useState('');
+      const [showFilters, setShowFilters] = useState(false);
       const timerRef = useRef(null);
 
       const handleSearch = (val) => {
@@ -2987,23 +3912,92 @@
         }, 300);
       };
 
+      // Client-side filtering
+      const allChannels = useMemo(() => {
+        if (!teams || teams.length === 0) return [];
+        return teams.flatMap(t => (t.channels || []).map(c => ({ ...c, teamName: t.name })));
+      }, [teams]);
+
+      const filteredResults = useMemo(() => {
+        if (!results) return null;
+        let posts = results.posts || [];
+        let messages = results.messages || [];
+        if (filterAuthor) {
+          posts = posts.filter(p => {
+            const a = p.author || p;
+            return String(a.id) === filterAuthor || String(p.user_id || p.author_id) === filterAuthor;
+          });
+          messages = messages.filter(m => {
+            const s = m.sender || m;
+            return String(s.id) === filterAuthor || String(m.sender_id) === filterAuthor;
+          });
+        }
+        if (filterDateFrom) {
+          const from = new Date(filterDateFrom);
+          posts = posts.filter(p => new Date(p.created_at) >= from);
+          messages = messages.filter(m => new Date(m.created_at) >= from);
+        }
+        if (filterDateTo) {
+          const to = new Date(filterDateTo + 'T23:59:59');
+          posts = posts.filter(p => new Date(p.created_at) <= to);
+          messages = messages.filter(m => new Date(m.created_at) <= to);
+        }
+        if (filterChannel) {
+          posts = posts.filter(p => String(p.channel_id) === filterChannel);
+        }
+        return { posts, messages };
+      }, [results, filterAuthor, filterDateFrom, filterDateTo, filterChannel]);
+
+      const hasActiveFilters = filterAuthor || filterDateFrom || filterDateTo || filterChannel;
+      const clearFilters = () => { setFilterAuthor(''); setFilterDateFrom(''); setFilterDateTo(''); setFilterChannel(''); };
+
+      const selectStyle = { padding: '6px 10px', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '13px', background: 'var(--bg-primary)', color: 'var(--text-primary)', flex: 1, minWidth: '120px' };
+
+      const displayResults = filteredResults || results;
+
       return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', height: '100%' } },
         React.createElement('div', { style: { padding: '16px 20px', borderBottom: '1px solid var(--border)' } },
-          React.createElement('h2', { style: { margin: '0 0 12px', fontSize: '18px', fontWeight: '600' } }, 'Suche'),
+          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' } },
+            React.createElement('h2', { style: { margin: 0, fontSize: '18px', fontWeight: '600', flex: 1 } }, 'Suche'),
+            React.createElement('button', {
+              onClick: () => setShowFilters(!showFilters),
+              style: { background: showFilters || hasActiveFilters ? 'var(--accent)' : 'var(--bg-tertiary)', color: showFilters || hasActiveFilters ? 'white' : 'var(--text-secondary)', border: 'none', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontSize: '13px', fontWeight: '500', transition: 'all 0.15s' },
+              'aria-label': 'Filter anzeigen'
+            }, '⚙ Filter' + (hasActiveFilters ? ' ●' : ''))
+          ),
           React.createElement('input', {
             type: 'text',
             placeholder: 'Posts und Nachrichten durchsuchen...',
             value: query,
             onChange: e => handleSearch(e.target.value),
             style: { width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box', outline: 'none' }
-          })
+          }),
+          // Filter-Panel
+          showFilters && React.createElement('div', {
+            style: { display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px', padding: '12px', background: 'var(--bg-tertiary)', borderRadius: '8px' }
+          },
+            React.createElement('select', { value: filterAuthor, onChange: e => setFilterAuthor(e.target.value), style: selectStyle, 'aria-label': 'Nach Autor filtern' },
+              React.createElement('option', { value: '' }, 'Alle Autoren'),
+              (allUsers || []).map(u => React.createElement('option', { key: u.id, value: String(u.id) }, u.display_name))
+            ),
+            React.createElement('select', { value: filterChannel, onChange: e => setFilterChannel(e.target.value), style: selectStyle, 'aria-label': 'Nach Kanal filtern' },
+              React.createElement('option', { value: '' }, 'Alle Kanäle'),
+              allChannels.map(c => React.createElement('option', { key: c.id, value: String(c.id) }, c.teamName + ' › ' + c.name))
+            ),
+            React.createElement('input', { type: 'date', value: filterDateFrom, onChange: e => setFilterDateFrom(e.target.value), style: selectStyle, 'aria-label': 'Datum von', title: 'Von' }),
+            React.createElement('input', { type: 'date', value: filterDateTo, onChange: e => setFilterDateTo(e.target.value), style: selectStyle, 'aria-label': 'Datum bis', title: 'Bis' }),
+            hasActiveFilters && React.createElement('button', {
+              onClick: clearFilters,
+              style: { padding: '6px 12px', background: 'var(--danger)', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', whiteSpace: 'nowrap' }
+            }, '✕ Zurücksetzen')
+          )
         ),
         React.createElement('div', { style: { flex: 1, overflow: 'auto', padding: '16px 20px' } },
-          searching && React.createElement('div', { style: { textAlign: 'center', color: 'var(--text-muted)', padding: '20px' } }, 'Suche...'),
-          !searching && results && React.createElement(React.Fragment, null,
-            results.posts.length > 0 && React.createElement('div', null,
-              React.createElement('h3', { style: { fontSize: '14px', color: 'var(--text-muted)', fontWeight: '600', marginBottom: '8px' } }, 'Posts (' + results.posts.length + ')'),
-              results.posts.map(post => {
+          searching && React.createElement(SkeletonPosts, { count: 3 }),
+          !searching && displayResults && React.createElement(React.Fragment, null,
+            displayResults.posts.length > 0 && React.createElement('div', null,
+              React.createElement('h3', { style: { fontSize: '14px', color: 'var(--text-muted)', fontWeight: '600', marginBottom: '8px' } }, 'Posts (' + displayResults.posts.length + ')'),
+              displayResults.posts.map(post => {
                 const author = post.author || { display_name: 'Unbekannt', avatar_color: '#999' };
                 return React.createElement('div', { key: post.id, className: 'post-card', style: { marginBottom: '8px' } },
                   React.createElement('div', { className: 'post-header' },
@@ -3018,11 +4012,11 @@
                 );
               })
             ),
-            results.messages.length > 0 && React.createElement('div', { style: { marginTop: '16px' } },
-              React.createElement('h3', { style: { fontSize: '14px', color: 'var(--text-muted)', fontWeight: '600', marginBottom: '8px' } }, 'Nachrichten (' + results.messages.length + ')'),
-              results.messages.map(msg => {
+            displayResults.messages.length > 0 && React.createElement('div', { style: { marginTop: '16px' } },
+              React.createElement('h3', { style: { fontSize: '14px', color: 'var(--text-muted)', fontWeight: '600', marginBottom: '8px' } }, 'Nachrichten (' + displayResults.messages.length + ')'),
+              displayResults.messages.map(msg => {
                 const sender = msg.sender || { display_name: 'Unbekannt', avatar_color: '#999' };
-                return React.createElement('div', { key: msg.id, style: { padding: '10px 14px', background: 'white', borderRadius: '8px', marginBottom: '6px', border: '1px solid var(--border)' } },
+                return React.createElement('div', { key: msg.id, style: { padding: '10px 14px', background: 'var(--bg-secondary)', borderRadius: '8px', marginBottom: '6px', border: '1px solid var(--border)' } },
                   React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' } },
                     React.createElement(Avatar, { user: sender, size: 24 }),
                     React.createElement('strong', { style: { fontSize: '13px' } }, sender.display_name),
@@ -3032,13 +4026,13 @@
                 );
               })
             ),
-            results.posts.length === 0 && results.messages.length === 0 &&
+            displayResults.posts.length === 0 && displayResults.messages.length === 0 &&
               React.createElement('div', { style: { textAlign: 'center', color: 'var(--text-muted)', padding: '40px 20px' } },
                 React.createElement('div', { style: { fontSize: '32px', marginBottom: '8px' } }, '🔍'),
-                'Keine Ergebnisse für "' + query + '"'
+                'Keine Ergebnisse für "' + query + '"' + (hasActiveFilters ? ' (mit Filtern)' : '')
               )
           ),
-          !results && !searching && React.createElement('div', { style: { textAlign: 'center', color: 'var(--text-muted)', padding: '60px 20px' } },
+          !displayResults && !searching && React.createElement('div', { style: { textAlign: 'center', color: 'var(--text-muted)', padding: '60px 20px' } },
             React.createElement('div', { style: { fontSize: '48px', marginBottom: '12px' } }, '🔍'),
             'Tippe um zu suchen — Ergebnisse erscheinen sofort'
           )
@@ -3160,16 +4154,247 @@
       );
     }
 
-    function App() {
-      const [setupComplete, setSetupComplete] = useState(false);
-      const [supabaseClient, setSupabaseClient] = useState(null);
-      const [isDemo, setIsDemo] = useState(true);
-      const [user, setUser] = useState(null);
+    // ============================================================
+    // ONBOARDING WIZARD
+    // ============================================================
+    function OnboardingWizard({ onClose }) {
+      const [step, setStep] = useState(0);
 
-      // View: 'teams' or 'chat'
-      const [view, setView] = useState('teams');
+      const steps = [
+        {
+          icon: '👋',
+          title: 'Willkommen bei KRS Connect!',
+          text: 'KRS Connect ist unsere schulinterne Kommunikationsplattform — speziell für das Kollegium der Kurpfalz-Realschule Schriesheim.',
+          detail: 'Hier findest du alle wichtigen Infos, kannst mit Kolleg:innen chatten und bleibst immer auf dem Laufenden.'
+        },
+        {
+          icon: '📢',
+          title: 'Teams & Kanäle',
+          text: 'Die Kommunikation ist in Teams und Kanäle organisiert — ähnlich wie bei Microsoft Teams.',
+          detail: 'Jedes Team hat verschiedene Kanäle für unterschiedliche Themen (z.\u00a0B. „Allgemein", „Vertretung", „Fachschaft"). Du findest sie in der linken Seitenleiste.'
+        },
+        {
+          icon: '💬',
+          title: 'Chat & Direktnachrichten',
+          text: 'Für persönliche Gespräche gibt es den Chat-Bereich.',
+          detail: 'Klicke auf „Chat" in der Seitenleiste, um Direktnachrichten an einzelne Kolleg:innen zu senden. Alles bleibt vertraulich zwischen euch.'
+        },
+        {
+          icon: '🔔',
+          title: '@Erwähnungen & Dringend',
+          text: 'Wichtige Nachrichten erreichst du mit @Erwähnungen.',
+          detail: 'Tippe @ und einen Namen, um jemanden direkt anzusprechen. Mit @alle erreichst du das gesamte Kollegium. Dringende Nachrichten (🚨) erzeugen eine Extra-Benachrichtigung.'
+        },
+        {
+          icon: '🚀',
+          title: 'Bereit!',
+          text: 'Das war\'s schon — du kannst jetzt loslegen!',
+          detail: 'Tipp: Aktiviere die Browser-Benachrichtigungen (Glockensymbol oben), damit du keine wichtigen Nachrichten verpasst.'
+        }
+      ];
 
-      // Teams state
+      const s = steps[step];
+      const isLast = step === steps.length - 1;
+
+      return React.createElement('div', {
+        className: 'modal-overlay',
+        style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }
+      },
+        React.createElement('div', {
+          onClick: e => e.stopPropagation(),
+          style: { background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', maxWidth: '480px', width: '100%', padding: '40px 32px 32px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', textAlign: 'center', position: 'relative' }
+        },
+          // Step indicator dots
+          React.createElement('div', { style: { display: 'flex', gap: '8px', justifyContent: 'center', marginBottom: '24px' } },
+            steps.map((_, i) => React.createElement('div', {
+              key: i,
+              style: {
+                width: '10px', height: '10px', borderRadius: '50%',
+                background: i === step ? 'var(--primary)' : i < step ? 'var(--primary)' : 'var(--border)',
+                opacity: i <= step ? 1 : 0.4,
+                transition: 'all 0.3s ease'
+              }
+            }))
+          ),
+          // Icon
+          React.createElement('div', { style: { fontSize: '48px', marginBottom: '16px' } }, s.icon),
+          // Title
+          React.createElement('h2', { style: { margin: '0 0 12px', fontSize: '22px', color: 'var(--text-primary)' } }, s.title),
+          // Main text
+          React.createElement('p', { style: { margin: '0 0 8px', fontSize: '15px', color: 'var(--text-primary)', lineHeight: '1.5' } }, s.text),
+          // Detail text
+          React.createElement('p', { style: { margin: '0 0 28px', fontSize: '13px', color: 'var(--text-muted)', lineHeight: '1.5' } }, s.detail),
+          // Buttons
+          React.createElement('div', { style: { display: 'flex', gap: '12px', justifyContent: 'center' } },
+            step > 0 && React.createElement('button', {
+              onClick: () => setStep(step - 1),
+              style: { padding: '10px 24px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '14px', minHeight: '44px', minWidth: '44px' }
+            }, '← Zurück'),
+            React.createElement('button', {
+              onClick: () => {
+                if (isLast) {
+                  try { localStorage.setItem('krs_onboarding_done', '1'); } catch(e) {}
+                  onClose();
+                } else {
+                  setStep(step + 1);
+                }
+              },
+              style: { padding: '10px 28px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--primary)', color: '#fff', cursor: 'pointer', fontSize: '14px', fontWeight: 600, minHeight: '44px', minWidth: '44px' }
+            }, isLast ? '✓ Los geht\'s!' : 'Weiter →')
+          ),
+          // Skip link
+          !isLast && React.createElement('button', {
+            onClick: () => {
+              try { localStorage.setItem('krs_onboarding_done', '1'); } catch(e) {}
+              onClose();
+            },
+            style: { marginTop: '16px', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '14px', padding: '10px 16px', minHeight: '44px', minWidth: '44px' }
+          }, 'Überspringen')
+        )
+      );
+    }
+
+    // ============================================================
+    // HELP PANEL — Aufklappbare Hilfe-Übersicht
+    // ============================================================
+    function HelpPanel({ onClose, onStartOnboarding }) {
+      return React.createElement('div', {
+        className: 'modal-overlay',
+        onClick: onClose,
+        style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }
+      },
+        React.createElement('div', {
+          onClick: e => e.stopPropagation(),
+          style: { background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', maxWidth: '520px', width: '100%', maxHeight: '80vh', overflow: 'auto', padding: '24px 28px', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }
+        },
+          React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' } },
+            React.createElement('h2', { style: { margin: 0, fontSize: '20px' } }, '❓ Hilfe & Tipps'),
+            React.createElement('button', { onClick: onClose, 'aria-label': 'Schließen', style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '20px', color: 'var(--text-muted)', padding: '8px' } }, '✕')
+          ),
+          React.createElement('div', { style: { fontSize: '14px', lineHeight: '1.6', color: 'var(--text-secondary)' } },
+            React.createElement(Accordion, { title: 'Wie funktionieren Teams & Kanäle?', icon: '📢', defaultOpen: true },
+              React.createElement('p', { style: { margin: '4px 0' } }, 'Die Kommunikation ist in Teams organisiert. Jedes Team hat Kanäle für verschiedene Themen (z.\u00a0B. „Allgemein", „Vertretung").'),
+              React.createElement('p', { style: { margin: '4px 0' } }, 'Wähle links ein Team → dann einen Kanal → schreibe einen Beitrag oder antworte auf einen Thread.'),
+              React.createElement(WikiLink, { url: 'https://de.m.wikipedia.org/wiki/Microsoft_Teams', title: 'Microsoft Teams', label: 'Vergleich: Microsoft Teams' })
+            ),
+            React.createElement(Accordion, { title: 'Wie nutze ich den Chat?', icon: '💬' },
+              React.createElement('p', { style: { margin: '4px 0' } }, 'Klicke unten auf „Chat" um Direktnachrichten zu senden. Tippe auf „+" um einen neuen Chat zu starten.'),
+              React.createElement('p', { style: { margin: '4px 0' } }, 'Chat-Nachrichten sind nur zwischen dir und der anderen Person sichtbar.')
+            ),
+            React.createElement(Accordion, { title: 'Was bedeuten @Erwähnungen?', icon: '🔔' },
+              React.createElement('p', { style: { margin: '4px 0' } }, 'Tippe @ und einen Namen, um jemanden direkt zu benachrichtigen. Die Person erhält eine Push-Benachrichtigung.'),
+              React.createElement('p', { style: { margin: '4px 0' } }, 'Mit @alle erreichst du das gesamte Kollegium — bitte sparsam verwenden!')
+            ),
+            React.createElement(Accordion, { title: 'Was bedeutet 🚨 Dringend?', icon: '🚨' },
+              React.createElement('p', { style: { margin: '4px 0' } }, 'Team-Admins können Beiträge als „Dringend" markieren. Diese erzeugen eine sofortige Push-Benachrichtigung bei allen Teammitgliedern — auch wenn die App gerade nicht offen ist.')
+            ),
+            React.createElement(Accordion, { title: 'Wie lade ich Dateien hoch?', icon: '📎' },
+              React.createElement('p', { style: { margin: '4px 0' } }, 'Klicke auf das Büroklammer-Symbol (📎) neben dem Textfeld. Du kannst Bilder, PDFs und Dokumente hochladen. Maximale Dateigröße: 10 MB.')
+            ),
+            React.createElement(Accordion, { title: 'Wie aktiviere ich Benachrichtigungen?', icon: '🔔' },
+              React.createElement('p', { style: { margin: '4px 0' } }, 'Klicke unten auf das Glocken-Symbol (🔔). Dein Browser fragt dann, ob du Benachrichtigungen erlauben möchtest.'),
+              React.createElement('p', { style: { margin: '4px 0' } }, 'Tipp: Auf dem iPad unter Einstellungen → Safari → Erweitert → „Push API" aktivieren.'),
+              React.createElement(WikiLink, { url: 'https://de.m.wikipedia.org/wiki/Push-Nachricht', title: 'Push-Nachrichten', label: 'Was sind Push-Nachrichten?' })
+            ),
+            React.createElement(Accordion, { title: 'Was ist die Suche?', icon: '🔍' },
+              React.createElement('p', { style: { margin: '4px 0' } }, 'Klicke unten auf die Lupe (🔍) um nach Beiträgen und Nachrichten zu suchen. Du kannst nach Autor, Kanal und Datum filtern.')
+            ),
+            React.createElement(Accordion, { title: 'Datenschutz & Sicherheit', icon: '🔒' },
+              React.createElement('p', { style: { margin: '4px 0' } }, 'KRS Connect ist DSGVO-konform. Alle Daten werden in der EU (Frankfurt) gespeichert. Klicke auf 🔒 für den vollständigen Datenschutzhinweis.'),
+              React.createElement(WikiLink, { url: 'https://de.m.wikipedia.org/wiki/Datenschutz-Grundverordnung', title: 'DSGVO', label: 'Was ist die DSGVO?' })
+            )
+          ),
+          React.createElement('div', { style: { marginTop: '16px', textAlign: 'center' } },
+            React.createElement('button', {
+              onClick: () => { onClose(); onStartOnboarding(); },
+              style: { padding: '10px 24px', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: 'var(--radius)', cursor: 'pointer', fontSize: '14px', fontWeight: '500' }
+            }, '🎓 Einführung erneut starten')
+          )
+        )
+      );
+    }
+
+    // ============================================================
+    // PROFILE MODAL — Profilansicht mit Avatar-Upload
+    // ============================================================
+    function ProfileModal({ user, onClose, onAvatarUpload }) {
+      return React.createElement('div', {
+        className: 'online-panel',
+        style: { bottom: '70px', left: '76px', minWidth: '220px' }
+      },
+        React.createElement('div', { style: { padding: '16px', textAlign: 'center' } },
+          React.createElement(Avatar, { user, size: 56 }),
+          React.createElement('div', { style: { marginTop: '8px', fontWeight: '600', fontSize: '15px' } }, user.display_name),
+          React.createElement('div', { style: { fontSize: '12px', color: 'var(--text-muted)', marginBottom: '12px' } }, user.email || user.role || ''),
+          React.createElement('label', {
+            style: { display: 'inline-block', padding: '6px 14px', background: 'var(--accent)', color: 'white', borderRadius: 'var(--radius)', cursor: 'pointer', fontSize: '13px', fontWeight: '500' }
+          },
+            '📷 Profilbild ändern',
+            React.createElement('input', { type: 'file', accept: 'image/*', onChange: onAvatarUpload, style: { display: 'none' } })
+          )
+        )
+      );
+    }
+
+    // ============================================================
+    // PRIVACY MODAL — Datenschutzhinweis (DSGVO)
+    // ============================================================
+    function PrivacyModal({ onClose }) {
+      return React.createElement('div', {
+        className: 'modal-overlay',
+        onClick: onClose,
+        style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }
+      },
+        React.createElement('div', {
+          onClick: e => e.stopPropagation(),
+          style: { background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', maxWidth: '600px', width: '100%', maxHeight: '80vh', overflow: 'auto', padding: '24px 28px', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }
+        },
+          React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' } },
+            React.createElement('h2', { style: { margin: 0, fontSize: '20px' } }, '🔒 Datenschutzhinweis'),
+            React.createElement('button', { onClick: onClose, 'aria-label': 'Schließen', style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '20px', color: 'var(--text-muted)', padding: '8px' } }, '✕')
+          ),
+          React.createElement('div', { style: { fontSize: '14px', lineHeight: '1.6', color: 'var(--text-secondary)' } },
+            React.createElement(Accordion, { title: 'Verantwortlicher', icon: '🏫', defaultOpen: true },
+              React.createElement('p', { style: { margin: '4px 0' } }, 'Kurpfalz-Realschule Schriesheim, vertreten durch die Schulleitung.'),
+              React.createElement('p', { style: { margin: '4px 0' } }, 'Kontakt: sekretariat@realschule-schriesheim.de'),
+              React.createElement(WikiLink, { url: 'https://de.m.wikipedia.org/wiki/Datenschutz-Grundverordnung', title: 'DSGVO', label: 'Was ist die DSGVO?' })
+            ),
+            React.createElement(Accordion, { title: 'Zweck der Datenverarbeitung', icon: '📋' },
+              React.createElement('p', { style: { margin: '4px 0' } }, 'KRS Connect dient der internen Kommunikation des Kollegiums. Verarbeitet werden: Name, E-Mail-Adresse, verfasste Nachrichten und hochgeladene Dateien.')
+            ),
+            React.createElement(Accordion, { title: 'Rechtsgrundlage', icon: '⚖️' },
+              React.createElement('p', { style: { margin: '4px 0' } }, 'Die Verarbeitung erfolgt auf Grundlage von Art. 6 Abs. 1 lit. e DSGVO (öffentliches Interesse/Bildungsauftrag) sowie der einschlägigen Regelungen des LDSG BW.'),
+              React.createElement(WikiLink, { url: 'https://de.m.wikipedia.org/wiki/Landesdatenschutzgesetz_(Baden-W%C3%BCrttemberg)', title: 'LDSG BW', label: 'Landesdatenschutzgesetz BW' })
+            ),
+            React.createElement(Accordion, { title: 'Hosting & Auftragsverarbeitung', icon: '☁️' },
+              React.createElement('p', { style: { margin: '4px 0' } }, 'Die Daten werden bei Supabase Inc. (EU-Region Frankfurt) gehostet. Ein Auftragsverarbeitungsvertrag (AVV) gemäß Art. 28 DSGVO liegt vor.'),
+              React.createElement('p', { style: { margin: '4px 0' } }, 'Die Webseite wird über GitHub Pages (Microsoft/GitHub Inc.) bereitgestellt.'),
+              React.createElement('div', { style: { display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '6px' } },
+                React.createElement(WikiLink, { url: 'https://de.m.wikipedia.org/wiki/Supabase', title: 'Supabase', label: 'Was ist Supabase?' }),
+                React.createElement(WikiLink, { url: 'https://de.m.wikipedia.org/wiki/GitHub', title: 'GitHub', label: 'Was ist GitHub?' })
+              )
+            ),
+            React.createElement(Accordion, { title: 'Speicherdauer', icon: '⏱️' },
+              React.createElement('p', { style: { margin: '4px 0' } }, 'Nachrichten und Dateien werden für die Dauer des Schuljahres gespeichert. Nach Ausscheiden aus dem Kollegium wird der Account nach Absprache deaktiviert und die Daten nach spätestens 6 Monaten gelöscht.')
+            ),
+            React.createElement(Accordion, { title: 'Ihre Rechte', icon: '✅' },
+              React.createElement('p', { style: { margin: '4px 0' } }, 'Sie haben das Recht auf Auskunft (Art. 15), Berichtigung (Art. 16), Löschung (Art. 17) und Datenübertragbarkeit (Art. 20) sowie das Recht auf Beschwerde bei der Aufsichtsbehörde (LfDI BW).'),
+              React.createElement(WikiLink, { url: 'https://de.m.wikipedia.org/wiki/Landesbeauftragter_f%C3%BCr_den_Datenschutz_und_die_Informationsfreiheit_Baden-W%C3%BCrttemberg', title: 'LfDI BW', label: 'Landesbeauftragter für Datenschutz BW' })
+            ),
+            React.createElement(Accordion, { title: 'Kontakt Datenschutz', icon: '📧' },
+              React.createElement('p', { style: { margin: '4px 0' } }, 'Datenschutzbeauftragter des Staatlichen Schulamts Mannheim.'),
+              React.createElement('p', { style: { margin: '4px 0' } }, 'Bei Fragen wenden Sie sich an die Schulleitung oder den IT-Beauftragten (N. Kotzan).')
+            )
+          )
+        )
+      );
+    }
+
+    // ============================================================
+    // CUSTOM HOOKS — Reduzieren App-Komplexität
+    // ============================================================
+
+    function useTeamsState() {
       const [teams, setTeams] = useState([]);
       const [selectedTeam, setSelectedTeam] = useState(null);
       const [channels, setChannels] = useState([]);
@@ -3179,20 +4404,59 @@
       const [openThread, setOpenThread] = useState(null);
       const [hiddenTeams, setHiddenTeams] = useState(new Set());
       const [showHiddenTeams, setShowHiddenTeams] = useState(false);
+      const [postsLoading, setPostsLoading] = useState(false);
+      const [hasMorePosts, setHasMorePosts] = useState(false);
 
-      // Chat state
+      const toggleTeamVisibility = useCallback((teamId) => {
+        setHiddenTeams(prev => {
+          const next = new Set(prev);
+          if (next.has(teamId)) next.delete(teamId);
+          else next.add(teamId);
+          return next;
+        });
+      }, []);
+
+      return { teams, setTeams, selectedTeam, setSelectedTeam, channels, setChannels,
+        selectedChannel, setSelectedChannel, posts, setPosts, replies, setReplies,
+        openThread, setOpenThread, hiddenTeams, showHiddenTeams, setShowHiddenTeams,
+        postsLoading, setPostsLoading, hasMorePosts, setHasMorePosts, toggleTeamVisibility };
+    }
+
+    function useChatState() {
       const [conversations, setConversations] = useState([]);
       const [selectedConversation, setSelectedConversation] = useState(null);
       const [chatMessages, setChatMessages] = useState([]);
-      const [allUsers, setAllUsers] = useState([]);
+      const [hasMoreMessages, setHasMoreMessages] = useState(false);
+      return { conversations, setConversations, selectedConversation, setSelectedConversation,
+        chatMessages, setChatMessages, hasMoreMessages, setHasMoreMessages };
+    }
 
-      // Unread notifications
+    function useUnreadState() {
       const [unreadChatCount, setUnreadChatCount] = useState(0);
       const [unreadPostChannels, setUnreadPostChannels] = useState(new Map());
-      // Mapping: channelId → teamId (für Team-Badges)
       const [channelTeamMap, setChannelTeamMap] = useState(new Map());
+      return { unreadChatCount, setUnreadChatCount, unreadPostChannels, setUnreadPostChannels,
+        channelTeamMap, setChannelTeamMap };
+    }
 
-      // Browser Notifications
+    function useModals() {
+      const [showOnlinePanel, setShowOnlinePanel] = useState(false);
+      const [showFeedback, setShowFeedback] = useState(false);
+      const [showProfile, setShowProfile] = useState(false);
+      const [showPrivacy, setShowPrivacy] = useState(false);
+      const [showOnboarding, setShowOnboarding] = useState(false);
+      const [showCreateTeam, setShowCreateTeam] = useState(false);
+      const [showTeamMembers, setShowTeamMembers] = useState(false);
+      const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+      const [showHelp, setShowHelp] = useState(false);
+      return { showOnlinePanel, setShowOnlinePanel, showFeedback, setShowFeedback,
+        showProfile, setShowProfile, showPrivacy, setShowPrivacy,
+        showOnboarding, setShowOnboarding, showCreateTeam, setShowCreateTeam,
+        showTeamMembers, setShowTeamMembers, mobileSidebarOpen, setMobileSidebarOpen,
+        showHelp, setShowHelp };
+    }
+
+    function useNotifications() {
       const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
         try { return localStorage.getItem('krs-notifications') !== 'off'; } catch(e) { return true; }
       });
@@ -3221,20 +4485,21 @@
           requestNotifications();
           return;
         }
-        const next = !notificationsEnabled;
-        setNotificationsEnabled(next);
-        try { localStorage.setItem('krs-notifications', next ? 'on' : 'off'); } catch(e) {}
-        showToast(next ? 'Benachrichtigungen aktiviert' : 'Benachrichtigungen deaktiviert', 'success');
+        setNotificationsEnabled(prev => {
+          const next = !prev;
+          try { localStorage.setItem('krs-notifications', next ? 'on' : 'off'); } catch(e) {}
+          showToast(next ? 'Benachrichtigungen aktiviert' : 'Benachrichtigungen deaktiviert', 'success');
+          return next;
+        });
       }, [notificationsEnabled, notificationPermission, requestNotifications]);
 
       const sendBrowserNotification = useCallback((title, body, onClick) => {
         if (!notificationsEnabled || notificationPermission !== 'granted') return;
-        if (document.hasFocus()) return; // Nicht benachrichtigen wenn App im Fokus
+        if (document.hasFocus()) return;
         try {
           const n = new Notification(title, {
-            body: body.length > 100 ? body.substring(0, 100) + '...' : body,
-            icon: KRS_LOGO,
-            badge: KRS_LOGO,
+            body: (body || '').substring(0, 150),
+            icon: KRS_LOGO, badge: KRS_LOGO,
             tag: 'krs-' + Date.now(),
             renotify: true
           });
@@ -3243,37 +4508,78 @@
         } catch(e) { console.warn('Notification error:', e); }
       }, [notificationsEnabled, notificationPermission]);
 
-      // Online presence
-      const [onlineUsers, setOnlineUsers] = useState(new Set());
-      const [showOnlinePanel, setShowOnlinePanel] = useState(false);
-      const [showFeedback, setShowFeedback] = useState(false);
+      return { notificationsEnabled, notificationPermission, requestNotifications,
+        toggleNotifications, sendBrowserNotification };
+    }
 
+    // ============================================================
+    // APP COMPONENT
+    // ============================================================
+    function App() {
+      const [setupComplete, setSetupComplete] = useState(false);
+      const [supabaseClient, setSupabaseClient] = useState(null);
+      const [isDemo, setIsDemo] = useState(true);
+      const [user, setUser] = useState(null);
+      const [view, setView] = useState('teams');
+      const [allUsers, setAllUsers] = useState([]);
       const [loadingUsers, setLoadingUsers] = useState(false);
-
-      // Pagination
-      const [hasMorePosts, setHasMorePosts] = useState(false);
-      const [hasMoreMessages, setHasMoreMessages] = useState(false);
       const [loadingMore, setLoadingMore] = useState(false);
+      const [userTeamRole, setUserTeamRole] = useState(null);
+      const [onlineUsers, setOnlineUsers] = useState(new Set());
+      const [onboardingStep, setOnboardingStep] = useState(0);
       const PAGE_SIZE = 50;
 
-      // Mobile sidebar
-      const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+      // Custom Hooks
+      const teamsState = useTeamsState();
+      const { teams, setTeams, selectedTeam, setSelectedTeam, channels, setChannels,
+        selectedChannel, setSelectedChannel, posts, setPosts, replies, setReplies,
+        openThread, setOpenThread, hiddenTeams, showHiddenTeams, setShowHiddenTeams,
+        postsLoading, setPostsLoading, hasMorePosts, setHasMorePosts, toggleTeamVisibility } = teamsState;
 
-      // Team management modals
-      const [showCreateTeam, setShowCreateTeam] = useState(false);
-      const [showTeamMembers, setShowTeamMembers] = useState(false);
-      const [userTeamRole, setUserTeamRole] = useState(null);
+      const chatState = useChatState();
+      const { conversations, setConversations, selectedConversation, setSelectedConversation,
+        chatMessages, setChatMessages, hasMoreMessages, setHasMoreMessages } = chatState;
+
+      const unreadState = useUnreadState();
+      const { unreadChatCount, setUnreadChatCount, unreadPostChannels, setUnreadPostChannels,
+        channelTeamMap, setChannelTeamMap } = unreadState;
+
+      const modals = useModals();
+      const { showOnlinePanel, setShowOnlinePanel, showFeedback, setShowFeedback,
+        showProfile, setShowProfile, showPrivacy, setShowPrivacy,
+        showOnboarding, setShowOnboarding, showCreateTeam, setShowCreateTeam,
+        showTeamMembers, setShowTeamMembers, mobileSidebarOpen, setMobileSidebarOpen,
+        showHelp, setShowHelp } = modals;
+
+      const { notificationsEnabled, notificationPermission, requestNotifications,
+        toggleNotifications, sendBrowserNotification } = useNotifications();
+
+      // Notifications, Modals, Teams, Chat, Unread — alle in Custom Hooks (oben)
+
+      const handleAvatarUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (!file.type.startsWith('image/')) { showToast('Bitte wähle ein Bild aus.', 'error'); return; }
+        if (file.size > 5 * 1024 * 1024) { showToast('Bild zu groß (max. 5 MB).', 'error'); return; }
+        try {
+          const url = await dataService.uploadFile(file);
+          if (url) {
+            const updated = await dataService.updateProfile(user.id, { avatar_url: url });
+            if (updated) {
+              setUser(prev => ({ ...prev, avatar_url: url }));
+              showToast('Profilbild aktualisiert!', 'success');
+              setShowProfile(false);
+            }
+          }
+        } catch (err) {
+          showToast('Profilbild konnte nicht hochgeladen werden.', 'error');
+        }
+      };
+
+      // (loadingUsers, postsLoading, hasMore*, loadingMore, mobileSidebarOpen,
+      //  showCreateTeam, showTeamMembers, userTeamRole — jetzt oben in App oder in Custom Hooks)
 
       const dataService = useMemo(() => new DataService(isDemo ? null : supabaseClient), [supabaseClient, isDemo]);
-
-      const toggleTeamVisibility = (teamId) => {
-        setHiddenTeams(prev => {
-          const next = new Set(prev);
-          if (next.has(teamId)) next.delete(teamId);
-          else next.add(teamId);
-          return next;
-        });
-      };
 
       // Pending auth user (wird nach Setup+Render automatisch eingeloggt)
       const [pendingAuthUser, setPendingAuthUser] = useState(null);
@@ -3422,17 +4728,25 @@
         }
         const usersData = await dataService.getUsers();
         setAllUsers(usersData || MOCK_USERS);
+        // Onboarding for first-time users
+        try {
+          if (!localStorage.getItem('krs_onboarding_done')) {
+            setShowOnboarding(true);
+          }
+        } catch(e) { /* localStorage blocked */ }
       };
 
       // Posts subscription
       useEffect(() => {
         if (selectedChannel) {
           let cancelled = false;
+          setPostsLoading(true);
           const loadPosts = async () => {
             const postsData = await dataService.getPosts(selectedChannel.id, PAGE_SIZE, 0);
             if (!cancelled) {
               setPosts(postsData);
               setHasMorePosts(postsData.length >= PAGE_SIZE);
+              setPostsLoading(false);
             }
           };
           loadPosts();
@@ -3447,7 +4761,7 @@
         }
       }, [selectedChannel, dataService]);
 
-      // Thread replies
+      // Thread replies + Realtime
       useEffect(() => {
         if (openThread) {
           let cancelled = false;
@@ -3456,7 +4770,13 @@
             if (!cancelled) setReplies(repliesData);
           };
           loadReplies();
-          return () => { cancelled = true; };
+          const unsub = dataService.subscribeToReplies(openThread.id, newReply => {
+            if (!cancelled) setReplies(prev => {
+              if (prev.some(r => r.id === newReply.id)) return prev;
+              return [...prev, newReply];
+            });
+          });
+          return () => { cancelled = true; unsub(); };
         }
       }, [openThread, dataService]);
 
@@ -3498,6 +4818,12 @@
         }
       }, [selectedConversation, dataService]);
 
+      // Ref für selectedConversation (verhindert Stale Closure + unnötige Re-Subscriptions)
+      const selectedConversationRef = useRef(selectedConversation);
+      selectedConversationRef.current = selectedConversation;
+      const selectedChannelRef = useRef(selectedChannel);
+      selectedChannelRef.current = selectedChannel;
+
       // Global listener for new messages (unread badges)
       useEffect(() => {
         if (!user || !dataService || dataService.isDemo) return;
@@ -3510,7 +4836,8 @@
             const newMsg = payload.new;
             // Don't count own messages or messages in the currently open conversation
             if (newMsg.sender_id === user.id) return;
-            if (selectedConversation && newMsg.conversation_id === selectedConversation.id) return;
+            const currentConv = selectedConversationRef.current;
+            if (currentConv && newMsg.conversation_id === currentConv.id) return;
             // Update unread count
             setUnreadChatCount(prev => prev + 1);
             // Update conversation unread badge
@@ -3534,18 +4861,37 @@
             const newPost = payload.new;
             if (newPost.author_id === user.id) return;
             if (newPost.parent_id) return; // Skip replies
+            // Deduplication: Nicht zählen wenn der Post im aktuell offenen Channel ist
+            const currentCh = selectedChannelRef.current;
+            if (currentCh && newPost.channel_id === currentCh.id) return;
             // Mark channel as having unread posts
             setUnreadPostChannels(prev => {
               const next = new Map(prev);
               next.set(newPost.channel_id, (next.get(newPost.channel_id) || 0) + 1);
               return next;
             });
-            // Browser-Notification
-            sendBrowserNotification(
-              '📢 Neuer Beitrag',
-              newPost.title || newPost.content || 'Neuer Beitrag in einem Kanal',
-              () => { /* focus kommt automatisch */ }
-            );
+            // Browser-Notification (dringend und @alle erhalten spezielle Behandlung)
+            const isUrgentPost = newPost.is_urgent;
+            const hasMentionAll = (newPost.content || '').toLowerCase().includes('@alle');
+            const hasMentionMe = user && (newPost.content || '').toLowerCase().includes(('@' + (user.display_name || '')).toLowerCase());
+            const notifTitle = isUrgentPost ? '🚨 DRINGEND' : hasMentionAll ? '📢 @alle' : hasMentionMe ? '💬 Du wurdest erwähnt' : '📢 Neuer Beitrag';
+            // Dringend + @alle: Notification auch wenn App im Fokus
+            if (isUrgentPost || hasMentionAll || hasMentionMe) {
+              try {
+                if (notificationsEnabled && notificationPermission === 'granted') {
+                  const n = new Notification(notifTitle, {
+                    body: (newPost.title || newPost.content || 'Neuer Beitrag').substring(0, 150),
+                    icon: KRS_LOGO, badge: KRS_LOGO, tag: 'krs-urgent-' + newPost.id, renotify: true, requireInteraction: isUrgentPost
+                  });
+                  n.onclick = () => { window.focus(); n.close(); };
+                  if (!isUrgentPost) setTimeout(() => n.close(), 10000);
+                }
+              } catch(e) {}
+              // In-App Toast für dringende Posts
+              if (isUrgentPost) showToast('🚨 DRINGEND: ' + (newPost.title || newPost.content || '').substring(0, 80), 'error');
+            } else {
+              sendBrowserNotification(notifTitle, newPost.title || newPost.content || 'Neuer Beitrag in einem Kanal', () => {});
+            }
           })
           .subscribe();
 
@@ -3553,7 +4899,7 @@
           sb.removeChannel(msgChannel);
           sb.removeChannel(postChannel);
         };
-      }, [user, dataService, selectedConversation]);
+      }, [user, dataService]); // selectedConversation NICHT in Dependencies (via Ref)
 
       // Tab-Titel mit Unread-Count aktualisieren
       useEffect(() => {
@@ -3813,7 +5159,8 @@
             React.createElement('button', {
               style: { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: '4px', display: 'flex', alignItems: 'center' },
               onClick: () => setShowCreateTeam(true),
-              title: 'Neues Team'
+              title: 'Neues Team',
+              'aria-label': 'Neues Team erstellen'
             },
               React.createElement('span', { dangerouslySetInnerHTML: { __html: Icons.plus }, style: { fontSize: '18px' } })
             )
@@ -3836,7 +5183,7 @@
                         const teamUnread = Array.from(unreadPostChannels.entries())
                           .filter(([chId]) => channelTeamMap.get(chId) === team.id)
                           .reduce((sum, [, count]) => sum + count, 0);
-                        return teamUnread > 0 ? React.createElement('span', { className: 'unread-badge', style: { marginLeft: 'auto' } }, teamUnread) : null;
+                        return teamUnread > 0 ? React.createElement('span', { className: 'unread-badge', style: { marginLeft: 'auto' }, 'aria-label': teamUnread + ' ungelesene Nachrichten' }, teamUnread) : null;
                       })()
                     ),
                     React.createElement('button', { className: 'team-hide-btn', onClick: (e) => { e.stopPropagation(); toggleTeamVisibility(team.id); }, title: 'Team ausblenden' }, '👁')
@@ -3896,14 +5243,17 @@
               selectedTeam && React.createElement('button', {
                 style: { background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', color: 'var(--text-secondary)', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' },
                 onClick: () => setShowTeamMembers(true),
-                title: 'Mitglieder anzeigen'
+                title: 'Mitglieder anzeigen',
+                'aria-label': 'Team-Mitglieder anzeigen'
               },
                 React.createElement('span', { dangerouslySetInnerHTML: { __html: Icons.users }, style: { width: '16px', height: '16px' } }),
                 React.createElement('span', null, 'Mitglieder')
               )
             ),
             React.createElement('div', { className: 'content-body' },
-              React.createElement(PostList, { posts, setPosts, channelId: selectedChannel?.id, dataService, user, onOpenThread: setOpenThread, hasMore: hasMorePosts, onLoadMore: loadMorePosts, loadingMore })
+              postsLoading
+                ? React.createElement(SkeletonPosts, { count: 4 })
+                : React.createElement(PostList, { posts, setPosts, channelId: selectedChannel?.id, dataService, user, allUsers, onOpenThread: setOpenThread, hasMore: hasMorePosts, onLoadMore: loadMorePosts, loadingMore })
             )
           )
         )
@@ -3955,9 +5305,9 @@
           isAdmin: userTeamRole === 'admin'
         }),
         // Main app layout
-        React.createElement('div', { className: 'app-layout' },
+        React.createElement('div', { className: 'app-layout', role: 'application' },
         // Sidebar mit View-Switcher
-        React.createElement('div', { className: 'sidebar' },
+        React.createElement('nav', { className: 'sidebar', 'aria-label': 'Hauptnavigation' },
           React.createElement('div', { className: 'sidebar-logo' }, React.createElement('img', { src: KRS_LOGO, alt: 'KRS', style: { width: '32px', height: '32px', objectFit: 'contain' } })),
           React.createElement('div', { className: 'sidebar-nav' },
             React.createElement('button', {
@@ -4001,7 +5351,21 @@
               title: notificationsEnabled && notificationPermission === 'granted' ? 'Benachrichtigungen deaktivieren' : 'Benachrichtigungen aktivieren',
               style: { opacity: notificationsEnabled && notificationPermission === 'granted' ? 1 : 0.5 }
             }, notificationsEnabled && notificationPermission === 'granted' ? '🔔' : '🔕'),
-            React.createElement('button', { className: 'feedback-trigger', onClick: () => setShowFeedback(true), title: 'Feedback geben' }, '📣'),
+            React.createElement('button', {
+              className: 'feedback-trigger',
+              onClick: toggleReadReceipts,
+              title: readReceiptsEnabled ? 'Lesebestätigungen deaktivieren' : 'Lesebestätigungen aktivieren (DSGVO: Andere sehen, dass du gelesen hast)',
+              'aria-label': readReceiptsEnabled ? 'Lesebestätigungen deaktivieren' : 'Lesebestätigungen aktivieren',
+              style: { opacity: readReceiptsEnabled ? 1 : 0.5 }
+            }, readReceiptsEnabled ? '✓✓' : '✓'),
+            React.createElement('button', { className: 'feedback-trigger', onClick: () => setShowHelp(true), title: 'Hilfe & Tipps', 'aria-label': 'Hilfe anzeigen' }, '❓'),
+            React.createElement('button', { className: 'feedback-trigger', onClick: () => setShowFeedback(true), title: 'Feedback geben', 'aria-label': 'Feedback geben' }, '📣'),
+            React.createElement('button', { className: 'feedback-trigger', onClick: () => setShowPrivacy(true), title: 'Datenschutz', 'aria-label': 'Datenschutzhinweis' }, '🔒'),
+            React.createElement('button', {
+              onClick: () => setShowProfile(prev => !prev),
+              title: 'Profil',
+              style: { background: 'none', border: 'none', cursor: 'pointer', padding: '2px', borderRadius: '50%' }
+            }, React.createElement(Avatar, { user: user || { display_name: '?', avatar_color: '#999' }, size: 28 })),
             React.createElement('button', { className: 'icon-btn', onClick: handleLogout, title: 'Abmelden', 'aria-label': 'Abmelden', dangerouslySetInnerHTML: { __html: Icons.logout } })
           ),
           // Online Users Panel (Popup)
@@ -4035,14 +5399,22 @@
             )
           )
         ),
+          // Profile Panel
+          showProfile && user && React.createElement(ProfileModal, { user, onClose: () => setShowProfile(false), onAvatarUpload: handleAvatarUpload }),
         // Main content: Teams oder Chat
         React.createElement('div', { className: 'main' },
-          view === 'teams' ? teamsView : view === 'chat' ? chatView : React.createElement(SearchView, { dataService, user })
+          view === 'teams' ? teamsView : view === 'chat' ? chatView : React.createElement(SearchView, { dataService, user, allUsers, teams })
         ),
         // Thread overlay (nur in Teams-View)
         view === 'teams' && openThread && React.createElement(ThreadPanel, { post: openThread, replies, dataService, user, onClose: () => setOpenThread(null) }),
         // Feedback Modal
-        showFeedback && React.createElement(FeedbackModal, { user, onClose: () => setShowFeedback(false) })
+        showFeedback && React.createElement(FeedbackModal, { user, onClose: () => setShowFeedback(false) }),
+        // Onboarding Wizard
+        showOnboarding && React.createElement(OnboardingWizard, { onClose: () => setShowOnboarding(false) }),
+        // Hilfe-Panel mit Accordions
+        showHelp && React.createElement(HelpPanel, { onClose: () => setShowHelp(false), onStartOnboarding: () => { try { localStorage.removeItem('krs_onboarding_done'); } catch(e) {} setShowOnboarding(true); } }),
+        // Datenschutz Modal
+        showPrivacy && React.createElement(PrivacyModal, { onClose: () => setShowPrivacy(false) })
       )
       );
     }
