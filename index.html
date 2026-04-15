@@ -2916,7 +2916,7 @@
       );
     }
 
-    function PostList({ posts, setPosts, channelId, dataService, user, allUsers, onOpenThread, hasMore, onLoadMore, loadingMore }) {
+    function PostList({ posts, setPosts, channelId, dataService, user, allUsers, onOpenThread, hasMore, onLoadMore, loadingMore, readReceiptsEnabled }) {
       const [newPostTitle, setNewPostTitle] = useState('');
       const [newPostContent, setNewPostContent] = useState('');
       const [saving, setSaving] = useState(false);
@@ -2931,17 +2931,7 @@
       const [emojiPickerPostId, setEmojiPickerPostId] = useState(null);
       const [readReceipts, setReadReceipts] = useState(new Map()); // Map<postId, [{user_id, display_name}]>
       const [expandedReads, setExpandedReads] = useState(null); // postId or null
-      // DSGVO: Read Receipts nur mit explizitem Opt-in
-      const [readReceiptsEnabled, setReadReceiptsEnabled] = useState(() => {
-        try { return localStorage.getItem('krs-read-receipts') === 'enabled'; } catch(e) { return false; }
-      });
-      const toggleReadReceipts = useCallback(() => {
-        setReadReceiptsEnabled(prev => {
-          const next = !prev;
-          try { localStorage.setItem('krs-read-receipts', next ? 'enabled' : 'disabled'); } catch(e) {}
-          return next;
-        });
-      }, []);
+      // readReceiptsEnabled + toggleReadReceipts werden von App als Props übergeben (DSGVO Opt-in als globale User-Preference)
 
       // Load reactions for loaded posts (Supabase mode)
       useEffect(() => {
@@ -4559,6 +4549,18 @@
       const { notificationsEnabled, notificationPermission, requestNotifications,
         toggleNotifications, sendBrowserNotification } = useNotifications();
 
+      // Read Receipts (DSGVO Opt-in, globale User-Preference)
+      const [readReceiptsEnabled, setReadReceiptsEnabled] = useState(() => {
+        try { return localStorage.getItem('krs-read-receipts') === 'enabled'; } catch(e) { return false; }
+      });
+      const toggleReadReceipts = useCallback(() => {
+        setReadReceiptsEnabled(prev => {
+          const next = !prev;
+          try { localStorage.setItem('krs-read-receipts', next ? 'enabled' : 'disabled'); } catch(e) {}
+          return next;
+        });
+      }, []);
+
       // Notifications, Modals, Teams, Chat, Unread — alle in Custom Hooks (oben)
 
       const handleAvatarUpload = async (e) => {
@@ -5258,7 +5260,7 @@
             React.createElement('div', { className: 'content-body' },
               postsLoading
                 ? React.createElement(SkeletonPosts, { count: 4 })
-                : React.createElement(PostList, { posts, setPosts, channelId: selectedChannel?.id, dataService, user, allUsers, onOpenThread: setOpenThread, hasMore: hasMorePosts, onLoadMore: loadMorePosts, loadingMore })
+                : React.createElement(PostList, { posts, setPosts, channelId: selectedChannel?.id, dataService, user, allUsers, onOpenThread: setOpenThread, hasMore: hasMorePosts, onLoadMore: loadMorePosts, loadingMore, readReceiptsEnabled })
             )
           )
         )
