@@ -1,0 +1,21 @@
+{
+  "name": "krs-tests",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Playwright E2E-Tests für KRS Connect + KRS Hub",
+  "scripts": {
+    "serve": "http-server . -p 4173 -c-1 --silent --cors",
+    "test": "playwright test",
+    "test:connect": "playwright test tests/connect",
+    "test:hub": "playwright test tests/hub",
+    "test:live": "playwright test tests/live",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "test:install": "playwright install --with-deps chromium",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.47.0",
+    "http-server": "^14.1.1"
+  }
+}

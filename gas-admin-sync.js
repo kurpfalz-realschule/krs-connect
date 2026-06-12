@@ -36,6 +36,7 @@ function onOpen() {
   SpreadsheetApp.getUi().createMenu('KRS Connect')
     .addItem('Setup: Sheets anlegen', 'setupSheets')
     .addItem('Secrets aendern', 'setupSecrets')
+    .addItem('Feedback-Sheet einrichten', 'setupFeedbackSheet')
     .addSeparator()
     .addItem('Sheet -> Supabase sync', 'syncToSupabase')
     .addItem('Supabase -> Sheet laden', 'loadFromSupabase')
@@ -315,6 +316,92 @@ function getColorForKuerzel(kuerzel) {
   return colors[Math.abs(hash) % colors.length];
 }
 
+// === FEEDBACK-SHEET ANLEGEN ===
+function setupFeedbackSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var fb = ss.getSheetByName('Feedback') || ss.insertSheet('Feedback');
+  if (fb.getLastRow() === 0 || fb.getRange('A1').getValue() === '') {
+    fb.getRange('A1:G1').setValues([[
+      'Zeitstempel', 'Name', 'Kategorie', 'Bewertung', 'Nachricht', 'Seite', 'User-Agent'
+    ]]);
+    fb.getRange('A1:G1').setFontWeight('bold').setBackground('#ff9800').setFontColor('white');
+    fb.setColumnWidth(1, 160);
+    fb.setColumnWidth(2, 120);
+    fb.setColumnWidth(3, 110);
+    fb.setColumnWidth(4, 80);
+    fb.setColumnWidth(5, 400);
+    fb.setColumnWidth(6, 120);
+    fb.setColumnWidth(7, 200);
+    fb.setFrozenRows(1);
+  }
+  SpreadsheetApp.getUi().alert('Feedback-Sheet eingerichtet!');
+}
+
+// === WEB-APP ENDPOINT: Feedback empfangen ===
+// Nach dem Deployen als Web-App erreichbar unter der Deployment-URL.
+// Die App sendet POST-Requests mit JSON-Body hierher.
+function doPost(e) {
+  var ALLOWED_CATEGORIES = ['bug', 'verbesserung', 'lob', 'frage', 'sonstiges'];
+  try {
+    // Eingabe-Validierung
+    if (!e || !e.postData || !e.postData.contents) {
+      return ContentService.createTextOutput(JSON.stringify({ success: false, error: 'Keine Daten empfangen' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    var data = JSON.parse(e.postData.contents);
+
+    // Kategorie-Whitelist
+    var category = String(data.category || 'sonstiges').toLowerCase();
+    if (ALLOWED_CATEGORIES.indexOf(category) === -1) category = 'sonstiges';
+
+    // Rating Range-Check (0-5)
+    var rating = Number(data.rating) || 0;
+    if (rating < 0) rating = 0;
+    if (rating > 5) rating = 5;
+
+    var ss = SpreadsheetApp.openById('1i81Zb9A2rpI1X8fkG11EwBs_BsaSFGUGtIaDfj_LHGE');
+    var fb = ss.getSheetByName('Feedback');
+    if (!fb) {
+      fb = ss.insertSheet('Feedback');
+      fb.getRange('A1:G1').setValues([[
+        'Zeitstempel', 'Name', 'Kategorie', 'Bewertung', 'Nachricht', 'Seite', 'User-Agent'
+      ]]);
+      fb.getRange('A1:G1').setFontWeight('bold').setBackground('#ff9800').setFontColor('white');
+      fb.setFrozenRows(1);
+    }
+
+    // Anti-Spam: Max 1000 Zeilen, danach ablehnen
+    if (fb.getLastRow() > 1000) {
+      return ContentService.createTextOutput(JSON.stringify({ success: false, error: 'Feedback-Limit erreicht' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    fb.appendRow([
+      new Date().toLocaleString('de-DE', { timeZone: 'Europe/Berlin' }),
+      String(data.name || 'Anonym').substring(0, 100),
+      category,
+      rating,
+      String(data.message || '').substring(0, 2000),
+      String(data.page || '').substring(0, 200),
+      String(data.userAgent || '').substring(0, 300)
+    ]);
+    return ContentService.createTextOutput(JSON.stringify({ success: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ success: false, error: 'Serverfehler' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// === WEB-APP ENDPOINT: GET (Statuscheck) ===
+function doGet(e) {
+  return ContentService.createTextOutput(JSON.stringify({
+    status: 'ok',
+    app: 'KRS Connect Feedback',
+    timestamp: new Date().toISOString()
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
 function showHelp() {
   var html = HtmlService.createHtmlOutput(
     '<h2>KRS Connect Admin</h2>' +
@@ -331,7 +418,10 @@ function showHelp() {
     '<li><b>lehrer</b> = Normaler Lehrer</li>' +
     '<li><b>gast</b> = Nur lesen</li>' +
     '</ul>' +
+    '<h3>Feedback:</h3>' +
+    '<p>Klicke "Feedback-Sheet einrichten" im Menu, um das Feedback-Tab anzulegen.</p>' +
+    '<p>Nach dem Web-App-Deploy empfaengt doPost() automatisch Feedback von der App.</p>' +
     '<p><small>Supabase: ooejsfixxiuobrpqgfqm.supabase.co</small></p>'
-  ).setWidth(400).setHeight(350);
+  ).setWidth(400).setHeight(400);
   SpreadsheetApp.getUi().showModalDialog(html, 'Hilfe');
 }

@@ -1,0 +1,121 @@
+# =====================================================================
+# KRS Connect — Test & Deploy Workflow
+# =====================================================================
+# Speicherort: BenditoT/krs-connect → .github/workflows/test-and-deploy.yml
+#
+# Voraussetzungen im krs-connect Repo:
+#   1. Repo → Settings → Pages → Source: GitHub Actions
+#   2. Repo → Settings → Actions → Workflow permissions: Read and write
+#   3. package.json + playwright.config.ts + tests/ + index.html im Repo-Root
+#      (index.html = Kopie von krs-connect-v3.html)
+#
+# Trigger:
+#   - PR gegen main → Tests
+#   - Push main + Tests grün → Deploy auf GitHub Pages
+#   - Push main + Tests rot → Deploy blockiert, alte Version bleibt live
+# =====================================================================
+
+name: Test & Deploy Connect
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: pages-connect
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  test:
+    name: Playwright Smoke (Demo-Mode)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci || npm install
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps chromium
+      - name: Run Connect smoke tests
+        run: npx playwright test --project=connect
+        env:
+          CI: true
+      - name: Upload Playwright Report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-connect
+          path: playwright-report/
+          retention-days: 14
+
+  build:
+    name: Build _site
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - name: Assemble deploy directory
+        run: |
+          mkdir -p _site
+          # Wenn die App als index.html im Repo liegt, einfach kopieren.
+          # Falls krs-connect-v3.html: erst nach index.html umbenennen.
+          if [ -f krs-connect-v3.html ] && [ ! -f index.html ]; then
+            cp krs-connect-v3.html _site/index.html
+          else
+            cp index.html _site/
+          fi
+          # Optionale Assets
+          for f in logo*.png manifest.json sw.js favicon.ico; do
+            [ -f "$f" ] && cp "$f" _site/ || true
+          done
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: '_site'
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  health-check:
+    name: Live Health-Check
+    needs: deploy
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+      - run: npm ci || npm install
+      - run: npx playwright install --with-deps chromium
+      - name: Wait for Pages-CDN propagation
+        run: sleep 60
+      - name: Run live health-checks
+        run: npx playwright test --project=live --grep "KRS Connect"
+        env:
+          CI: true
+        continue-on-error: true
