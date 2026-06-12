@@ -5,30 +5,59 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>KRS Connect</title>
   <style>
+    /* ═══════════════════════════════════════════════════
+       KRS Connect — Design Tokens (v4.0.0)
+       Synchron mit KRS Hub gehalten:
+       - Akzent-Blau (--accent) = Hub --primary
+       - Radius/Shadow/Transition aus Hub übernommen
+       - Orange/Amber bleiben für semantische Markierungen
+         (Pinned, Urgent) — kein Brand-Akzent
+       Abweichung zur Desktop-Vorlage (dokumentiert, O1):
+       --shadow bleibt FARBWERT, weil 14 Regeln ihn als
+       Farbe in box-shadow-Shorthands nutzen. Voller
+       Schattenwert wäre dort ungültiges CSS.
+       ═══════════════════════════════════════════════════ */
     :root {
+      /* Background-Hierarchie (Connect-eigen) */
       --bg-primary: #F8F9FC;
       --bg-secondary: #FFFFFF;
       --bg-tertiary: #EEF0F4;
       --bg-hover: #E4E7ED;
       --bg-active: #D8DCE5;
-      --text-primary: #1A1D26;
-      --text-secondary: #5A5F72;
-      --text-muted: #8C91A0;
-      --accent: #5B7B94;
-      --accent-hover: #4A6A83;
-      --accent-light: rgba(91,123,148,0.1);
-      --accent-orange: #D4762C;
-      --accent-amber: #E8A832;
-      --success: #22C55E;
-      --warning: #F59E0B;
-      --danger: #EF4444;
-      --danger-bg: #FEE2E2;
+
+      /* Text (mit Hub harmonisiert) */
+      --text-primary: #1e293b;
+      --text-secondary: #475569;
+      --text-muted: #64748b;
+
+      /* Akzent — identisch zu Hub --primary für konsistentes Branding */
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --accent-light: rgba(37, 99, 235, 0.10);
+      --accent-soft: #dbeafe;
+
+      /* Semantische Akzente (Connect-Spezifika) */
+      --accent-orange: #D4762C;   /* Pinned */
+      --accent-amber: #E8A832;    /* Highlight */
+
+      /* Status-Farben (mit Hub harmonisiert) */
+      --success: #16a34a;
+      --success-light: #dcfce7;
+      --warning: #d97706;
+      --warning-light: #fef3c7;
+      --danger: #dc2626;
+      --danger-bg: #fee2e2;
       --danger-text: #B91C1C;
-      --border: #E2E4E8;
-      --shadow: rgba(0,0,0,0.06);
-      --radius: 8px;
-      --radius-lg: 12px;
-      --transition: 0.15s ease;
+
+      /* Rahmen, Schatten, Radien (aus Hub übernommen) */
+      --border: #e2e8f0;
+      --shadow: rgba(0,0,0,0.08);
+      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1);
+      --radius: 10px;
+      --radius-sm: 6px;
+      --radius-lg: 14px;
+      --touch-min: 44px;
+      --transition: 0.2s ease;
     }
 
     * { box-sizing: border-box; }
@@ -567,6 +596,130 @@
       flex-shrink: 0;
     }
 
+    /* Polls */
+    .poll-container {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 14px;
+      margin: 8px 0;
+    }
+    .poll-question {
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 10px;
+      color: var(--text-primary);
+    }
+    .poll-option {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      margin-bottom: 6px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      cursor: pointer;
+      background: var(--bg-secondary);
+      transition: all 0.15s;
+      overflow: hidden;
+      min-height: 44px;
+    }
+    .poll-option:hover { border-color: var(--accent); }
+    .poll-option.voted { border-color: var(--accent); background: var(--accent-light); }
+    .poll-option .poll-bar {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      background: var(--accent);
+      opacity: 0.1;
+      border-radius: var(--radius);
+      transition: width 0.4s ease;
+    }
+    .poll-option .poll-text { position: relative; z-index: 1; flex: 1; font-size: 13px; }
+    .poll-option .poll-count { position: relative; z-index: 1; font-size: 12px; color: var(--text-muted); font-weight: 600; white-space: nowrap; }
+    .poll-meta { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 11px; color: var(--text-muted); }
+
+    /* Poll Creator */
+    .poll-creator { background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px; margin-top: 8px; }
+    .poll-creator input { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-primary); color: var(--text-primary); font-size: 13px; outline: none; margin-bottom: 6px; box-sizing: border-box; }
+    .poll-creator input:focus { border-color: var(--accent); }
+    .poll-creator .poll-option-row { display: flex; gap: 6px; margin-bottom: 6px; }
+    .poll-creator .poll-option-row input { flex: 1; margin-bottom: 0; }
+    .poll-creator .poll-option-row button { flex-shrink: 0; width: 32px; height: 32px; border: none; background: none; cursor: pointer; color: var(--text-muted); font-size: 16px; border-radius: var(--radius); }
+    .poll-creator .poll-option-row button:hover { background: var(--bg-hover); color: var(--danger); }
+
+    /* Channel Context Menu */
+    .channel-context-menu {
+      position: fixed;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 4px 20px var(--shadow);
+      padding: 4px 0;
+      z-index: 600;
+      min-width: 180px;
+    }
+    .channel-context-menu button {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 8px 14px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      color: var(--text-primary);
+      font-size: 13px;
+      text-align: left;
+    }
+    .channel-context-menu button:hover { background: var(--bg-hover); }
+    .channel-context-menu button.danger { color: var(--danger); }
+    .channel-context-menu button.danger:hover { background: rgba(239,68,68,0.08); }
+
+    /* Channel Create/Edit Dialog */
+    .channel-dialog {
+      background: var(--bg-secondary);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 10px 40px var(--shadow);
+      padding: 24px;
+      width: 380px;
+      max-width: calc(100vw - 32px);
+    }
+    .channel-dialog h3 { margin: 0 0 16px 0; font-size: 16px; }
+    .channel-dialog input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-size: 14px;
+      outline: none;
+      box-sizing: border-box;
+    }
+    .channel-dialog input:focus { border-color: var(--accent); }
+    .channel-dialog .dialog-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 16px;
+    }
+    .channel-dialog .dialog-actions button {
+      padding: 8px 16px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .channel-dialog .dialog-actions .btn-primary {
+      background: var(--accent);
+      color: white;
+      border: none;
+    }
+    .channel-dialog .dialog-actions .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
     /* Emoji Picker */
     .emoji-picker-overlay {
       position: fixed;
@@ -1031,10 +1184,32 @@
       .lightbox-close { top: 12px; right: 12px; width: 40px; height: 40px; }
       .lightbox-caption { font-size: 12px; padding: 6px 14px; bottom: 16px; }
     }
+
+    /* Phase 7.7: Offline-Banner */
+    .offline-banner {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 10000;
+      background: var(--warning, #F59E0B); color: #1A1D26;
+      text-align: center; padding: 6px 16px; font-size: 13px; font-weight: 600;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      animation: slideDown 0.3s ease;
+    }
+    .offline-banner.online {
+      background: var(--success, #22C55E); color: white;
+      animation: slideDown 0.3s ease;
+    }
+    @keyframes slideDown { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+    body.offline-mode .app-layout { margin-top: 32px; height: calc(100vh - 32px); }
+
   </style>
 </head>
 <body>
   <div id="app"><div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#5A5F72"><div style="width:40px;height:40px;border:3px solid #E2E4E8;border-top-color:#5B7B94;border-radius:50%;animation:spin 0.8s linear infinite"></div><div>KRS Connect wird geladen...</div><style>@keyframes spin{to{transform:rotate(360deg)}}</style></div></div>
+
+  <!-- Phase 7.8: CDN Preload für schnelleren Initial Load -->
+  <link rel="preload" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" as="script">
+  <link rel="preload" href="https://unpkg.com/react@18/umd/react.production.min.js" as="script" crossorigin>
+  <link rel="preload" href="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" as="script" crossorigin>
+  <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js" as="script">
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -1074,6 +1249,9 @@
 
         ov = document.createElement('div');
         ov.className = 'lightbox-overlay';
+        ov.setAttribute('role', 'dialog');
+        ov.setAttribute('aria-modal', 'true');
+        ov.setAttribute('aria-label', 'Bildanzeige');
         ov.onclick = function(e) { if (e.target === ov) closeLB(); };
 
         var img = _lbImgs[_lbIdx];
@@ -1120,7 +1298,14 @@
         var caption = document.createElement('div');
         caption.className = 'lightbox-caption';
         var countText = _lbImgs.length > 1 ? ((_lbIdx + 1) + '/' + _lbImgs.length + ' — ') : '';
-        caption.innerHTML = countText + '<a href="' + imgUrl + '" download="' + imgName.replace(/"/g, '&quot;') + '" title="Herunterladen" onclick="event.stopPropagation()">⬇ Download</a>';
+        if (countText) caption.appendChild(document.createTextNode(countText));
+        var dlLink = document.createElement('a');
+        dlLink.href = imgUrl;
+        dlLink.download = imgName;
+        dlLink.title = 'Herunterladen';
+        dlLink.textContent = '⬇ Download';
+        dlLink.onclick = function(e) { e.stopPropagation(); };
+        caption.appendChild(dlLink);
         ov.appendChild(caption);
 
         // Touch-Swipe
@@ -1183,8 +1368,82 @@
       toast.appendChild(iconSpan);
       toast.appendChild(msgSpan);
       container.appendChild(toast);
-      setTimeout(() => { toast.remove(); }, 4000);
+      setTimeout(() => { toast.remove(); }, CONFIG.TOAST_DURATION);
     }
+
+    // ============================================================
+    // APP-KONFIGURATION — Alle "Magic Numbers" zentral
+    // ============================================================
+    const CONFIG = {
+      // Dateigrößen-Limits
+      MAX_FILE_SIZE_POST: 20 * 1024 * 1024,       // 20 MB für Kanal-Posts
+      MAX_FILE_SIZE_CHAT: 20 * 1024 * 1024,       // 20 MB für Chat-Nachrichten
+      MAX_FILE_SIZE_AVATAR: 5 * 1024 * 1024,      // 5 MB für Profilbilder
+      MAX_FILES_PER_MESSAGE: 10,
+
+      // Zeitlimits (ms)
+      TOAST_DURATION: 4000,
+      WIKI_LOAD_TIMEOUT: 8000,
+      NOTIFICATION_AUTO_CLOSE: 8000,
+      IMAGE_COMPRESS_THRESHOLD: 200 * 1024,        // 200 KB — darunter kein Compress
+
+      // Umfragen
+      MIN_POLL_OPTIONS: 2,
+      MAX_POLL_OPTIONS: 10,
+
+      // Input-Validierung
+      MAX_CHANNEL_NAME: 50,
+      MAX_POST_LENGTH: 10000,
+      MAX_POLL_QUESTION: 200,
+      MAX_POLL_OPTION: 100,
+
+      // Upload-Extension-Whitelist (nur erlaubte Dateiendungen)
+      BLOCKED_EXTENSIONS: new Set(['exe', 'bat', 'cmd', 'scr', 'msi', 'ps1', 'vbs', 'js', 'jar', 'com', 'pif', 'wsf', 'reg']),
+
+      // Phase 7.8: Feature-Flags (für schrittweisen Rollout)
+      FEATURES: {
+        URGENT_POSTS: true,       // 🚨 Dringend-Nachrichten
+        OFFLINE_DETECTION: true,  // ⚡ Offline-Banner
+        READ_RECEIPTS: true,      // ✓✓ Lesebestätigungen
+        POLLS: true,              // 📊 Umfragen
+        FILE_UPLOAD: true,        // 📎 Datei-Upload
+        ADMIN_PANEL: true,        // ⚙️ Admin-Verwaltung
+        BROWSER_NOTIFICATIONS: true, // 🔔 Push-Notifications
+      },
+
+      // Heartbeat
+      HEARTBEAT_INTERVAL: 4 * 60 * 60 * 1000, // 4h
+    };
+
+    // ── Phase 7.7: Offline-Erkennung ──────────────────────────
+    (function initOfflineDetection() {
+      if (!CONFIG.FEATURES.OFFLINE_DETECTION) return;
+      let offlineBanner = null;
+
+      function showOfflineBanner() {
+        if (offlineBanner) return;
+        offlineBanner = document.createElement('div');
+        offlineBanner.className = 'offline-banner';
+        offlineBanner.textContent = '⚡ Keine Internetverbindung — Inhalte werden aus dem Cache geladen';
+        document.body.prepend(offlineBanner);
+        document.body.classList.add('offline-mode');
+      }
+
+      function hideOfflineBanner() {
+        if (offlineBanner) {
+          offlineBanner.className = 'offline-banner online';
+          offlineBanner.textContent = '✅ Wieder online!';
+          setTimeout(() => {
+            if (offlineBanner) { offlineBanner.remove(); offlineBanner = null; }
+            document.body.classList.remove('offline-mode');
+          }, 2000);
+        }
+      }
+
+      window.addEventListener('offline', showOfflineBanner);
+      window.addEventListener('online', hideOfflineBanner);
+      if (!navigator.onLine) showOfflineBanner();
+    })();
 
     // ============================================================
     // MOCK DATA (KRS-specific)
@@ -1253,6 +1512,23 @@
         },
       ],
       1: [
+        {
+          id: 6, author: MOCK_USERS[1], title: '',
+          content: '<p>📊 Wann soll der Pädagogische Tag stattfinden?</p>',
+          poll_data: {
+            question: 'Wann soll der Pädagogische Tag stattfinden?',
+            options: [
+              { id: 0, text: 'Freitag, 25. April', votes: [1, 3, 5, 7] },
+              { id: 1, text: 'Montag, 28. April', votes: [2, 4] },
+              { id: 2, text: 'Freitag, 2. Mai', votes: [6, 8] },
+              { id: 3, text: 'Mir egal / jeder Termin passt', votes: [] },
+            ],
+            totalVotes: 8,
+            multiSelect: false
+          },
+          reactions: [], replies: 2, reply_users: [MOCK_USERS[0], MOCK_USERS[4]],
+          created_at: '21.03.2026, 08:00'
+        },
         {
           id: 3, author: MOCK_USERS[2], title: '',
           content: '<p>Liebe Kolleginnen und Kollegen, bitte denkt daran, die Klassenbücher bis Ende der Woche zu aktualisieren. Danke!</p>',
@@ -1357,7 +1633,7 @@
     async function compressImage(file, maxWidth = 1200, quality = 0.8) {
       return new Promise((resolve) => {
         // Skip non-image files or small files (< 200KB)
-        if (!file.type.startsWith('image/') || file.size < 200 * 1024) {
+        if (!file.type.startsWith('image/') || file.size < CONFIG.IMAGE_COMPRESS_THRESHOLD) {
           resolve(file);
           return;
         }
@@ -1394,11 +1670,57 @@
       });
     }
 
+    // ── Phase 7.1: SubscriptionManager ──────────────────────────
+    // Map-basiertes Subscription-Tracking verhindert Memory Leaks
+    class SubscriptionManager {
+      constructor(supabaseClient) {
+        this.sb = supabaseClient;
+        this.subs = new Map();
+      }
+
+      add(key, subscription) {
+        this.remove(key); // Altes aufräumen bevor neues rein
+        this.subs.set(key, subscription);
+      }
+
+      remove(key) {
+        const sub = this.subs.get(key);
+        if (sub) {
+          try {
+            if (sub.unsubscribe) sub.unsubscribe();
+            if (sub.untrack) sub.untrack(); // Presence
+            if (this.sb && this.sb.removeChannel) this.sb.removeChannel(sub);
+          } catch (e) {
+            console.warn('SubscriptionManager remove error:', e);
+          }
+          this.subs.delete(key);
+        }
+      }
+
+      has(key) { return this.subs.has(key); }
+
+      cleanup() {
+        this.subs.forEach((sub, key) => {
+          try {
+            if (sub.unsubscribe) sub.unsubscribe();
+            if (sub.untrack) sub.untrack();
+            if (this.sb && this.sb.removeChannel) this.sb.removeChannel(sub);
+          } catch (e) {
+            console.warn('SubscriptionManager cleanup error:', e);
+          }
+        });
+        this.subs.clear();
+      }
+
+      get size() { return this.subs.size; }
+    }
+
     class DataService {
       constructor(supabaseClient = null) {
         this.sb = supabaseClient;
         this.isDemo = !supabaseClient;
-        this.subscriptions = [];
+        this.subscriptions = []; // Legacy (wird noch von altem Code genutzt)
+        this.subManager = new SubscriptionManager(supabaseClient);
       }
 
       async getStorageStats() {
@@ -1466,6 +1788,66 @@
         }
       }
 
+      // ── Channel Management ──────────────────────────
+      async createChannel(teamId, name, description = '') {
+        if (this.isDemo) {
+          const newCh = { id: 'ch-' + Date.now(), name, description, team_id: teamId, is_default: false, unread: 0 };
+          if (!MOCK_CHANNELS[teamId]) MOCK_CHANNELS[teamId] = [];
+          MOCK_CHANNELS[teamId].push(newCh);
+          return newCh;
+        }
+        try {
+          const { data, error } = await this.sb.from('channels').insert({ team_id: teamId, name, description, is_default: false }).select().single();
+          if (error) throw error;
+          return data;
+        } catch (err) {
+          console.error('createChannel error:', err);
+          showToast('Kanal konnte nicht erstellt werden.', 'error');
+          return null;
+        }
+      }
+
+      async updateChannel(channelId, updates) {
+        if (this.isDemo) {
+          for (const teamChannels of Object.values(MOCK_CHANNELS)) {
+            const ch = teamChannels.find(c => c.id === channelId);
+            if (ch) { Object.assign(ch, updates); return ch; }
+          }
+          return null;
+        }
+        try {
+          const { data, error } = await this.sb.from('channels').update(updates).eq('id', channelId).select().single();
+          if (error) throw error;
+          return data;
+        } catch (err) {
+          console.error('updateChannel error:', err);
+          showToast('Kanal konnte nicht umbenannt werden.', 'error');
+          return null;
+        }
+      }
+
+      async deleteChannel(channelId) {
+        if (this.isDemo) {
+          for (const [teamId, teamChannels] of Object.entries(MOCK_CHANNELS)) {
+            const idx = teamChannels.findIndex(c => c.id === channelId);
+            if (idx !== -1) { teamChannels.splice(idx, 1); return true; }
+          }
+          return false;
+        }
+        try {
+          // Delete all posts in channel first, then the channel
+          const { error: postsErr } = await this.sb.from('posts').delete().eq('channel_id', channelId);
+          if (postsErr) throw postsErr;
+          const { error } = await this.sb.from('channels').delete().eq('id', channelId);
+          if (error) throw error;
+          return true;
+        } catch (err) {
+          console.error('deleteChannel error:', err);
+          showToast('Kanal konnte nicht gelöscht werden.', 'error');
+          return false;
+        }
+      }
+
       async getChannels(teamId) {
         if (this.isDemo) return MOCK_CHANNELS[teamId] || [{ id: `default-${teamId}`, name: 'Allgemein', team_id: teamId }];
         try {
@@ -1478,14 +1860,27 @@
         }
       }
 
-      // Get unread counts for channels by comparing latest post time with lastRead from localStorage
+      // Get unread counts for channels (Phase 6: Supabase channel_reads + localStorage Fallback)
       async getChannelUnreadCounts(channelIds, userId) {
-        if (this.isDemo) return new Map(); // Demo uses mock unread values
+        if (this.isDemo) return new Map();
         try {
+          // 1. Lesezeiten aus Supabase laden (1 Query statt N)
+          const { data: dbReads } = await this.sb.from('channel_reads')
+            .select('channel_id, last_read_at')
+            .eq('user_id', userId)
+            .in('channel_id', channelIds);
+          const readMap = new Map((dbReads || []).map(r => [r.channel_id, r.last_read_at]));
+          // Fallback: localStorage für Channels ohne DB-Eintrag
+          for (const chId of channelIds) {
+            if (!readMap.has(chId)) {
+              const ls = localStorage.getItem(`krs-lastread-ch-${chId}`);
+              if (ls) readMap.set(chId, ls);
+            }
+          }
+          // 2. Unread-Counts parallel berechnen
           const counts = new Map();
-          // Parallel statt sequenziell (kein N+1 mehr)
           const results = await Promise.all(channelIds.map(chId => {
-            const lastRead = localStorage.getItem(`krs-lastread-ch-${chId}`) || '1970-01-01';
+            const lastRead = readMap.get(chId) || '1970-01-01';
             return this.sb.from('posts')
               .select('*', { count: 'exact', head: true })
               .eq('channel_id', chId)
@@ -1504,14 +1899,27 @@
         }
       }
 
-      // Get unread counts for conversations
+      // Get unread counts for conversations (Phase 6: Supabase + localStorage Fallback)
       async getConversationUnreadCounts(conversations, userId) {
-        if (this.isDemo) return new Map(); // Demo uses mock unread values
+        if (this.isDemo) return new Map();
         try {
+          const convIds = conversations.map(c => c.id);
+          // 1. Lesezeiten aus Supabase laden
+          const { data: dbReads } = await this.sb.from('conversation_reads')
+            .select('conversation_id, last_read_at')
+            .eq('user_id', userId)
+            .in('conversation_id', convIds);
+          const readMap = new Map((dbReads || []).map(r => [r.conversation_id, r.last_read_at]));
+          for (const conv of conversations) {
+            if (!readMap.has(conv.id)) {
+              const ls = localStorage.getItem(`krs-lastread-conv-${conv.id}`);
+              if (ls) readMap.set(conv.id, ls);
+            }
+          }
+          // 2. Parallel Counts
           const counts = new Map();
-          // Parallel statt sequenziell
           const results = await Promise.all(conversations.map(conv => {
-            const lastRead = localStorage.getItem(`krs-lastread-conv-${conv.id}`) || '1970-01-01';
+            const lastRead = readMap.get(conv.id) || '1970-01-01';
             return this.sb.from('messages')
               .select('*', { count: 'exact', head: true })
               .eq('conversation_id', conv.id)
@@ -1529,14 +1937,38 @@
         }
       }
 
-      // Mark channel as read
-      static markChannelRead(channelId) {
-        localStorage.setItem(`krs-lastread-ch-${channelId}`, new Date().toISOString());
+      // Mark channel as read (Phase 6: Supabase + localStorage Fallback)
+      markChannelRead(channelId, userId) {
+        const now = new Date().toISOString();
+        // localStorage immer setzen (Fallback + Demo-Modus)
+        try { localStorage.setItem(`krs-lastread-ch-${channelId}`, now); } catch(e) {}
+        // Supabase upsert (async, non-blocking)
+        if (!this.isDemo && this.sb && userId) {
+          this.sb.from('channel_reads').upsert(
+            { user_id: userId, channel_id: channelId, last_read_at: now },
+            { onConflict: 'user_id,channel_id' }
+          ).catch(e => console.warn('markChannelRead error:', e));
+        }
       }
 
-      // Mark conversation as read
+      // Mark conversation as read (Phase 6: Supabase + localStorage Fallback)
+      markConversationRead(conversationId, userId) {
+        const now = new Date().toISOString();
+        try { localStorage.setItem(`krs-lastread-conv-${conversationId}`, now); } catch(e) {}
+        if (!this.isDemo && this.sb && userId) {
+          this.sb.from('conversation_reads').upsert(
+            { user_id: userId, conversation_id: conversationId, last_read_at: now },
+            { onConflict: 'user_id,conversation_id' }
+          ).catch(e => console.warn('markConversationRead error:', e));
+        }
+      }
+
+      // Backward-compat static wrapper (für bestehende Aufrufe)
+      static markChannelRead(channelId) {
+        try { localStorage.setItem(`krs-lastread-ch-${channelId}`, new Date().toISOString()); } catch(e) {}
+      }
       static markConversationRead(conversationId) {
-        localStorage.setItem(`krs-lastread-conv-${conversationId}`, new Date().toISOString());
+        try { localStorage.setItem(`krs-lastread-conv-${conversationId}`, new Date().toISOString()); } catch(e) {}
       }
 
       async getPosts(channelId, limit = 50, offset = 0) {
@@ -1551,8 +1983,26 @@
         }
       }
 
-      async uploadFile(file) {
+      async uploadFile(file, folder = 'uploads') {
         if (this.isDemo) return URL.createObjectURL(file);
+
+        // Pre-Flight: Datei-Größe (Bucket-Limit ist 25 MB)
+        if (file.size > UPLOAD_CONFIG.MAX_BYTES) {
+          showToast(`Datei zu groß (${Math.round(file.size / 1024 / 1024)} MB, max. 25 MB).`, 'error');
+          return null;
+        }
+
+        // Pre-Flight: erlaubter MIME-Type (muss zur Storage-Policy passen)
+        const ext = (file.name.split('.').pop() || 'bin').toLowerCase();
+        if (file.type && !UPLOAD_CONFIG.ALLOWED_MIME.has(file.type)) {
+          showToast(`Dateityp nicht erlaubt (${file.type}). Erlaubt: Bilder, PDF, Word, Excel, PowerPoint, Text.`, 'error');
+          return null;
+        }
+        if (!file.type && !UPLOAD_CONFIG.ALLOWED_EXT.has(ext)) {
+          showToast(`Dateiendung .${ext} nicht erlaubt.`, 'error');
+          return null;
+        }
+
         // Compress images before upload
         if (file.type.startsWith('image/')) {
           file = await compressImage(file);
@@ -1572,15 +2022,32 @@
           } catch (quotaErr) {
             // Quota-Check fehlgeschlagen — kein Problem, Upload trotzdem versuchen
           }
-          const ext = file.name.split('.').pop() || 'bin';
-          const path = `uploads/${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${ext}`;
-          const { data, error } = await this.sb.storage.from('images').upload(path, file);
+          const path = `${folder}/${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${ext}`;
+          const { data, error } = await this.sb.storage.from('images').upload(path, file, {
+            contentType: file.type || undefined,
+            cacheControl: '3600',
+            upsert: false
+          });
           if (error) throw error;
           const { data: urlData } = this.sb.storage.from('images').getPublicUrl(data.path);
           return urlData.publicUrl;
         } catch (err) {
           console.error('uploadFile error:', err);
-          showToast('Datei konnte nicht hochgeladen werden. Ist die Datei zu gro\u00df?', 'error');
+          // Spezifische Fehlermeldungen je nach Supabase-Error
+          let msg = 'Datei konnte nicht hochgeladen werden.';
+          const txt = (err?.message || err?.error || '').toString();
+          if (/exceeded the maximum allowed size|payload too large|413/i.test(txt)) {
+            msg = 'Datei zu gro\u00df (max. 25 MB).';
+          } else if (/policy|not authorized|permission|RLS|row-level/i.test(txt)) {
+            msg = 'Dateityp nicht erlaubt oder fehlende Berechtigung. Erlaubt: Bilder, PDF, Office-Dokumente, Text.';
+          } else if (/network|fetch|offline/i.test(txt)) {
+            msg = 'Keine Verbindung - bitte Internet pr\u00fcfen.';
+          } else if (/duplicate/i.test(txt)) {
+            msg = 'Datei mit gleichem Namen existiert bereits.';
+          } else if (txt) {
+            msg = 'Upload fehlgeschlagen: ' + txt.substring(0, 80);
+          }
+          showToast(msg, 'error');
           return null;
         }
       }
@@ -1751,6 +2218,74 @@
         } catch (err) {
           console.error('updateProfile error:', err);
           showToast('Profil konnte nicht aktualisiert werden.', 'error');
+          return null;
+        }
+      }
+
+      // ── Polls ─────────────────────────────────────
+      async createPoll(channelId, authorId, question, options) {
+        const pollData = { question, options: options.map((o, i) => ({ id: i, text: o, votes: [] })), totalVotes: 0, multiSelect: false };
+        if (this.isDemo) {
+          const post = {
+            id: 'poll-' + Date.now(), channel_id: channelId,
+            author: MOCK_USERS.find(u => u.id === authorId) || MOCK_USERS[0],
+            content: '<p>📊 ' + question + '</p>',
+            poll_data: pollData,
+            reactions: [], replies: 0, reply_users: [],
+            created_at: new Date().toLocaleString('de-DE')
+          };
+          if (!MOCK_POSTS[channelId]) MOCK_POSTS[channelId] = [];
+          MOCK_POSTS[channelId].unshift(post);
+          return post;
+        }
+        try {
+          const { data, error } = await this.sb.from('posts').insert({
+            channel_id: channelId, author_id: authorId,
+            content: '<p>📊 ' + question + '</p>',
+            poll_data: pollData
+          }).select('*, author:users(*)').single();
+          if (error) throw error;
+          return data;
+        } catch (err) {
+          console.error('createPoll error:', err);
+          showToast('Umfrage konnte nicht erstellt werden.', 'error');
+          return null;
+        }
+      }
+
+      async votePoll(postId, optionId, userId) {
+        if (this.isDemo) {
+          for (const chPosts of Object.values(MOCK_POSTS)) {
+            const post = chPosts.find(p => p.id === postId);
+            if (post?.poll_data) {
+              // Remove previous vote
+              post.poll_data.options.forEach(o => { o.votes = o.votes.filter(v => v !== userId); });
+              // Add new vote
+              const opt = post.poll_data.options.find(o => o.id === optionId);
+              if (opt) opt.votes.push(userId);
+              post.poll_data.totalVotes = post.poll_data.options.reduce((sum, o) => sum + o.votes.length, 0);
+              return { ...post };
+            }
+          }
+          return null;
+        }
+        try {
+          // Fetch current poll data
+          const { data: post, error: fetchErr } = await this.sb.from('posts').select('poll_data').eq('id', postId).single();
+          if (fetchErr) throw fetchErr;
+          const pd = post.poll_data;
+          // Remove previous vote by this user
+          pd.options.forEach(o => { o.votes = o.votes.filter(v => v !== userId); });
+          // Add new vote
+          const opt = pd.options.find(o => o.id === optionId);
+          if (opt) opt.votes.push(userId);
+          pd.totalVotes = pd.options.reduce((sum, o) => sum + o.votes.length, 0);
+          const { data, error } = await this.sb.from('posts').update({ poll_data: pd }).eq('id', postId).select('*, author:users(*)').single();
+          if (error) throw error;
+          return data;
+        } catch (err) {
+          console.error('votePoll error:', err);
+          showToast('Abstimmung konnte nicht gespeichert werden.', 'error');
           return null;
         }
       }
@@ -2015,14 +2550,8 @@
 
       subscribeToChannel(channelId, onNewPost) {
         if (this.isDemo) return () => {};
-        // Smart: Alte Channel-Subscriptions aufräumen (nur den gleichen Channel-Typ)
-        this.subscriptions = this.subscriptions.filter(s => {
-          if (s._krsType === 'channel') {
-            try { s.unsubscribe(); if (this.sb) this.sb.removeChannel(s); } catch(e) {}
-            return false;
-          }
-          return true;
-        });
+        const subKey = 'channel'; // Nur eine Channel-Sub gleichzeitig
+        this.subManager.remove(subKey);
         try {
           const sub = this.sb.channel('posts-' + channelId)
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'posts', filter: `channel_id=eq.${channelId}` },
@@ -2039,12 +2568,8 @@
                 onNewPost(post);
               })
             .subscribe();
-          sub._krsType = 'channel'; // Mark type for smart cleanup
-          this.subscriptions.push(sub);
-          return () => {
-            try { sub.unsubscribe(); if (this.sb) this.sb.removeChannel(sub); } catch(e) {}
-            this.subscriptions = this.subscriptions.filter(s => s !== sub);
-          };
+          this.subManager.add(subKey, sub);
+          return () => { this.subManager.remove(subKey); };
         } catch (err) {
           console.error('subscribeToChannel error:', err);
           return () => {};
@@ -2053,14 +2578,8 @@
 
       subscribeToConversation(conversationId, onNewMessage) {
         if (this.isDemo) return () => {};
-        // Smart: Alte Conversation-Subscriptions aufräumen
-        this.subscriptions = this.subscriptions.filter(s => {
-          if (s._krsType === 'conversation') {
-            try { s.unsubscribe(); if (this.sb) this.sb.removeChannel(s); } catch(e) {}
-            return false;
-          }
-          return true;
-        });
+        const subKey = 'conversation';
+        this.subManager.remove(subKey);
         try {
           const sub = this.sb.channel('messages-' + conversationId)
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
@@ -2077,12 +2596,8 @@
                 onNewMessage(msg);
               })
             .subscribe();
-          sub._krsType = 'conversation'; // Mark type for smart cleanup
-          this.subscriptions.push(sub);
-          return () => {
-            try { sub.unsubscribe(); if (this.sb) this.sb.removeChannel(sub); } catch(e) {}
-            this.subscriptions = this.subscriptions.filter(s => s !== sub);
-          };
+          this.subManager.add(subKey, sub);
+          return () => { this.subManager.remove(subKey); };
         } catch (err) {
           console.error('subscribeToConversation error:', err);
           return () => {};
@@ -2091,14 +2606,8 @@
 
       subscribeToReplies(parentId, onNewReply) {
         if (this.isDemo) return () => {};
-        // Smart: Alte Reply-Subscriptions aufräumen
-        this.subscriptions = this.subscriptions.filter(s => {
-          if (s._krsType === 'replies') {
-            try { s.unsubscribe(); if (this.sb) this.sb.removeChannel(s); } catch(e) {}
-            return false;
-          }
-          return true;
-        });
+        const subKey = 'replies';
+        this.subManager.remove(subKey);
         try {
           const sub = this.sb.channel('replies-' + parentId)
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'posts', filter: `parent_id=eq.${parentId}` },
@@ -2115,12 +2624,8 @@
                 onNewReply(reply);
               })
             .subscribe();
-          sub._krsType = 'replies'; // Mark type for smart cleanup
-          this.subscriptions.push(sub);
-          return () => {
-            try { sub.unsubscribe(); if (this.sb) this.sb.removeChannel(sub); } catch(e) {}
-            this.subscriptions = this.subscriptions.filter(s => s !== sub);
-          };
+          this.subManager.add(subKey, sub);
+          return () => { this.subManager.remove(subKey); };
         } catch (err) {
           console.error('subscribeToReplies error:', err);
           return () => {};
@@ -2136,6 +2641,8 @@
           setTimeout(() => onPresenceChange(fakeOnline), 500);
           return () => {};
         }
+        const subKey = 'presence';
+        this.subManager.remove(subKey); // Alte Presence aufräumen
         const presenceChannel = this.sb.channel('online-users', {
           config: { presence: { key: userId } }
         });
@@ -2161,11 +2668,8 @@
               });
             }
           });
-        this.subscriptions.push(presenceChannel);
-        return () => {
-          presenceChannel.untrack();
-          this.sb.removeChannel(presenceChannel);
-        };
+        this.subManager.add(subKey, presenceChannel);
+        return () => { this.subManager.remove(subKey); };
       }
 
       async createTeam(name, description, iconText, iconColor, creatorId) {
@@ -2289,14 +2793,32 @@
         }
       }
 
-      // Auth-User in users-Tabelle auflösen
+      // Auth-User in users-Tabelle auflösen + auth_id verknüpfen (Phase 6)
       async resolveAuthUser(authUser) {
         if (!authUser || this.isDemo) return null;
         try {
           // Suche User in der users-Tabelle per E-Mail
           const { data, error } = await this.sb.from('users').select('*').eq('email', authUser.email).single();
           if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows
-          return data || null;
+          if (!data) {
+            console.warn('resolveAuthUser: Kein User mit Email', authUser.email);
+            return null;
+          }
+          // auth_id verknüpfen falls noch nicht gesetzt (einmalig beim ersten Login)
+          if (!data.auth_id) {
+            const { error: updateErr } = await this.sb.from('users')
+              .update({ auth_id: authUser.id, status: 'active' })
+              .eq('id', data.id);
+            if (updateErr) console.warn('auth_id Verknüpfung fehlgeschlagen:', updateErr);
+            else data.auth_id = authUser.id;
+          }
+          // User-Preferences initialisieren falls nötig
+          const { data: prefs } = await this.sb.from('user_preferences')
+            .select('*').eq('user_id', data.id).single();
+          if (!prefs) {
+            await this.sb.from('user_preferences').insert({ user_id: data.id }).catch(() => {});
+          }
+          return data;
         } catch (err) {
           console.error('resolveAuthUser error:', err);
           return null;
@@ -2322,7 +2844,71 @@
         }
       }
 
+      // ── Phase 6: User-Preferences (Supabase statt localStorage) ──
+      async getUserPreferences(userId) {
+        if (this.isDemo) return { read_receipts_enabled: false, notifications_enabled: true, saved_posts: [], onboarding_done: false };
+        try {
+          const { data } = await this.sb.from('user_preferences').select('*').eq('user_id', userId).single();
+          return data || { read_receipts_enabled: false, notifications_enabled: true, saved_posts: [], onboarding_done: false };
+        } catch (e) { return { read_receipts_enabled: false, notifications_enabled: true, saved_posts: [], onboarding_done: false }; }
+      }
+
+      async updateUserPreference(userId, key, value) {
+        if (this.isDemo) return;
+        try {
+          await this.sb.from('user_preferences')
+            .upsert({ user_id: userId, [key]: value, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+        } catch (e) { console.warn('updateUserPreference error:', e); }
+      }
+
+      // ── Phase 6: Admin-Panel Methoden ──
+      async getAllUsersAdmin() {
+        if (this.isDemo) return MOCK_USERS;
+        try {
+          const { data, error } = await this.sb.from('users').select('*').order('display_name');
+          if (error) throw error;
+          return data || [];
+        } catch (e) { console.error('getAllUsersAdmin error:', e); return []; }
+      }
+
+      async inviteUser(email, displayName, role = 'member') {
+        if (this.isDemo) return null;
+        try {
+          const colors = ['#7c6ff7','#4ECDC4','#FF6B6B','#45B7D1','#96CEB4','#FFEAA7','#DDA0DD','#87CEEB'];
+          const { data, error } = await this.sb.from('users').insert({
+            email: email.toLowerCase(),
+            display_name: displayName,
+            role,
+            status: 'invited',
+            avatar_color: colors[Math.floor(Math.random() * colors.length)]
+          }).select().single();
+          if (error) throw error;
+          return data;
+        } catch (e) {
+          console.error('inviteUser error:', e);
+          showToast('Einladung fehlgeschlagen: ' + (e.message || 'Unbekannter Fehler'), 'error');
+          return null;
+        }
+      }
+
+      async updateUserStatus(userId, status) {
+        if (this.isDemo) return;
+        try {
+          await this.sb.from('users').update({ status }).eq('id', userId);
+        } catch (e) { console.error('updateUserStatus error:', e); }
+      }
+
+      async updateUserRole(userId, role) {
+        if (this.isDemo) return;
+        try {
+          await this.sb.from('users').update({ role }).eq('id', userId);
+        } catch (e) { console.error('updateUserRole error:', e); }
+      }
+
       cleanup() {
+        // SubscriptionManager aufräumen (Phase 7.1)
+        this.subManager.cleanup();
+        // Legacy-Array aufräumen (falls noch genutzt)
         this.subscriptions.forEach(s => {
           try {
             if (s.unsubscribe) s.unsubscribe();
@@ -2493,7 +3079,7 @@
       const iframe = document.createElement('iframe');
       iframe.src = url; iframe.sandbox = 'allow-same-origin allow-popups allow-scripts';
       iframe.setAttribute('loading', 'lazy');
-      const loadTimeout = setTimeout(() => { showWikiError(popup, url, title); }, 8000);
+      const loadTimeout = setTimeout(() => { showWikiError(popup, url, title); }, CONFIG.WIKI_LOAD_TIMEOUT);
       iframe.onload = () => clearTimeout(loadTimeout);
       iframe.onerror = () => { clearTimeout(loadTimeout); showWikiError(popup, url, title); };
 
@@ -2549,8 +3135,64 @@
       return React.createElement('div', { className: 'avatar', style }, getInitials(user.display_name));
     }
 
+    // ── Formatting Toolbar ──
+    function FormatToolbar({ textareaRef, value, onChange }) {
+      const wrapSelection = useCallback((before, after) => {
+        const ta = textareaRef.current;
+        if (!ta) return;
+        const start = ta.selectionStart;
+        const end = ta.selectionEnd;
+        const selected = value.substring(start, end);
+        const newText = value.substring(0, start) + before + (selected || 'Text') + after + value.substring(end);
+        onChange(newText);
+        setTimeout(() => {
+          ta.focus();
+          if (selected) {
+            ta.setSelectionRange(start + before.length, start + before.length + selected.length);
+          } else {
+            ta.setSelectionRange(start + before.length, start + before.length + 4);
+          }
+        }, 0);
+      }, [textareaRef, value, onChange]);
+
+      const insertList = useCallback(() => {
+        const ta = textareaRef.current;
+        if (!ta) return;
+        const pos = ta.selectionStart;
+        const before = value.substring(0, pos);
+        const needsNewline = before.length > 0 && !before.endsWith('\n') ? '\n' : '';
+        const newText = before + needsNewline + '• Punkt 1\n• Punkt 2\n• Punkt 3\n' + value.substring(pos);
+        onChange(newText);
+        setTimeout(() => { ta.focus(); }, 0);
+      }, [textareaRef, value, onChange]);
+
+      const insertLink = useCallback(() => {
+        const ta = textareaRef.current;
+        if (!ta) return;
+        const start = ta.selectionStart;
+        const end = ta.selectionEnd;
+        const selected = value.substring(start, end);
+        const linkText = selected || 'Linktext';
+        const newText = value.substring(0, start) + '<a href="https://">' + linkText + '</a>' + value.substring(end);
+        onChange(newText);
+        setTimeout(() => { ta.focus(); ta.setSelectionRange(start + 10, start + 18); }, 0);
+      }, [textareaRef, value, onChange]);
+
+      const btnStyle = { background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px', color: 'var(--text-muted)', fontSize: '13px', borderRadius: 'var(--radius)', minWidth: '32px', minHeight: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' };
+
+      return React.createElement('div', { style: { display: 'flex', gap: '2px', padding: '4px 0', borderBottom: '1px solid var(--border)', marginBottom: '4px' } },
+        React.createElement('button', { type: 'button', onClick: () => wrapSelection('<strong>', '</strong>'), title: 'Fett (Ctrl+B)', style: { ...btnStyle, fontWeight: '700' } }, 'B'),
+        React.createElement('button', { type: 'button', onClick: () => wrapSelection('<em>', '</em>'), title: 'Kursiv (Ctrl+I)', style: { ...btnStyle, fontStyle: 'italic' } }, 'I'),
+        React.createElement('button', { type: 'button', onClick: () => wrapSelection('<u>', '</u>'), title: 'Unterstrichen', style: { ...btnStyle, textDecoration: 'underline' } }, 'U'),
+        React.createElement('div', { style: { width: '1px', background: 'var(--border)', margin: '4px 4px' } }),
+        React.createElement('button', { type: 'button', onClick: insertList, title: 'Liste', style: btnStyle }, '≡'),
+        React.createElement('button', { type: 'button', onClick: insertLink, title: 'Link einfügen', style: btnStyle }, '🔗'),
+        React.createElement('button', { type: 'button', onClick: () => wrapSelection('<code>', '</code>'), title: 'Code', style: { ...btnStyle, fontFamily: 'monospace', fontSize: '12px' } }, '</>'),
+      );
+    }
+
     // ── Mention Textarea with @ Autocomplete ──
-    function MentionTextarea({ value, onChange, allUsers, placeholder, autoFocus, style }) {
+    function MentionTextarea({ value, onChange, allUsers, placeholder, autoFocus, style, showToolbar }) {
       const [mentionQuery, setMentionQuery] = useState(null);
       const [mentionIdx, setMentionIdx] = useState(0);
       const textareaRef = useRef(null);
@@ -2608,7 +3250,29 @@
         }
       };
 
+      // Keyboard shortcuts for formatting
+      const handleKeyDownFormat = useCallback((e) => {
+        if ((e.ctrlKey || e.metaKey) && !e.shiftKey) {
+          const ta = textareaRef.current;
+          if (!ta) return;
+          const start = ta.selectionStart;
+          const end = ta.selectionEnd;
+          const sel = value.substring(start, end);
+          let before = '', after = '';
+          if (e.key === 'b') { before = '<strong>'; after = '</strong>'; }
+          else if (e.key === 'i') { before = '<em>'; after = '</em>'; }
+          else if (e.key === 'u') { before = '<u>'; after = '</u>'; }
+          if (before) {
+            e.preventDefault();
+            const newText = value.substring(0, start) + before + (sel || 'Text') + after + value.substring(end);
+            onChange(newText);
+            setTimeout(() => { ta.focus(); ta.setSelectionRange(start + before.length, start + before.length + (sel.length || 4)); }, 0);
+          }
+        }
+      }, [value, onChange]);
+
       return React.createElement('div', { style: { position: 'relative' } },
+        showToolbar !== false && React.createElement(FormatToolbar, { textareaRef, value, onChange }),
         mentionQuery !== null && filteredUsers.length > 0 && React.createElement('div', { className: 'mention-autocomplete', role: 'listbox', 'aria-label': 'Erwähnungen' },
           filteredUsers.map((u, i) =>
             React.createElement('button', {
@@ -2635,7 +3299,7 @@
           placeholder: placeholder || 'Was möchtest du teilen?',
           value: value,
           onChange: handleInput,
-          onKeyDown: handleKeyDown,
+          onKeyDown: (e) => { handleKeyDown(e); handleKeyDownFormat(e); },
           autoFocus: autoFocus,
           style: style || { display: 'block', width: '100%', padding: '8px 0', border: 'none', background: 'transparent', color: 'var(--text-primary)', fontSize: '14px', minHeight: '60px', fontFamily: 'inherit', resize: 'none', outline: 'none' }
         })
@@ -2688,6 +3352,20 @@
     const SUPABASE_URL = 'https://ooejsfixxiuobrpqgfqm.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9vZWpzZml4eGl1b2JycHFnZnFtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwMjQ5MDYsImV4cCI6MjA4OTYwMDkwNn0.GbAv-sB4B8nNE3IPfiYIjbkMKs0Aq03c_-TUcmFY_5s';
 
+    // Erlaubte Email-Domains für Login (Phase 6 Auth-Whitelist)
+    const ALLOWED_EMAIL_DOMAINS = ['realschule-schriesheim.de'];
+    // Zusätzlich erlaubte Admin-Emails (für Norbert's Gmail etc.)
+    const ALLOWED_ADMIN_EMAILS = ['kotzan@gmail.com'];
+
+    // Singleton Supabase-Client (vermeidet mehrfache Instanziierung)
+    let _supabaseClientSingleton = null;
+    function getSupabaseClient() {
+      if (!_supabaseClientSingleton && window.supabase) {
+        _supabaseClientSingleton = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      }
+      return _supabaseClientSingleton;
+    }
+
     // Hilfsfunktion: Datum lesbar formatieren
     function formatDate(dateStr) {
       if (!dateStr) return '';
@@ -2738,6 +3416,44 @@
       }
     }
 
+    // ============================================================
+    // TEST-/CI-HOOKS: forceMode-Override + Version-Marker
+    // ============================================================
+    // Tests setzen ?forceMode=demo um den DataService deterministisch
+    // in den Demo-Modus zu zwingen — ohne dass dazu Credentials
+    // entfernt werden müssen.
+    window.KRS_VERSION = '4.0.0';
+    const __KRS_QS = new URLSearchParams(typeof location !== 'undefined' ? location.search : '');
+    window.__KRS_FORCE_DEMO = __KRS_QS.get('forceMode') === 'demo';
+    window.__KRS_FORCE_USER = __KRS_QS.get('forceUser') || null; // optional: direktes Login als kuerzel
+    window.DataService = DataService; // Test-Hook: Upload-Validierung prüft die Klasse direkt (smoke-upload-validation)
+
+    // ============================================================
+    // UPLOAD-KONFIG: zentrale Konstanten für DataService.uploadFile
+    // ============================================================
+    // Muss synchron mit der Storage-Policy "images_insert_validated"
+    // (siehe migrations/2026-05-01_storage-upload-fix.sql) gehalten werden.
+    const UPLOAD_CONFIG = {
+      MAX_BYTES: 25 * 1024 * 1024, // 25 MB pro Datei (Bucket-Limit)
+      ALLOWED_MIME: new Set([
+        'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
+        'image/heic', 'image/svg+xml',
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-powerpoint',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'text/plain', 'text/csv', 'text/markdown'
+      ]),
+      ALLOWED_EXT: new Set([
+        'jpg','jpeg','png','gif','webp','heic','svg',
+        'pdf','doc','docx','xls','xlsx','ppt','pptx',
+        'txt','csv','md'
+      ])
+    };
+
     function sanitizeHtml(html) {
       if (!html) return '';
       const tmp = document.createElement('div');
@@ -2771,10 +3487,15 @@
 
       // Beim Laden: Prüfe ob bereits eine Supabase-Session existiert (mit Timeout)
       useEffect(() => {
+        // CI/Test-Override: forceMode=demo → SetupScreen sofort skippen
+        if (window.__KRS_FORCE_DEMO === true) {
+          onSetupComplete({ isDemo: true });
+          return;
+        }
         const checkExistingSession = async () => {
           try {
-            const { createClient } = window.supabase;
-            const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            const client = getSupabaseClient();
+            if (!client) { setCheckingSession(false); return; }
             // Timeout: Wenn Supabase nicht in 6s antwortet → Login-Screen zeigen
             const sessionPromise = client.auth.getSession();
             const timeoutPromise = new Promise((_, reject) =>
@@ -2799,18 +3520,27 @@
       }, []);
 
       const handleMagicLink = async () => {
-        const emailRegex = /^[^\s@]{1,64}@[^\s@]{1,255}\.[a-z]{2,}$/i;
-        if (!email.trim() || !emailRegex.test(email.trim())) {
+        const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]{1,64}@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z]{2,})+$/;
+        const trimmedEmail = email.trim().toLowerCase();
+        if (!trimmedEmail || !emailRegex.test(trimmedEmail)) {
           setError('Bitte eine gültige E-Mail-Adresse eingeben (z.\u00a0B. vorname.name@schule.de).');
+          return;
+        }
+        // Email-Whitelist-Prüfung (Phase 6)
+        const domain = trimmedEmail.split('@')[1];
+        const isAllowedDomain = ALLOWED_EMAIL_DOMAINS.includes(domain);
+        const isAllowedAdmin = ALLOWED_ADMIN_EMAILS.includes(trimmedEmail);
+        if (!isAllowedDomain && !isAllowedAdmin) {
+          setError('Bitte verwende deine Schul-E-Mail-Adresse (@realschule-schriesheim.de).');
           return;
         }
         setLoading(true);
         setError('');
         try {
-          const { createClient } = window.supabase;
-          const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+          const client = getSupabaseClient();
+          if (!client) throw new Error('Supabase nicht verfügbar');
           const ds = new DataService(client);
-          const { error: linkErr } = await ds.sendMagicLink(email.trim());
+          const { error: linkErr } = await ds.sendMagicLink(trimmedEmail);
           if (linkErr) {
             setError(linkErr);
             setLoading(false);
@@ -2826,7 +3556,7 @@
               if (appUser) {
                 onSetupComplete({ isDemo: false, client, authUser: appUser });
               } else {
-                setError('Dein Account wurde gefunden, aber kein Benutzerprofil in der App. Bitte wende dich an den Administrator.');
+                setError('Kein Benutzerprofil gefunden. Bitte wende dich an die Schulleitung (Petra oder Daniel).');
                 setMagicLinkSent(false);
               }
             }
@@ -2900,14 +3630,31 @@
     }
 
     function UserSelection({ users, onUserSelected, loading }) {
-      return React.createElement('div', { className: 'setup-screen' },
+      // Test-/CI-Hook: ?forceUser=<kuerzel|name> → automatischer Login
+      useEffect(() => {
+        const force = window.__KRS_FORCE_USER;
+        if (!force || loading || !users || users.length === 0) return;
+        const match = users.find(u =>
+          u.kuerzel === force ||
+          u.username === force ||
+          (u.display_name || '').toLowerCase() === force.toLowerCase()
+        ) || users[0]; // Fallback: erster User
+        if (match) onUserSelected(match);
+      }, [users, loading]);
+      return React.createElement('div', { className: 'setup-screen', 'data-screen': 'user-selection' },
         React.createElement('h1', null, 'Wer bist du?'),
         React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: '13px', marginBottom: '16px' } }, 'Demo-Modus: Wähle einen Benutzer'),
         loading
           ? React.createElement(SkeletonUsers, { count: 6 })
           : React.createElement('div', { className: 'user-grid' },
               users.map(user =>
-                React.createElement('button', { key: user.id, className: 'user-btn', onClick: () => onUserSelected(user) },
+                React.createElement('button', {
+                  key: user.id,
+                  className: 'user-btn',
+                  onClick: () => onUserSelected(user),
+                  'data-user-id': user.id,
+                  'data-user-kuerzel': user.kuerzel || user.username || ''
+                },
                   React.createElement(Avatar, { user, size: 48 }),
                   React.createElement('div', { className: 'user-btn-name' }, user.display_name)
                 )
@@ -2916,7 +3663,269 @@
       );
     }
 
-    function PostList({ posts, setPosts, channelId, dataService, user, allUsers, onOpenThread, hasMore, onLoadMore, loadingMore, readReceiptsEnabled }) {
+    // ── Admin-Panel (Phase 6.4) ─────────────────────
+    function AdminPanel({ dataService, currentUser, onClose }) {
+      const [adminUsers, setAdminUsers] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [inviteEmail, setInviteEmail] = useState('');
+      const [inviteName, setInviteName] = useState('');
+      const [inviting, setInviting] = useState(false);
+      const [filter, setFilter] = useState('all'); // 'all', 'active', 'inactive', 'invited'
+
+      useEffect(() => {
+        loadUsers();
+      }, []);
+
+      const loadUsers = async () => {
+        setLoading(true);
+        const users = await dataService.getAllUsersAdmin();
+        setAdminUsers(users);
+        setLoading(false);
+      };
+
+      const handleInvite = async () => {
+        if (!inviteEmail.trim() || !inviteName.trim()) {
+          showToast('Bitte E-Mail und Name ausfüllen.', 'error'); return;
+        }
+        const domain = inviteEmail.trim().split('@')[1]?.toLowerCase();
+        if (!ALLOWED_EMAIL_DOMAINS.includes(domain) && !ALLOWED_ADMIN_EMAILS.includes(inviteEmail.trim().toLowerCase())) {
+          showToast('Nur Schul-E-Mail-Adressen erlaubt.', 'error'); return;
+        }
+        setInviting(true);
+        const newUser = await dataService.inviteUser(inviteEmail.trim(), inviteName.trim());
+        if (newUser) {
+          setAdminUsers(prev => [...prev, newUser]);
+          setInviteEmail('');
+          setInviteName('');
+          showToast('Einladung für ' + inviteName.trim() + ' erstellt!', 'success');
+        }
+        setInviting(false);
+      };
+
+      const handleToggleStatus = async (userId, currentStatus) => {
+        const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
+        await dataService.updateUserStatus(userId, newStatus);
+        setAdminUsers(prev => prev.map(u => u.id === userId ? { ...u, status: newStatus } : u));
+        showToast('Status geändert.', 'success');
+      };
+
+      const handleToggleRole = async (userId, currentRole) => {
+        if (userId === currentUser.id) { showToast('Du kannst deine eigene Rolle nicht ändern.', 'error'); return; }
+        const newRole = currentRole === 'admin' ? 'member' : 'admin';
+        await dataService.updateUserRole(userId, newRole);
+        setAdminUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
+        showToast('Rolle geändert.', 'success');
+      };
+
+      const filteredUsers = filter === 'all' ? adminUsers : adminUsers.filter(u => (u.status || 'active') === filter);
+      const activeCount = adminUsers.filter(u => (u.status || 'active') === 'active').length;
+      const inactiveCount = adminUsers.filter(u => (u.status || 'active') === 'inactive').length;
+      const invitedCount = adminUsers.filter(u => (u.status || 'active') === 'invited').length;
+
+      return React.createElement('div', {
+        className: 'modal-overlay',
+        onClick: (e) => e.target === e.currentTarget && onClose(),
+        role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Administration'
+      },
+        React.createElement('div', {
+          style: { background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', width: '90%', maxWidth: '600px', maxHeight: '85vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }
+        },
+          // Header
+          React.createElement('div', {
+            style: { padding: '20px 24px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }
+          },
+            React.createElement('div', null,
+              React.createElement('h2', { style: { margin: 0, fontSize: '18px' } }, '⚙️ Administration'),
+              React.createElement('p', { style: { margin: '4px 0 0', fontSize: '13px', color: 'var(--text-muted)' } },
+                activeCount + ' aktiv, ' + inactiveCount + ' inaktiv, ' + invitedCount + ' eingeladen')
+            ),
+            React.createElement('button', {
+              onClick: onClose,
+              style: { background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'var(--text-muted)' }
+            }, '✕')
+          ),
+
+          // Invite Form
+          React.createElement('div', {
+            style: { padding: '16px 24px', borderBottom: '1px solid var(--border)', display: 'flex', gap: '8px', flexWrap: 'wrap' }
+          },
+            React.createElement('input', {
+              placeholder: 'Name',
+              value: inviteName, onChange: e => setInviteName(e.target.value),
+              style: { flex: '1', minWidth: '120px', padding: '8px 12px', fontSize: '13px', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }
+            }),
+            React.createElement('input', {
+              placeholder: 'E-Mail (@realschule-schriesheim.de)',
+              value: inviteEmail, onChange: e => setInviteEmail(e.target.value),
+              onKeyDown: e => e.key === 'Enter' && handleInvite(),
+              style: { flex: '2', minWidth: '200px', padding: '8px 12px', fontSize: '13px', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }
+            }),
+            React.createElement('button', {
+              onClick: handleInvite, disabled: inviting,
+              style: { padding: '8px 16px', fontSize: '13px', whiteSpace: 'nowrap' }
+            }, inviting ? 'Wird erstellt...' : '+ Einladen')
+          ),
+
+          // Filter Tabs
+          React.createElement('div', {
+            style: { padding: '8px 24px', display: 'flex', gap: '8px', borderBottom: '1px solid var(--border)' }
+          },
+            ['all', 'active', 'inactive', 'invited'].map(f =>
+              React.createElement('button', {
+                key: f,
+                onClick: () => setFilter(f),
+                style: {
+                  padding: '4px 12px', fontSize: '12px', borderRadius: '12px', border: 'none', cursor: 'pointer',
+                  background: filter === f ? 'var(--accent)' : 'var(--bg-tertiary)',
+                  color: filter === f ? 'white' : 'var(--text-secondary)'
+                }
+              }, f === 'all' ? 'Alle (' + adminUsers.length + ')' :
+                 f === 'active' ? 'Aktiv (' + activeCount + ')' :
+                 f === 'inactive' ? 'Inaktiv (' + inactiveCount + ')' :
+                 'Eingeladen (' + invitedCount + ')')
+            )
+          ),
+
+          // User List
+          React.createElement('div', {
+            style: { flex: 1, overflow: 'auto', padding: '8px 24px 16px' }
+          },
+            loading
+              ? React.createElement('p', { style: { textAlign: 'center', color: 'var(--text-muted)', padding: '20px' } }, 'Lade Benutzerliste...')
+              : filteredUsers.map(u =>
+                  React.createElement('div', {
+                    key: u.id,
+                    style: {
+                      display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 0',
+                      borderBottom: '1px solid var(--border)',
+                      opacity: (u.status || 'active') === 'inactive' ? 0.5 : 1
+                    }
+                  },
+                    // Status-Dot + Avatar
+                    React.createElement('div', { style: { position: 'relative' } },
+                      React.createElement(Avatar, { user: u, size: 36 }),
+                      React.createElement('div', {
+                        style: {
+                          position: 'absolute', bottom: 0, right: 0, width: '10px', height: '10px',
+                          borderRadius: '50%', border: '2px solid var(--bg-secondary)',
+                          background: (u.status || 'active') === 'active' ? 'var(--success)' :
+                                      (u.status || 'active') === 'invited' ? 'var(--warning)' : 'var(--text-muted)'
+                        }
+                      })
+                    ),
+                    // Name + Email
+                    React.createElement('div', { style: { flex: 1, minWidth: 0 } },
+                      React.createElement('div', { style: { fontSize: '14px', fontWeight: 500 } }, u.display_name || u.username),
+                      React.createElement('div', { style: { fontSize: '12px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis' } }, u.email || '–')
+                    ),
+                    // Role Badge
+                    React.createElement('span', {
+                      style: {
+                        fontSize: '11px', padding: '2px 8px', borderRadius: '4px',
+                        background: u.role === 'admin' ? 'var(--accent-light)' : 'var(--bg-tertiary)',
+                        color: u.role === 'admin' ? 'var(--accent)' : 'var(--text-muted)',
+                        cursor: u.id !== currentUser.id ? 'pointer' : 'default'
+                      },
+                      onClick: () => u.id !== currentUser.id && handleToggleRole(u.id, u.role),
+                      title: u.id !== currentUser.id ? 'Klicken um Rolle zu ändern' : 'Eigene Rolle'
+                    }, u.role === 'admin' ? 'Admin' : 'Mitglied'),
+                    // Status Toggle
+                    u.id !== currentUser.id && React.createElement('button', {
+                      onClick: () => handleToggleStatus(u.id, u.status || 'active'),
+                      style: {
+                        padding: '4px 10px', fontSize: '11px', borderRadius: '4px', border: 'none', cursor: 'pointer',
+                        background: (u.status || 'active') === 'active' ? 'var(--danger-bg)' : 'var(--success)',
+                        color: (u.status || 'active') === 'active' ? 'var(--danger-text)' : 'white'
+                      }
+                    }, (u.status || 'active') === 'active' ? 'Deaktivieren' : 'Aktivieren')
+                  )
+                )
+          )
+        )
+      );
+    }
+
+    // ── Poll Display ──────────────────────────────
+    function PollDisplay({ pollData, postId, userId, dataService, onVoted }) {
+      if (!pollData) return null;
+      const { question, options, totalVotes } = pollData;
+      const userVote = options.findIndex(o => o.votes?.includes(userId));
+      const [votingId, setVotingId] = useState(null);
+
+      const handleVote = async (optionId) => {
+        if (votingId !== null) return; // Prevent double-click
+        setVotingId(optionId);
+        const result = await dataService.votePoll(postId, optionId, userId);
+        setVotingId(null);
+        if (result && onVoted) onVoted(result);
+      };
+
+      return React.createElement('div', { className: 'poll-container' },
+        React.createElement('div', { className: 'poll-question' }, '📊 ' + question),
+        options.map(opt => {
+          const voteCount = opt.votes?.length || 0;
+          const pct = totalVotes > 0 ? Math.round((voteCount / totalVotes) * 100) : 0;
+          const isVoted = opt.votes?.includes(userId);
+          return React.createElement('div', {
+            key: opt.id,
+            className: 'poll-option' + (isVoted ? ' voted' : '') + (votingId === opt.id ? ' voting' : ''),
+            onClick: () => handleVote(opt.id),
+            role: 'button',
+            style: votingId !== null ? { opacity: votingId === opt.id ? 0.7 : 0.5, pointerEvents: 'none' } : {},
+            'aria-label': opt.text + ' (' + pct + '%)'
+          },
+            React.createElement('div', { className: 'poll-bar', style: { width: pct + '%' } }),
+            React.createElement('span', { className: 'poll-text' }, opt.text),
+            React.createElement('span', { className: 'poll-count' }, voteCount > 0 ? (pct + '% · ' + voteCount) : '–')
+          );
+        }),
+        React.createElement('div', { className: 'poll-meta' },
+          React.createElement('span', null, totalVotes + ' Stimme' + (totalVotes !== 1 ? 'n' : '')),
+          userVote >= 0 && React.createElement('span', null, '✓ Du hast abgestimmt')
+        )
+      );
+    }
+
+    // ── Poll Creator ─────────────────────────────
+    function PollCreator({ onCreatePoll, onCancel }) {
+      const [question, setQuestion] = useState('');
+      const [options, setOptions] = useState(['', '']);
+
+      const addOption = () => { if (options.length < CONFIG.MAX_POLL_OPTIONS) setOptions(prev => [...prev, '']); };
+      const removeOption = (idx) => { if (options.length > 2) setOptions(prev => prev.filter((_, i) => i !== idx)); };
+      const updateOption = (idx, val) => setOptions(prev => prev.map((o, i) => i === idx ? val : o));
+
+      const handleSubmit = () => {
+        const q = question.trim();
+        if (!q) { showToast('Bitte eine Frage eingeben', 'error'); return; }
+        if (q.length > CONFIG.MAX_POLL_QUESTION) { showToast('Frage zu lang (max. ' + CONFIG.MAX_POLL_QUESTION + ' Zeichen)', 'error'); return; }
+        const opts = options.map(o => o.trim()).filter(o => o.length > 0);
+        if (opts.length < CONFIG.MIN_POLL_OPTIONS) { showToast('Mindestens ' + CONFIG.MIN_POLL_OPTIONS + ' Optionen nötig', 'error'); return; }
+        const tooLong = opts.find(o => o.length > CONFIG.MAX_POLL_OPTION);
+        if (tooLong) { showToast('Option zu lang (max. ' + CONFIG.MAX_POLL_OPTION + ' Zeichen)', 'error'); return; }
+        onCreatePoll(q, opts);
+      };
+
+      return React.createElement('div', { className: 'poll-creator' },
+        React.createElement('div', { style: { fontWeight: '600', fontSize: '13px', marginBottom: '8px', color: 'var(--text-primary)' } }, '📊 Umfrage erstellen'),
+        React.createElement('input', { placeholder: 'Frage eingeben...', value: question, onChange: e => setQuestion(e.target.value), autoFocus: true }),
+        React.createElement('div', { style: { fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px' } }, 'Optionen:'),
+        options.map((opt, idx) =>
+          React.createElement('div', { key: idx, className: 'poll-option-row' },
+            React.createElement('input', { placeholder: 'Option ' + (idx + 1), value: opt, onChange: e => updateOption(idx, e.target.value), onKeyDown: e => { if (e.key === 'Enter') { e.preventDefault(); if (idx === options.length - 1) addOption(); } } }),
+            options.length > 2 && React.createElement('button', { type: 'button', onClick: () => removeOption(idx), title: 'Entfernen' }, '✕')
+          )
+        ),
+        React.createElement('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', marginTop: '8px' } },
+          options.length < CONFIG.MAX_POLL_OPTIONS && React.createElement('button', { type: 'button', onClick: addOption, style: { background: 'none', border: '1px dashed var(--border)', borderRadius: 'var(--radius)', padding: '6px 12px', cursor: 'pointer', fontSize: '12px', color: 'var(--text-muted)' } }, '+ Option'),
+          React.createElement('div', { style: { flex: 1 } }),
+          React.createElement('button', { type: 'button', onClick: onCancel, style: { padding: '6px 14px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '13px' } }, 'Abbrechen'),
+          React.createElement('button', { type: 'button', onClick: handleSubmit, style: { padding: '6px 16px', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: 'var(--radius)', cursor: 'pointer', fontSize: '13px', fontWeight: '500' } }, 'Umfrage posten')
+        )
+      );
+    }
+
+    function PostList({ posts, setPosts, channelId, dataService, user, allUsers, onOpenThread, hasMore, onLoadMore, loadingMore, onForward, onSave, savedPosts, onDragDrop, readReceiptsEnabled }) {
       const [newPostTitle, setNewPostTitle] = useState('');
       const [newPostContent, setNewPostContent] = useState('');
       const [saving, setSaving] = useState(false);
@@ -2929,9 +3938,11 @@
       const [editContent, setEditContent] = useState('');
       const [editTitle, setEditTitle] = useState('');
       const [emojiPickerPostId, setEmojiPickerPostId] = useState(null);
+      const [dragOver, setDragOver] = useState(false);
+      const [showPollCreator, setShowPollCreator] = useState(false);
       const [readReceipts, setReadReceipts] = useState(new Map()); // Map<postId, [{user_id, display_name}]>
       const [expandedReads, setExpandedReads] = useState(null); // postId or null
-      // readReceiptsEnabled + toggleReadReceipts werden von App als Props übergeben (DSGVO Opt-in als globale User-Preference)
+      // readReceiptsEnabled kommt jetzt als Prop von App (Single Source of Truth)
 
       // Load reactions for loaded posts (Supabase mode)
       useEffect(() => {
@@ -3040,14 +4051,16 @@
         const newFiles = Array.from(e.target.files);
         const validFiles = [];
         for (const file of newFiles) {
-          if (file.size > 20 * 1024 * 1024) { setPostError('Datei "' + file.name + '" zu groß (max. 20 MB)'); continue; }
+          if (file.size > CONFIG.MAX_FILE_SIZE_POST) { setPostError('Datei "' + file.name + '" zu groß (max. ' + Math.round(CONFIG.MAX_FILE_SIZE_POST / 1024 / 1024) + ' MB)'); continue; }
           if (file.type && !ALLOWED_MIME_TYPES.has(file.type)) { setPostError('Dateityp von "' + file.name + '" nicht erlaubt.'); continue; }
+          const ext = file.name.split('.').pop()?.toLowerCase();
+          if (ext && CONFIG.BLOCKED_EXTENSIONS.has(ext)) { setPostError('Dateityp ".' + ext + '" nicht erlaubt.'); continue; }
           const preview = file.type.startsWith('image/') ? URL.createObjectURL(file) : null;
           validFiles.push({ file, preview });
         }
         if (validFiles.length > 0) {
           setSelectedFiles(prev => {
-            if (prev.length + validFiles.length > 10) { setPostError('Maximal 10 Dateien pro Beitrag'); return prev; }
+            if (prev.length + validFiles.length > CONFIG.MAX_FILES_PER_MESSAGE) { setPostError('Maximal ' + CONFIG.MAX_FILES_PER_MESSAGE + ' Dateien pro Beitrag'); return prev; }
             return [...prev, ...validFiles];
           });
         }
@@ -3062,15 +4075,55 @@
         });
       };
 
+      // Drag & Drop Handler
+      const handleDragOver = useCallback((e) => { e.preventDefault(); e.stopPropagation(); setDragOver(true); }, []);
+      const handleDragLeave = useCallback((e) => { e.preventDefault(); e.stopPropagation(); setDragOver(false); }, []);
+      const handleDrop = useCallback((e) => {
+        e.preventDefault(); e.stopPropagation(); setDragOver(false);
+        const droppedFiles = Array.from(e.dataTransfer.files);
+        if (droppedFiles.length === 0) return;
+        setShowPostForm(true);
+        const validFiles = [];
+        for (const file of droppedFiles) {
+          if (file.size > CONFIG.MAX_FILE_SIZE_POST) { setPostError('Datei "' + file.name + '" zu groß (max. ' + Math.round(CONFIG.MAX_FILE_SIZE_POST / 1024 / 1024) + ' MB)'); continue; }
+          if (file.type && !ALLOWED_MIME_TYPES.has(file.type)) { setPostError('Dateityp von "' + file.name + '" nicht erlaubt.'); continue; }
+          const ext = file.name.split('.').pop()?.toLowerCase();
+          if (ext && CONFIG.BLOCKED_EXTENSIONS.has(ext)) { setPostError('Dateityp ".' + ext + '" nicht erlaubt.'); continue; }
+          const preview = file.type.startsWith('image/') ? URL.createObjectURL(file) : null;
+          validFiles.push({ file, preview });
+        }
+        if (validFiles.length > 0) {
+          setSelectedFiles(prev => {
+            if (prev.length + validFiles.length > CONFIG.MAX_FILES_PER_MESSAGE) { setPostError('Maximal ' + CONFIG.MAX_FILES_PER_MESSAGE + ' Dateien pro Beitrag'); return prev; }
+            return [...prev, ...validFiles];
+          });
+        }
+      }, []);
+
       const clearAllFiles = () => {
         selectedFiles.forEach(f => { if (f.preview) URL.revokeObjectURL(f.preview); });
         setSelectedFiles([]);
         if (fileInputRef.current) fileInputRef.current.value = '';
       };
 
+      const handleCreatePoll = async (question, options) => {
+        const result = await dataService.createPoll(channelId, user.id, question, options);
+        if (result) {
+          setPosts(prev => [result, ...prev]);
+          setShowPollCreator(false);
+          setShowPostForm(false);
+          showToast('Umfrage erstellt 📊', 'success');
+        }
+      };
+
+      const handlePollVote = (updatedPost) => {
+        setPosts(prev => prev.map(p => p.id === updatedPost.id ? { ...p, poll_data: updatedPost.poll_data } : p));
+      };
+
       const handleCreatePost = async (e) => {
         e.preventDefault();
         if (!newPostContent.trim() && selectedFiles.length === 0) return;
+        if (newPostContent.length > CONFIG.MAX_POST_LENGTH) { setPostError('Beitrag zu lang (max. ' + CONFIG.MAX_POST_LENGTH + ' Zeichen)'); return; }
         setSaving(true);
         setPostError('');
         try {
@@ -3103,7 +4156,16 @@
         setSaving(false);
       };
 
-      return React.createElement(React.Fragment, null,
+      return React.createElement('div', {
+        onDragOver: handleDragOver,
+        onDragLeave: handleDragLeave,
+        onDrop: handleDrop,
+        style: { position: 'relative', flex: 1, display: 'flex', flexDirection: 'column' }
+      },
+        // Drag & Drop Overlay
+        dragOver && React.createElement('div', {
+          style: { position: 'absolute', inset: 0, background: 'rgba(99, 102, 241, 0.08)', border: '2px dashed var(--accent)', borderRadius: 'var(--radius-lg)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }
+        }, React.createElement('div', { style: { fontSize: '16px', color: 'var(--accent)', fontWeight: '600', padding: '20px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', boxShadow: '0 4px 12px var(--shadow)' } }, '📎 Dateien hier ablegen')),
         React.createElement('div', { style: { marginBottom: '16px' } },
           // Compact input bar (always visible)
           !showPostForm && React.createElement('button', {
@@ -3134,22 +4196,47 @@
               React.createElement('input', { ref: fileInputRef, type: 'file', multiple: true, accept: 'image/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt', onChange: handleFileSelect, style: { display: 'none' } }),
               React.createElement('button', { type: 'button', onClick: () => fileInputRef.current?.click(), title: 'Dateien anhängen (max. 10)', 'aria-label': 'Dateien anhängen', style: { padding: '6px 8px', background: 'transparent', border: 'none', borderRadius: 'var(--radius)', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }, dangerouslySetInnerHTML: { __html: Icons.paperclip } }),
               selectedFiles.length > 0 && React.createElement('span', { style: { fontSize: '11px', color: 'var(--text-muted)' } }, selectedFiles.length + '/10'),
-              // Dringend-Button nur für Admins sichtbar
-              userTeamRole === 'admin' && React.createElement('button', {
+              // Dringend-Button nur für Admins sichtbar (Phase 7.5)
+              user?.role === 'admin' && React.createElement('button', {
                 type: 'button',
                 onClick: () => setIsUrgent(u => !u),
                 title: isUrgent ? 'Dringend-Markierung entfernen' : 'Als dringend markieren',
                 'aria-label': isUrgent ? 'Dringend-Markierung entfernen' : 'Als dringend markieren',
                 style: { padding: '4px 10px', background: isUrgent ? 'var(--danger-bg, #FEE2E2)' : 'transparent', border: isUrgent ? '1px solid var(--danger)' : '1px solid transparent', borderRadius: '16px', cursor: 'pointer', fontSize: '13px', color: isUrgent ? 'var(--danger-text, #B91C1C)' : 'var(--text-muted)', fontWeight: isUrgent ? '600' : '400', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: '4px', minHeight: '44px' }
               }, '🚨', isUrgent ? ' Dringend' : ''),
+              // Umfrage-Button
+              React.createElement('button', {
+                type: 'button',
+                onClick: () => { setShowPollCreator(p => !p); },
+                title: 'Umfrage erstellen',
+                'aria-label': 'Umfrage erstellen',
+                style: { padding: '4px 10px', background: showPollCreator ? 'var(--accent-light)' : 'transparent', border: showPollCreator ? '1px solid var(--accent)' : '1px solid transparent', borderRadius: '16px', cursor: 'pointer', fontSize: '13px', color: showPollCreator ? 'var(--accent)' : 'var(--text-muted)', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: '4px', minHeight: '44px' }
+              }, '📊'),
               React.createElement('div', { style: { flex: 1 } }),
-              React.createElement('button', { type: 'button', onClick: () => { setShowPostForm(false); setNewPostTitle(''); setNewPostContent(''); clearAllFiles(); }, style: { padding: '6px 14px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '13px' } }, 'Abbrechen'),
+              React.createElement('button', { type: 'button', onClick: () => { setShowPostForm(false); setNewPostTitle(''); setNewPostContent(''); clearAllFiles(); setShowPollCreator(false); }, style: { padding: '6px 14px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '13px' } }, 'Abbrechen'),
               React.createElement('button', { type: 'submit', disabled: saving, style: { padding: '6px 16px', background: saving ? 'var(--text-muted)' : 'var(--accent)', color: 'white', border: 'none', borderRadius: 'var(--radius)', cursor: saving ? 'not-allowed' : 'pointer', fontSize: '13px', fontWeight: '500' } }, saving ? 'Wird gesendet...' : 'Posten')
             ),
             postError && React.createElement('p', { style: { color: 'var(--danger)', fontSize: '12px', margin: '6px 0 0' } }, postError)
-          )
+          ),
+          // Poll Creator (wenn aktiv)
+          showPollCreator && React.createElement(PollCreator, {
+            onCreatePoll: handleCreatePoll,
+            onCancel: () => setShowPollCreator(false)
+          })
         ),
-        [...posts].sort((a, b) => (b.is_pinned ? 1 : 0) - (a.is_pinned ? 1 : 0)).map(post => {
+        // Phase 7.8: Empty State wenn keine Posts
+        posts.length === 0 && React.createElement('div', { style: { textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' } },
+          React.createElement('div', { style: { fontSize: '48px', marginBottom: '12px' } }, '💬'),
+          React.createElement('div', { style: { fontSize: '16px', fontWeight: '500', marginBottom: '8px', color: 'var(--text-secondary)' } }, 'Noch keine Beiträge in diesem Kanal'),
+          React.createElement('div', { style: { fontSize: '13px' } }, 'Schreibe den ersten Beitrag und starte die Diskussion!'),
+          React.createElement('button', { onClick: () => setShowPostForm(true), style: { marginTop: '16px', padding: '8px 20px', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: 'var(--radius)', cursor: 'pointer', fontSize: '14px' } }, '✏️ Beitrag schreiben')
+        ),
+        [...posts].sort((a, b) => {
+          // Phase 7.5: Urgent zuerst, dann Pinned, dann Rest
+          if (a.is_urgent !== b.is_urgent) return b.is_urgent ? 1 : -1;
+          if (a.is_pinned !== b.is_pinned) return b.is_pinned ? 1 : -1;
+          return 0;
+        }).map(post => {
           const author = post.author || { display_name: 'Unbekannt', avatar_color: '#999' };
           const replyCount = post.replies ?? post.reply_count ?? 0;
           const isOwner = user && (post.author_id === user.id || user.role === 'admin');
@@ -3171,6 +4258,10 @@
                 )
               ),
               !isEditing && React.createElement('div', { style: { display: 'flex', gap: '4px' } },
+                // Lesezeichen
+                onSave && React.createElement('button', { onClick: () => onSave(post), title: savedPosts?.find(p => p.id === post.id) ? 'Lesezeichen entfernen' : 'Nachricht speichern', 'aria-label': 'Lesezeichen', style: { background: 'none', border: 'none', cursor: 'pointer', padding: '8px', color: savedPosts?.find(p => p.id === post.id) ? 'var(--accent)' : 'var(--text-muted)', fontSize: '14px', borderRadius: 'var(--radius)', minWidth: '36px', minHeight: '36px' } }, savedPosts?.find(p => p.id === post.id) ? '🔖' : '🔗'),
+                // Weiterleiten
+                onForward && React.createElement('button', { onClick: () => onForward(post), title: 'Weiterleiten', 'aria-label': 'Nachricht weiterleiten', style: { background: 'none', border: 'none', cursor: 'pointer', padding: '8px', color: 'var(--text-muted)', fontSize: '14px', borderRadius: 'var(--radius)', minWidth: '36px', minHeight: '36px' } }, '↪'),
                 // Pin: Admin oder Autor darf pinnen
                 (isOwner || user.role === 'admin') && React.createElement('button', { onClick: () => handleTogglePin(post), title: post.is_pinned ? 'Loslösen' : 'Anheften', 'aria-label': post.is_pinned ? 'Post loslösen' : 'Post anheften', style: { background: 'none', border: 'none', cursor: 'pointer', padding: '8px', color: post.is_pinned ? 'var(--accent-orange)' : 'var(--text-muted)', fontSize: '14px', borderRadius: 'var(--radius)', minWidth: '36px', minHeight: '36px' } }, '📌'),
                 // Edit/Delete: Nur Autor
@@ -3189,7 +4280,9 @@
                 )
               : React.createElement(React.Fragment, null,
                   post.title && React.createElement('div', { className: 'post-title' }, post.title),
-                  React.createElement('div', { className: 'post-content', dangerouslySetInnerHTML: { __html: sanitizeHtml(post.content) } })
+                  React.createElement('div', { className: 'post-content', dangerouslySetInnerHTML: { __html: sanitizeHtml(post.content) } }),
+                  // Poll anzeigen falls vorhanden
+                  post.poll_data && React.createElement(PollDisplay, { pollData: post.poll_data, postId: post.id, userId: user.id, dataService, onVoted: handlePollVote })
                 ),
             post.image_url && (() => {
               // Parse multi-file JSON or single URL
@@ -3261,7 +4354,11 @@
       );
     }
 
-    function ThreadPanel({ post, replies, dataService, user, onClose }) {
+    // Phase 7.2: Props sind jetzt optional — Fallback auf AppContext
+    function ThreadPanel({ post, replies, dataService: _ds, user: _u, onClose }) {
+      const ctx = useApp();
+      const dataService = _ds || ctx.dataService;
+      const user = _u || ctx.user;
       const [replyContent, setReplyContent] = useState('');
       const [saving, setSaving] = useState(false);
 
@@ -3339,13 +4436,13 @@
         }
       };
 
-      return React.createElement('div', { className: 'modal-overlay', onClick: onClose },
+      return React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', onClick: onClose },
         React.createElement('div', { className: 'modal', onClick: e => e.stopPropagation() },
           React.createElement('div', { className: 'modal-header' },
             React.createElement('h3', null, 'Team erstellen')
           ),
           React.createElement('form', { onSubmit: handleCreate, className: 'modal-body' },
-            error && React.createElement('div', { style: { background: 'var(--danger-light, #fee)', color: 'var(--danger, #c33)', padding: '10px 12px', borderRadius: 'var(--radius)', marginBottom: '15px', fontSize: '13px' } }, error),
+            error && React.createElement('div', { style: { background: 'var(--danger-bg, #fee)', color: 'var(--danger, #c33)', padding: '10px 12px', borderRadius: 'var(--radius)', marginBottom: '15px', fontSize: '13px' } }, error),
             React.createElement('div', { className: 'form-group' },
               React.createElement('label', { className: 'form-label' }, 'Team-Name'),
               React.createElement('input', {
@@ -3471,13 +4568,13 @@
         }
       };
 
-      return React.createElement('div', { className: 'modal-overlay', onClick: onClose },
+      return React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', onClick: onClose },
         React.createElement('div', { className: 'modal', onClick: e => e.stopPropagation(), style: { width: '480px' } },
           React.createElement('div', { className: 'modal-header' },
             React.createElement('h3', null, 'Mitgliederverwaltung')
           ),
           React.createElement('div', { className: 'modal-body' },
-            error && React.createElement('div', { style: { background: 'var(--danger-light, #fee)', color: 'var(--danger, #c33)', padding: '10px 12px', borderRadius: 'var(--radius)', marginBottom: '15px', fontSize: '13px' } }, error),
+            error && React.createElement('div', { style: { background: 'var(--danger-bg, #fee)', color: 'var(--danger, #c33)', padding: '10px 12px', borderRadius: 'var(--radius)', marginBottom: '15px', fontSize: '13px' } }, error),
             React.createElement('div', { style: { marginBottom: '20px' } },
               loading ? React.createElement(SkeletonMembers, { count: 4 }) : (() => {
                 const admins = members.filter(m => m.role === 'admin');
@@ -3620,7 +4717,7 @@
               ))
           ]
         ),
-        showGroupChat && React.createElement('div', { className: 'modal-overlay', onClick: () => setShowGroupChat(false) },
+        showGroupChat && React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', onClick: () => setShowGroupChat(false) },
           React.createElement('div', { className: 'modal', onClick: e => e.stopPropagation() },
             React.createElement('div', { className: 'modal-header' },
               React.createElement('h3', null, 'Neuer Gruppenchat')
@@ -3715,14 +4812,16 @@
         const newFiles = Array.from(e.target.files);
         const validFiles = [];
         for (const file of newFiles) {
-          if (file.size > 20 * 1024 * 1024) { showToast('Datei "' + file.name + '" zu groß (max. 20 MB)', 'error'); continue; }
+          if (file.size > CONFIG.MAX_FILE_SIZE_CHAT) { showToast('Datei "' + file.name + '" zu groß (max. ' + Math.round(CONFIG.MAX_FILE_SIZE_CHAT / 1024 / 1024) + ' MB)', 'error'); continue; }
           if (file.type && !CHAT_ALLOWED_TYPES.has(file.type)) { showToast('Dateityp von "' + file.name + '" nicht erlaubt.', 'error'); continue; }
+          const ext = file.name.split('.').pop()?.toLowerCase();
+          if (ext && CONFIG.BLOCKED_EXTENSIONS.has(ext)) { showToast('Dateityp ".' + ext + '" nicht erlaubt.', 'error'); continue; }
           const preview = file.type.startsWith('image/') ? URL.createObjectURL(file) : null;
           validFiles.push({ file, preview });
         }
         if (validFiles.length > 0) {
           setChatFiles(prev => {
-            if (prev.length + validFiles.length > 10) { showToast('Maximal 10 Dateien pro Nachricht', 'error'); return prev; }
+            if (prev.length + validFiles.length > CONFIG.MAX_FILES_PER_MESSAGE) { showToast('Maximal ' + CONFIG.MAX_FILES_PER_MESSAGE + ' Dateien pro Nachricht', 'error'); return prev; }
             return [...prev, ...validFiles];
           });
         }
@@ -4098,7 +5197,7 @@
         }
       };
 
-      return React.createElement('div', { className: 'feedback-overlay', onClick: (ev) => { if (ev.target === ev.currentTarget) onClose(); } },
+      return React.createElement('div', { className: 'feedback-overlay', role: 'dialog', 'aria-modal': 'true', onClick: (ev) => { if (ev.target === ev.currentTarget) onClose(); } },
         React.createElement('div', { className: 'feedback-modal' },
           React.createElement('div', { className: 'feedback-title' }, '📣', ' Feedback geben'),
 
@@ -4193,6 +5292,7 @@
 
       return React.createElement('div', {
         className: 'modal-overlay',
+        role: 'dialog', 'aria-modal': 'true',
         style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }
       },
         React.createElement('div', {
@@ -4205,7 +5305,7 @@
               key: i,
               style: {
                 width: '10px', height: '10px', borderRadius: '50%',
-                background: i === step ? 'var(--primary)' : i < step ? 'var(--primary)' : 'var(--border)',
+                background: i === step ? 'var(--accent)' : i < step ? 'var(--accent)' : 'var(--border)',
                 opacity: i <= step ? 1 : 0.4,
                 transition: 'all 0.3s ease'
               }
@@ -4223,7 +5323,7 @@
           React.createElement('div', { style: { display: 'flex', gap: '12px', justifyContent: 'center' } },
             step > 0 && React.createElement('button', {
               onClick: () => setStep(step - 1),
-              style: { padding: '10px 24px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '14px', minHeight: '44px', minWidth: '44px' }
+              style: { padding: '10px 24px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '14px', minHeight: '44px', minWidth: '44px' }
             }, '← Zurück'),
             React.createElement('button', {
               onClick: () => {
@@ -4234,7 +5334,7 @@
                   setStep(step + 1);
                 }
               },
-              style: { padding: '10px 28px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--primary)', color: '#fff', cursor: 'pointer', fontSize: '14px', fontWeight: 600, minHeight: '44px', minWidth: '44px' }
+              style: { padding: '10px 28px', borderRadius: 'var(--radius)', border: 'none', background: 'var(--accent)', color: '#fff', cursor: 'pointer', fontSize: '14px', fontWeight: 600, minHeight: '44px', minWidth: '44px' }
             }, isLast ? '✓ Los geht\'s!' : 'Weiter →')
           ),
           // Skip link
@@ -4255,6 +5355,7 @@
     function HelpPanel({ onClose, onStartOnboarding }) {
       return React.createElement('div', {
         className: 'modal-overlay',
+        role: 'dialog', 'aria-modal': 'true',
         onClick: onClose,
         style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }
       },
@@ -4337,6 +5438,7 @@
     function PrivacyModal({ onClose }) {
       return React.createElement('div', {
         className: 'modal-overlay',
+        role: 'dialog', 'aria-modal': 'true',
         onClick: onClose,
         style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }
       },
@@ -4444,11 +5546,21 @@
       const [showTeamMembers, setShowTeamMembers] = useState(false);
       const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
       const [showHelp, setShowHelp] = useState(false);
+      const [showCreateChannel, setShowCreateChannel] = useState(false);
+      const [channelContextMenu, setChannelContextMenu] = useState(null); // { channel, x, y }
+      const [editingChannel, setEditingChannel] = useState(null); // channel object for rename
+      const [showForwardModal, setShowForwardModal] = useState(null); // post to forward
+      const [showAdmin, setShowAdmin] = useState(false); // Phase 6: Admin-Panel
+      const [savedPosts, setSavedPosts] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('krs-saved-posts') || '[]'); } catch(e) { return []; }
+      });
       return { showOnlinePanel, setShowOnlinePanel, showFeedback, setShowFeedback,
         showProfile, setShowProfile, showPrivacy, setShowPrivacy,
         showOnboarding, setShowOnboarding, showCreateTeam, setShowCreateTeam,
         showTeamMembers, setShowTeamMembers, mobileSidebarOpen, setMobileSidebarOpen,
-        showHelp, setShowHelp };
+        showHelp, setShowHelp, showCreateChannel, setShowCreateChannel,
+        channelContextMenu, setChannelContextMenu, editingChannel, setEditingChannel,
+        showForwardModal, setShowForwardModal, showAdmin, setShowAdmin, savedPosts, setSavedPosts };
     }
 
     function useNotifications() {
@@ -4499,7 +5611,7 @@
             renotify: true
           });
           if (onClick) n.onclick = () => { window.focus(); onClick(); n.close(); };
-          setTimeout(() => n.close(), 8000);
+          setTimeout(() => n.close(), CONFIG.NOTIFICATION_AUTO_CLOSE);
         } catch(e) { console.warn('Notification error:', e); }
       }, [notificationsEnabled, notificationPermission]);
 
@@ -4510,6 +5622,69 @@
     // ============================================================
     // APP COMPONENT
     // ============================================================
+    // ── Phase 7.2: React Context (Foundation) ──────────────────
+    // App-weite Werte ohne Props-Drilling verfügbar.
+    // Bestehende Props bleiben als Override-Fallback erhalten.
+    const AppContext = React.createContext({
+      dataService: null,
+      user: null,
+      allUsers: [],
+      onlineUsers: new Set(),
+      readReceiptsEnabled: true,
+      userRole: 'member',
+    });
+    function useApp() { return React.useContext(AppContext); }
+
+    // ── Phase 7.4: Error Boundaries ──────────────────────────
+    class ErrorBoundary extends React.Component {
+      constructor(props) {
+        super(props);
+        this.state = { hasError: false, error: null };
+      }
+      static getDerivedStateFromError(error) {
+        return { hasError: true, error };
+      }
+      componentDidCatch(error, info) {
+        console.error('ErrorBoundary caught:', error, info);
+      }
+      render() {
+        if (this.state.hasError) {
+          const style = { padding: '40px', textAlign: 'center', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' };
+          return React.createElement('div', { style },
+            React.createElement('h2', { style: { color: 'var(--text-primary)', marginBottom: '12px' } }, 'Etwas ist schiefgelaufen'),
+            React.createElement('p', { style: { color: 'var(--text-secondary)', marginBottom: '20px' } },
+              this.props.fallbackMessage || 'Dieser Bereich hatte einen Fehler. Bitte versuche es erneut.'
+            ),
+            React.createElement('button', {
+              onClick: () => this.setState({ hasError: false, error: null }),
+              style: { background: 'var(--accent)', color: 'white', border: 'none', padding: '10px 20px', borderRadius: 'var(--radius)', cursor: 'pointer', fontSize: '14px', marginRight: '8px' }
+            }, 'Erneut versuchen'),
+            React.createElement('button', {
+              onClick: () => window.location.reload(),
+              style: { background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)', padding: '10px 20px', borderRadius: 'var(--radius)', cursor: 'pointer', fontSize: '14px' }
+            }, 'Seite neu laden')
+          );
+        }
+        return this.props.children;
+      }
+    }
+
+    // ── Phase 7.3: Memoization ──────────────────────────────────
+    // Rein props-basierte Komponenten in React.memo wrappen.
+    // Verhindert Re-Renders bei App-State-Änderungen, die sie nicht betreffen.
+    // Function-Declaration-Bindings sind in non-strict script mode neu zuweisbar.
+    try {
+      HelpPanel = React.memo(HelpPanel);
+      PrivacyModal = React.memo(PrivacyModal);
+      OnboardingWizard = React.memo(OnboardingWizard);
+      SetupScreen = React.memo(SetupScreen);
+      UserSelection = React.memo(UserSelection);
+      ProfileModal = React.memo(ProfileModal);
+      EmojiPicker = React.memo(EmojiPicker);
+    } catch (e) {
+      console.warn('Memo-Wrap fehlgeschlagen (Browser evtl. strict):', e.message);
+    }
+
     function App() {
       const [setupComplete, setSetupComplete] = useState(false);
       const [supabaseClient, setSupabaseClient] = useState(null);
@@ -4523,6 +5698,12 @@
       const [onlineUsers, setOnlineUsers] = useState(new Set());
       const [onboardingStep, setOnboardingStep] = useState(0);
       const PAGE_SIZE = 50;
+
+      // P7 (Merge-Fix O1, 11.06.2026): dataService MUSS vor allen
+      // useCallback-Dependency-Arrays deklariert sein, die es referenzieren
+      // (toggleReadReceipts, toggleSavedPost, …). In der MacBook-Basis stand
+      // die Deklaration weiter unten → TDZ-ReferenceError bei jedem Render.
+      const dataService = useMemo(() => new DataService(isDemo ? null : supabaseClient), [supabaseClient, isDemo]);
 
       // Custom Hooks
       const teamsState = useTeamsState();
@@ -4544,12 +5725,16 @@
         showProfile, setShowProfile, showPrivacy, setShowPrivacy,
         showOnboarding, setShowOnboarding, showCreateTeam, setShowCreateTeam,
         showTeamMembers, setShowTeamMembers, mobileSidebarOpen, setMobileSidebarOpen,
-        showHelp, setShowHelp } = modals;
+        showHelp, setShowHelp, showCreateChannel, setShowCreateChannel,
+        channelContextMenu, setChannelContextMenu, editingChannel, setEditingChannel,
+        showForwardModal, setShowForwardModal, showAdmin, setShowAdmin, savedPosts, setSavedPosts } = modals;
 
       const { notificationsEnabled, notificationPermission, requestNotifications,
         toggleNotifications, sendBrowserNotification } = useNotifications();
 
-      // Read Receipts (DSGVO Opt-in, globale User-Preference)
+      // Notifications, Modals, Teams, Chat, Unread — alle in Custom Hooks (oben)
+
+      // DSGVO: Read Receipts nur mit explizitem Opt-in (App-Level für Toolbar-Button)
       const [readReceiptsEnabled, setReadReceiptsEnabled] = useState(() => {
         try { return localStorage.getItem('krs-read-receipts') === 'enabled'; } catch(e) { return false; }
       });
@@ -4557,17 +5742,19 @@
         setReadReceiptsEnabled(prev => {
           const next = !prev;
           try { localStorage.setItem('krs-read-receipts', next ? 'enabled' : 'disabled'); } catch(e) {}
+          // Phase 6: Auch in Supabase speichern
+          if (user?.id && dataService && !dataService.isDemo) {
+            dataService.updateUserPreference(user.id, 'read_receipts_enabled', next);
+          }
           return next;
         });
-      }, []);
-
-      // Notifications, Modals, Teams, Chat, Unread — alle in Custom Hooks (oben)
+      }, [user, dataService]);
 
       const handleAvatarUpload = async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
         if (!file.type.startsWith('image/')) { showToast('Bitte wähle ein Bild aus.', 'error'); return; }
-        if (file.size > 5 * 1024 * 1024) { showToast('Bild zu groß (max. 5 MB).', 'error'); return; }
+        if (file.size > CONFIG.MAX_FILE_SIZE_AVATAR) { showToast('Bild zu groß (max. ' + Math.round(CONFIG.MAX_FILE_SIZE_AVATAR / 1024 / 1024) + ' MB).', 'error'); return; }
         try {
           const url = await dataService.uploadFile(file);
           if (url) {
@@ -4583,10 +5770,77 @@
         }
       };
 
+      // ── Channel Management Handlers ──────────────────
+      const handleCreateChannel = useCallback(async (name) => {
+        if (!selectedTeam || !name.trim()) return;
+        if (name.trim().length > CONFIG.MAX_CHANNEL_NAME) {
+          showToast('Kanalname zu lang (max. ' + CONFIG.MAX_CHANNEL_NAME + ' Zeichen)', 'error'); return;
+        }
+        const newCh = await dataService.createChannel(selectedTeam.id, name.trim());
+        if (newCh) {
+          setChannels(prev => [...prev, newCh]);
+          setSelectedChannel(newCh);
+          setShowCreateChannel(false);
+          showToast('Kanal „' + newCh.name + '" erstellt', 'success');
+        }
+      }, [selectedTeam, dataService]);
+
+      const handleRenameChannel = useCallback(async (channelId, newName) => {
+        if (!newName.trim()) return;
+        const updated = await dataService.updateChannel(channelId, { name: newName.trim() });
+        if (updated) {
+          setChannels(prev => prev.map(ch => ch.id === channelId ? { ...ch, name: newName.trim() } : ch));
+          if (selectedChannel?.id === channelId) setSelectedChannel(prev => ({ ...prev, name: newName.trim() }));
+          setEditingChannel(null);
+          showToast('Kanal umbenannt', 'success');
+        }
+      }, [dataService, selectedChannel]);
+
+      const handleDeleteChannel = useCallback(async (channel) => {
+        if (channel.is_default) { showToast('Der Standard-Kanal kann nicht gelöscht werden.', 'error'); return; }
+        const ok = await dataService.deleteChannel(channel.id);
+        if (ok) {
+          setChannels(prev => { const filtered = prev.filter(ch => ch.id !== channel.id); if (selectedChannel?.id === channel.id && filtered.length > 0) setSelectedChannel(filtered[0]); return filtered; });
+          showToast('Kanal „' + channel.name + '" gelöscht', 'success');
+        }
+        setChannelContextMenu(null);
+      }, [dataService, selectedChannel]);
+
+      const handleChannelContextMenu = useCallback((e, ch) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (user?.role !== 'admin') return;
+        setChannelContextMenu({ channel: ch, x: e.clientX, y: e.clientY });
+      }, [user]);
+
+      // Forward post to another channel or DM
+      const handleForwardPost = useCallback(async (post, targetChannelId) => {
+        const fwdContent = '<p><em>↪ Weitergeleitet von #' + (selectedChannel?.name || '') + ':</em></p>' + (post.content || '');
+        const result = await dataService.createPost(targetChannelId, user.id, fwdContent, '', null, false);
+        if (result) {
+          showToast('Nachricht weitergeleitet', 'success');
+          setShowForwardModal(null);
+        }
+      }, [dataService, user, selectedChannel]);
+
+      // Saved/Bookmarked posts
+      const toggleSavePost = useCallback((post) => {
+        setSavedPosts(prev => {
+          const exists = prev.find(p => p.id === post.id);
+          const next = exists ? prev.filter(p => p.id !== post.id) : [...prev, { id: post.id, title: post.title || post.content?.substring(0, 60), channel: selectedChannel?.name, savedAt: new Date().toISOString() }];
+          try { localStorage.setItem('krs-saved-posts', JSON.stringify(next)); } catch(e) {}
+          // Phase 6: Auch in Supabase speichern
+          if (user?.id && dataService && !dataService.isDemo) {
+            dataService.updateUserPreference(user.id, 'saved_posts', next);
+          }
+          showToast(exists ? 'Lesezeichen entfernt' : 'Nachricht gespeichert 🔖', 'success');
+          return next;
+        });
+      }, [selectedChannel, user, dataService]);
+
       // (loadingUsers, postsLoading, hasMore*, loadingMore, mobileSidebarOpen,
       //  showCreateTeam, showTeamMembers, userTeamRole — jetzt oben in App oder in Custom Hooks)
-
-      const dataService = useMemo(() => new DataService(isDemo ? null : supabaseClient), [supabaseClient, isDemo]);
+      // (dataService — jetzt oben direkt nach den useState-Deklarationen, s. P7)
 
       // Pending auth user (wird nach Setup+Render automatisch eingeloggt)
       const [pendingAuthUser, setPendingAuthUser] = useState(null);
@@ -4701,8 +5955,8 @@
           }
           if (channelsData.length > 0) {
             setSelectedChannel(channelsData[0]);
-            // Mark the first channel as read right away
-            DataService.markChannelRead(channelsData[0].id);
+            // Mark the first channel as read right away (Phase 6: Instanz-Methode für Supabase-Upsert)
+            dataService.markChannelRead(channelsData[0].id, selectedUser.id);
           }
           // Check user's role in this team
           if (!dataService.isDemo) {
@@ -4735,36 +5989,112 @@
         }
         const usersData = await dataService.getUsers();
         setAllUsers(usersData || MOCK_USERS);
-        // Onboarding for first-time users
-        try {
-          if (!localStorage.getItem('krs_onboarding_done')) {
-            setShowOnboarding(true);
+        // Phase 6: Preferences aus Supabase laden (mit localStorage Fallback)
+        if (!dataService.isDemo) {
+          try {
+            const prefs = await dataService.getUserPreferences(selectedUser.id);
+            if (prefs) {
+              if (prefs.read_receipts_enabled !== undefined) setReadReceiptsEnabled(prefs.read_receipts_enabled);
+              if (prefs.saved_posts && Array.isArray(prefs.saved_posts) && prefs.saved_posts.length > 0) {
+                setSavedPosts(prefs.saved_posts);
+              }
+              if (prefs.onboarding_done) {
+                // Onboarding schon gemacht → nicht mehr zeigen
+              } else {
+                setShowOnboarding(true);
+              }
+            }
+          } catch(e) {
+            // Fallback: localStorage
+            try { if (!localStorage.getItem('krs_onboarding_done')) setShowOnboarding(true); } catch(e2) {}
           }
-        } catch(e) { /* localStorage blocked */ }
+        } else {
+          // Demo-Modus: localStorage check
+          try { if (!localStorage.getItem('krs_onboarding_done')) setShowOnboarding(true); } catch(e) {}
+        }
       };
 
-      // Posts subscription
+      // Session-Refresh + Auto-Logout bei Token-Ablauf (Phase 6)
+      useEffect(() => {
+        if (isDemo || !supabaseClient) return;
+        const { data: { subscription } } = supabaseClient.auth.onAuthStateChange(
+          (event, session) => {
+            if (event === 'TOKEN_REFRESHED') {
+              console.log('Session refreshed');
+            }
+            if (event === 'SIGNED_OUT') {
+              setUser(null);
+              setSetupComplete(false);
+              setIsDemo(true);
+              _supabaseClientSingleton = null;
+              showToast('Du wurdest abgemeldet.', 'info');
+            }
+          }
+        );
+        return () => subscription?.unsubscribe();
+      }, [supabaseClient, isDemo]);
+
+      // Heartbeat: Alle 4h Supabase pingen (Phase 6.8 — Backup, primär via GAS)
+      useEffect(() => {
+        if (isDemo || !supabaseClient) return;
+        const interval = setInterval(async () => {
+          try {
+            await supabaseClient.from('users').select('count', { count: 'exact', head: true });
+          } catch (e) {
+            console.warn('Heartbeat failed:', e);
+            showToast('Verbindung zum Server unterbrochen. Seite bitte neu laden.', 'error');
+          }
+        }, 4 * 60 * 60 * 1000); // 4 Stunden
+        return () => clearInterval(interval);
+      }, [supabaseClient, isDemo]);
+
+      // Posts subscription (Phase 6.7: Loading-Guard gegen Race Condition)
+      const postsLoadingRef = useRef(false);
+      const pendingRealtimeRef = useRef([]);
       useEffect(() => {
         if (selectedChannel) {
           let cancelled = false;
+          postsLoadingRef.current = true;
+          pendingRealtimeRef.current = [];
           setPostsLoading(true);
           const loadPosts = async () => {
             const postsData = await dataService.getPosts(selectedChannel.id, PAGE_SIZE, 0);
             if (!cancelled) {
               setPosts(postsData);
               setHasMorePosts(postsData.length >= PAGE_SIZE);
+              // Pending Realtime-Events nachträglich anwenden
+              const pending = pendingRealtimeRef.current;
+              if (pending.length > 0) {
+                setPosts(prev => {
+                  let updated = [...prev];
+                  for (const p of pending) {
+                    if (!updated.some(existing => existing.id === p.id)) {
+                      updated = [p, ...updated];
+                    }
+                  }
+                  return updated;
+                });
+              }
+              pendingRealtimeRef.current = [];
+              postsLoadingRef.current = false;
               setPostsLoading(false);
             }
           };
           loadPosts();
           const unsub = dataService.subscribeToChannel(selectedChannel.id, newPost => {
-            if (!cancelled) setPosts(prev => {
+            if (cancelled) return;
+            if (postsLoadingRef.current) {
+              // Während Loading: Events in Queue sammeln
+              pendingRealtimeRef.current.push(newPost);
+              return;
+            }
+            setPosts(prev => {
               // Duplikat-Prävention (optimistic update + Realtime)
               if (prev.some(p => p.id === newPost.id)) return prev;
               return [newPost, ...prev];
             });
           });
-          return () => { cancelled = true; unsub(); };
+          return () => { cancelled = true; postsLoadingRef.current = false; unsub(); };
         }
       }, [selectedChannel, dataService]);
 
@@ -4891,7 +6221,7 @@
                     icon: KRS_LOGO, badge: KRS_LOGO, tag: 'krs-urgent-' + newPost.id, renotify: true, requireInteraction: isUrgentPost
                   });
                   n.onclick = () => { window.focus(); n.close(); };
-                  if (!isUrgentPost) setTimeout(() => n.close(), 10000);
+                  if (!isUrgentPost) setTimeout(() => n.close(), CONFIG.NOTIFICATION_AUTO_CLOSE);
                 }
               } catch(e) {}
               // In-App Toast für dringende Posts
@@ -4990,30 +6320,31 @@
       }, [user, dataService]);
 
       // Clear unread when opening a conversation
-      const handleConversationSelect = (conv) => {
+      // Phase 7.3: Handler memoizieren — verhindert Re-Renders bei Child-Komponenten
+      const handleConversationSelect = useCallback((conv) => {
         setSelectedConversation(conv);
-        // Mark as read in localStorage (for Supabase mode)
-        DataService.markConversationRead(conv.id);
+        // Mark as read (Phase 6: Supabase + localStorage)
+        dataService.markConversationRead(conv.id, user?.id);
         if (conv.unread > 0) {
           setUnreadChatCount(prev => Math.max(0, prev - conv.unread));
           setConversations(prev => prev.map(c =>
             c.id === conv.id ? { ...c, unread: 0 } : c
           ));
         }
-      };
+      }, [dataService, user?.id]);
 
       // Clear unread posts when selecting a channel
-      const handleChannelSelect = (ch) => {
+      const handleChannelSelect = useCallback((ch) => {
         setSelectedChannel(ch);
         setMobileSidebarOpen(false);
-        // Mark as read in localStorage (for Supabase mode)
-        DataService.markChannelRead(ch.id);
+        // Mark as read (Phase 6: Supabase + localStorage)
+        dataService.markChannelRead(ch.id, user?.id);
         setUnreadPostChannels(prev => {
           const next = new Map(prev);
           next.delete(ch.id);
           return next;
         });
-      };
+      }, [dataService, user?.id]);
 
       const handleTeamSelect = async (team) => {
         setSelectedTeam(team);
@@ -5112,6 +6443,10 @@
         if (!isDemo) {
           await dataService.signOut();
         }
+        // Phase 6: Singleton-Client zurücksetzen
+        _supabaseClientSingleton = null;
+        setSupabaseClient(null);
+        setIsDemo(true);
         setSetupComplete(false);
         setUser(null);
         setView('teams');
@@ -5148,6 +6483,18 @@
         setHasMoreMessages(older.length >= PAGE_SIZE);
         setLoadingMore(false);
       };
+
+      // Phase 7.2: Context-Value memoiziert (verhindert unnötige Re-Renders der Consumer)
+      // P8 (Merge-Fix O1, 11.06.2026): MUSS vor den Early-Returns stehen —
+      // Hooks dürfen nicht hinter bedingten returns liegen (React #310).
+      const appContextValue = React.useMemo(() => ({
+        dataService,
+        user,
+        allUsers,
+        onlineUsers,
+        readReceiptsEnabled,
+        userRole: user?.role || 'member',
+      }), [dataService, user, allUsers, onlineUsers, readReceiptsEnabled]);
 
       if (!setupComplete) {
         return React.createElement(SetupScreen, { onSetupComplete: handleSetupComplete });
@@ -5220,8 +6567,14 @@
         ),
         React.createElement('div', { className: 'sidebar-content' + (mobileSidebarOpen ? ' mobile-open' : '') },
           selectedTeam && React.createElement(React.Fragment, null,
-            React.createElement('div', { className: 'sidebar-header' },
-              React.createElement('h2', null, '# Kanäle')
+            React.createElement('div', { className: 'sidebar-header', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+              React.createElement('h2', null, '# Kanäle'),
+              user?.role === 'admin' && React.createElement('button', {
+                style: { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: '4px', display: 'flex', alignItems: 'center' },
+                onClick: () => setShowCreateChannel(true),
+                title: 'Neuen Kanal erstellen',
+                'aria-label': 'Neuen Kanal erstellen'
+              }, React.createElement('span', { dangerouslySetInnerHTML: { __html: Icons.plus }, style: { fontSize: '18px' } }))
             ),
             React.createElement('div', { className: 'sidebar-list' },
               channels.map(ch => {
@@ -5229,14 +6582,14 @@
                 return React.createElement('button', {
                   key: ch.id,
                   className: 'list-item' + (selectedChannel?.id === ch.id ? ' active' : ''),
-                  onClick: () => handleChannelSelect(ch)
+                  onClick: () => handleChannelSelect(ch),
+                  onContextMenu: (e) => handleChannelContextMenu(e, ch)
                 },
                   React.createElement('span', { style: { fontSize: '12px' } }, '#'),
                   React.createElement('span', { className: 'list-item-text' + (unreadCount > 0 ? ' channel-unread' : '') }, ch.name),
                   unreadCount > 0 && React.createElement('span', { className: 'unread-badge' }, unreadCount)
                 );
-              }
-              )
+              })
             )
           )
         ),
@@ -5260,7 +6613,7 @@
             React.createElement('div', { className: 'content-body' },
               postsLoading
                 ? React.createElement(SkeletonPosts, { count: 4 })
-                : React.createElement(PostList, { posts, setPosts, channelId: selectedChannel?.id, dataService, user, allUsers, onOpenThread: setOpenThread, hasMore: hasMorePosts, onLoadMore: loadMorePosts, loadingMore, readReceiptsEnabled })
+                : React.createElement(PostList, { posts, setPosts, channelId: selectedChannel?.id, dataService, user, allUsers, onOpenThread: setOpenThread, hasMore: hasMorePosts, onLoadMore: loadMorePosts, loadingMore, onForward: setShowForwardModal, onSave: toggleSavePost, savedPosts, readReceiptsEnabled })
             )
           )
         )
@@ -5297,7 +6650,10 @@
         )
       );
 
-      return React.createElement(React.Fragment, null,
+      // (appContextValue — jetzt oben vor den Early-Returns, s. P8)
+
+      return React.createElement(AppContext.Provider, { value: appContextValue },
+        React.createElement(React.Fragment, null,
         // Modals
         showCreateTeam && React.createElement(CreateTeamModal, {
           onClose: () => setShowCreateTeam(false),
@@ -5307,10 +6663,74 @@
           teamId: selectedTeam.id,
           dataService,
           onClose: () => setShowTeamMembers(false),
-          onMembersUpdated: () => {}, // Optional callback
+          onMembersUpdated: () => {},
           currentUser: user,
           isAdmin: userTeamRole === 'admin'
         }),
+        // Channel erstellen Dialog
+        showCreateChannel && React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', onClick: () => setShowCreateChannel(false) },
+          React.createElement('div', { className: 'channel-dialog', onClick: e => e.stopPropagation() },
+            React.createElement('h3', null, '# Neuen Kanal erstellen'),
+            React.createElement('p', { style: { fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 12px 0' } }, 'Kanal wird in „' + (selectedTeam?.name || '') + '" erstellt.'),
+            React.createElement('input', {
+              id: 'new-channel-name',
+              placeholder: 'Kanalname (z.\u00a0B. „Vertretung")',
+              autoFocus: true,
+              onKeyDown: (e) => { if (e.key === 'Enter') { handleCreateChannel(e.target.value); } if (e.key === 'Escape') setShowCreateChannel(false); }
+            }),
+            React.createElement('div', { className: 'dialog-actions' },
+              React.createElement('button', { onClick: () => setShowCreateChannel(false) }, 'Abbrechen'),
+              React.createElement('button', { className: 'btn-primary', onClick: () => { const inp = document.getElementById('new-channel-name'); if (inp) handleCreateChannel(inp.value); } }, 'Erstellen')
+            )
+          )
+        ),
+        // Channel umbenennen Dialog
+        editingChannel && React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', onClick: () => setEditingChannel(null) },
+          React.createElement('div', { className: 'channel-dialog', onClick: e => e.stopPropagation() },
+            React.createElement('h3', null, '# Kanal umbenennen'),
+            React.createElement('input', {
+              id: 'rename-channel-input',
+              defaultValue: editingChannel.name,
+              autoFocus: true,
+              onKeyDown: (e) => { if (e.key === 'Enter') handleRenameChannel(editingChannel.id, e.target.value); if (e.key === 'Escape') setEditingChannel(null); }
+            }),
+            React.createElement('div', { className: 'dialog-actions' },
+              React.createElement('button', { onClick: () => setEditingChannel(null) }, 'Abbrechen'),
+              React.createElement('button', { className: 'btn-primary', onClick: () => { const inp = document.getElementById('rename-channel-input'); if (inp) handleRenameChannel(editingChannel.id, inp.value); } }, 'Speichern')
+            )
+          )
+        ),
+        // Channel Kontextmenü
+        channelContextMenu && React.createElement(React.Fragment, null,
+          React.createElement('div', { style: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 599 }, onClick: () => setChannelContextMenu(null) }),
+          React.createElement('div', { className: 'channel-context-menu', style: { left: channelContextMenu.x, top: channelContextMenu.y } },
+            React.createElement('button', { onClick: () => { setEditingChannel(channelContextMenu.channel); setChannelContextMenu(null); } }, '✏️', ' Umbenennen'),
+            !channelContextMenu.channel.is_default && React.createElement('button', { className: 'danger', onClick: () => { if (confirm('Kanal „' + channelContextMenu.channel.name + '" wirklich löschen? Alle Beiträge gehen verloren.')) handleDeleteChannel(channelContextMenu.channel); else setChannelContextMenu(null); } }, '🗑', ' Löschen')
+          )
+        ),
+        // Nachricht weiterleiten Modal
+        showForwardModal && React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', onClick: () => setShowForwardModal(null) },
+          React.createElement('div', { className: 'channel-dialog', style: { width: '340px' }, onClick: e => e.stopPropagation() },
+            React.createElement('h3', null, '↪ Nachricht weiterleiten'),
+            React.createElement('p', { style: { fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 12px 0' } }, 'An welchen Kanal weiterleiten?'),
+            React.createElement('div', { style: { maxHeight: '250px', overflowY: 'auto' } },
+              teams.flatMap(t => (channels.length > 0 || t.id === selectedTeam?.id) ? channels.filter(ch => ch.id !== selectedChannel?.id).map(ch => (
+                React.createElement('button', {
+                  key: ch.id,
+                  style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', width: '100%', border: 'none', background: 'none', cursor: 'pointer', borderRadius: 'var(--radius)', fontSize: '13px', color: 'var(--text-primary)' },
+                  className: 'list-item',
+                  onClick: () => handleForwardPost(showForwardModal, ch.id)
+                },
+                  React.createElement('span', { style: { color: 'var(--text-muted)' } }, '#'),
+                  React.createElement('span', null, ch.name)
+                )
+              )) : [])
+            ),
+            React.createElement('div', { className: 'dialog-actions' },
+              React.createElement('button', { onClick: () => setShowForwardModal(null) }, 'Abbrechen')
+            )
+          )
+        ),
         // Main app layout
         React.createElement('div', { className: 'app-layout', role: 'application' },
         // Sidebar mit View-Switcher
@@ -5341,7 +6761,16 @@
               title: 'Suche',
               'aria-label': 'Suche',
               dangerouslySetInnerHTML: { __html: Icons.search }
-            })
+            }),
+            React.createElement('button', {
+              className: 'nav-item' + (view === 'saved' ? ' active' : ''),
+              onClick: () => setView('saved'),
+              title: 'Gespeicherte Nachrichten',
+              'aria-label': 'Lesezeichen'
+            },
+              '🔖',
+              savedPosts.length > 0 && React.createElement('span', { className: 'nav-badge', style: { fontSize: '9px' } }, savedPosts.length)
+            )
           ),
           React.createElement('div', { className: 'sidebar-bottom' },
             React.createElement('button', {
@@ -5365,6 +6794,8 @@
               'aria-label': readReceiptsEnabled ? 'Lesebestätigungen deaktivieren' : 'Lesebestätigungen aktivieren',
               style: { opacity: readReceiptsEnabled ? 1 : 0.5 }
             }, readReceiptsEnabled ? '✓✓' : '✓'),
+            // Admin-Button (nur für Admins sichtbar, Phase 6)
+            user?.role === 'admin' && React.createElement('button', { className: 'feedback-trigger', onClick: () => setShowAdmin(true), title: 'Administration', 'aria-label': 'Admin-Panel öffnen' }, '⚙️'),
             React.createElement('button', { className: 'feedback-trigger', onClick: () => setShowHelp(true), title: 'Hilfe & Tipps', 'aria-label': 'Hilfe anzeigen' }, '❓'),
             React.createElement('button', { className: 'feedback-trigger', onClick: () => setShowFeedback(true), title: 'Feedback geben', 'aria-label': 'Feedback geben' }, '📣'),
             React.createElement('button', { className: 'feedback-trigger', onClick: () => setShowPrivacy(true), title: 'Datenschutz', 'aria-label': 'Datenschutzhinweis' }, '🔒'),
@@ -5410,18 +6841,57 @@
           showProfile && user && React.createElement(ProfileModal, { user, onClose: () => setShowProfile(false), onAvatarUpload: handleAvatarUpload }),
         // Main content: Teams oder Chat
         React.createElement('div', { className: 'main' },
-          view === 'teams' ? teamsView : view === 'chat' ? chatView : React.createElement(SearchView, { dataService, user, allUsers, teams })
+          view === 'teams' ? React.createElement(ErrorBoundary, { fallbackMessage: 'Der Teams-Bereich hatte einen Fehler.' }, teamsView)
+            : view === 'chat' ? React.createElement(ErrorBoundary, { fallbackMessage: 'Der Chat-Bereich hatte einen Fehler.' }, chatView)
+            : view === 'saved' ? React.createElement('div', { style: { flex: 1, display: 'flex', flexDirection: 'column' } },
+                React.createElement('div', { className: 'content-header' },
+                  React.createElement('h1', null, '🔖 Gespeicherte Nachrichten')
+                ),
+                React.createElement('div', { className: 'content-body', style: { padding: '16px' } },
+                  savedPosts.length === 0
+                    ? React.createElement('div', { style: { textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' } },
+                        React.createElement('div', { style: { fontSize: '48px', marginBottom: '12px' } }, '🔖'),
+                        React.createElement('p', { style: { fontSize: '15px' } }, 'Noch keine Nachrichten gespeichert.'),
+                        React.createElement('p', { style: { fontSize: '13px', marginTop: '8px' } }, 'Klicke auf 🔗 bei einem Beitrag, um ihn hier zu speichern.')
+                      )
+                    : savedPosts.map((sp, idx) =>
+                        React.createElement('div', { key: sp.id || idx, style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', marginBottom: '8px' } },
+                          React.createElement('div', null,
+                            React.createElement('div', { style: { fontSize: '14px', fontWeight: '500', color: 'var(--text-primary)' } }, sp.title || '(Kein Titel)'),
+                            React.createElement('div', { style: { fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' } }, (sp.channel ? '# ' + sp.channel : '') + (sp.savedAt ? ' · ' + new Date(sp.savedAt).toLocaleDateString('de-DE') : ''))
+                          ),
+                          React.createElement('button', {
+                            onClick: () => toggleSavePost(sp),
+                            title: 'Entfernen',
+                            style: { background: 'none', border: 'none', cursor: 'pointer', padding: '8px', color: 'var(--text-muted)', fontSize: '14px' }
+                          }, '✕')
+                        )
+                      )
+                )
+              )
+            : React.createElement(SearchView, { dataService, user, allUsers, teams })
         ),
         // Thread overlay (nur in Teams-View)
         view === 'teams' && openThread && React.createElement(ThreadPanel, { post: openThread, replies, dataService, user, onClose: () => setOpenThread(null) }),
         // Feedback Modal
         showFeedback && React.createElement(FeedbackModal, { user, onClose: () => setShowFeedback(false) }),
         // Onboarding Wizard
-        showOnboarding && React.createElement(OnboardingWizard, { onClose: () => setShowOnboarding(false) }),
+        showOnboarding && React.createElement(OnboardingWizard, { onClose: () => {
+          setShowOnboarding(false);
+          // Phase 6: Onboarding-Status auch in Supabase speichern
+          if (user?.id && dataService && !dataService.isDemo) {
+            dataService.updateUserPreference(user.id, 'onboarding_done', true);
+          }
+        } }),
         // Hilfe-Panel mit Accordions
         showHelp && React.createElement(HelpPanel, { onClose: () => setShowHelp(false), onStartOnboarding: () => { try { localStorage.removeItem('krs_onboarding_done'); } catch(e) {} setShowOnboarding(true); } }),
         // Datenschutz Modal
-        showPrivacy && React.createElement(PrivacyModal, { onClose: () => setShowPrivacy(false) })
+        showPrivacy && React.createElement(PrivacyModal, { onClose: () => setShowPrivacy(false) }),
+        // Admin-Panel (Phase 6 — nur für Admins sichtbar)
+        showAdmin && user?.role === 'admin' && React.createElement(AdminPanel, {
+          dataService, currentUser: user, onClose: () => setShowAdmin(false)
+        })
+      )
       )
       );
     }
@@ -5430,7 +6900,9 @@
     // RENDER APP
     // ============================================================
     const root = ReactDOM.createRoot(document.getElementById('app'));
-    root.render(React.createElement(App));
+    root.render(React.createElement(ErrorBoundary, { fallbackMessage: 'Die App hatte einen Fehler. Bitte lade die Seite neu.' },
+      React.createElement(App)
+    ));
   </script>
 </body>
 </html>
