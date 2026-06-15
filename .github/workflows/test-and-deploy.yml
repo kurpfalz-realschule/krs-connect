@@ -1,7 +1,7 @@
 # =====================================================================
 # KRS Connect — Test & Deploy Workflow
 # =====================================================================
-# Speicherort: BenditoT/krs-connect → .github/workflows/test-and-deploy.yml
+# Speicherort: kurpfalz-realschule/krs-connect → .github/workflows/test-and-deploy.yml
 #
 # Voraussetzungen im krs-connect Repo:
 #   1. Repo → Settings → Pages → Source: GitHub Actions
@@ -112,10 +112,36 @@ jobs:
           cache: 'npm'
       - run: npm ci || npm install
       - run: npx playwright install --with-deps chromium
-      - name: Wait for Pages-CDN propagation
-        run: sleep 60
+      # Statt fixem sleep: aktiv pollen, bis das Pages-CDN die FRISCH deployte
+      # Version ausliefert. Verhindert die "Timing-Artefakt"-Fehler (404 auf neue
+      # Ressourcen / window.KRS_VERSION noch nicht da), wenn der Check zu früh lief.
+      - name: Wait for Pages-CDN to serve the freshly deployed version
+        shell: bash
+        run: |
+          set -uo pipefail
+          URL="https://kurpfalz-realschule.github.io/krs-connect/"
+          # Erwartete Version aus dem gerade deployten index.html lesen
+          EXPECTED="$(grep -oE "window\.KRS_VERSION *= *'[^']+'" index.html | head -1 | grep -oE "[0-9]+\.[0-9]+\.[0-9]+" || true)"
+          echo "Erwartete Live-Version: ${EXPECTED:-<keine Marker gefunden, prüfe nur HTTP 200>}"
+          ATTEMPTS=30   # 30 × 10s = bis zu 5 Min warten
+          for i in $(seq 1 "$ATTEMPTS"); do
+            CODE="$(curl -fsS -o /tmp/live.html -w '%{http_code}' "$URL" 2>/dev/null || echo 000)"
+            if [ "$CODE" = "200" ]; then
+              if [ -z "$EXPECTED" ] || grep -q "$EXPECTED" /tmp/live.html; then
+                echo "✅ Live-Version ${EXPECTED:-?} nach ca. $((i*10))s ausgeliefert."
+                exit 0
+              fi
+              echo "Versuch $i/$ATTEMPTS: HTTP 200, aber Version $EXPECTED noch nicht propagiert…"
+            else
+              echo "Versuch $i/$ATTEMPTS: HTTP $CODE — warte auf CDN…"
+            fi
+            sleep 10
+          done
+          echo "⚠️ Timeout: Live-Version ${EXPECTED:-?} nach $((ATTEMPTS*10))s nicht bestätigt — Health-Check läuft trotzdem."
       - name: Run live health-checks
         run: npx playwright test --project=live --grep "KRS Connect"
         env:
           CI: true
+        # Bleibt non-blocking, bis das Gate ein paar Deploys lang stabil grün ist.
+        # Dann kann diese Zeile entfernt werden, damit der Check ein echtes Gate wird.
         continue-on-error: true
