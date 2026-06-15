@@ -1,0 +1,57 @@
+# =====================================================================
+# KRS — Live Health-Check (geplant, ENTKOPPELT vom Deploy)
+# =====================================================================
+# Warum getrennt vom Deploy-Workflow?
+#   GitHub Pages liefert direkt nach einem Deploy minutenlang über
+#   verschiedene CDN-Edge-Knoten abwechselnd 200 und 404 ("Flapping").
+#   Ein Health-Check unmittelbar nach dem Deploy erzeugt dadurch
+#   Falsch-Negative (404), obwohl die Seite faktisch online ist.
+#   Deshalb prüfen wir hier ZEITVERSETZT/GEPLANT, wenn das CDN garantiert
+#   stabil ist  →  echtes Up/Down-Monitoring statt Deploy-Gate.
+#
+# Trigger:
+#   - alle 6 Stunden (Cron)
+#   - manuell über "Run workflow" (workflow_dispatch)
+#
+# Ein roter Lauf = Live-Seite wirklich nicht erreichbar → GitHub mailt den
+# Fehler an den Workflow-Verantwortlichen.
+# =====================================================================
+
+name: Live Health-Check (scheduled)
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'   # alle 6 Stunden (UTC)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-health
+  cancel-in-progress: false
+
+jobs:
+  health:
+    name: Live Health-Check (Connect + Hub)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+      - run: npm ci || npm install
+      - run: npx playwright install --with-deps chromium
+      - name: Run live health-checks (Connect + Hub)
+        run: npx playwright test --project=live
+        env:
+          CI: true
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-health-report
+          path: playwright-report/
+          retention-days: 14

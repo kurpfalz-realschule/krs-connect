@@ -98,53 +98,8 @@ jobs:
       - id: deployment
         uses: actions/deploy-pages@v4
 
-  health-check:
-    name: Live Health-Check
-    needs: deploy
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-      - run: npm ci || npm install
-      - run: npx playwright install --with-deps chromium
-      # GitHub Pages liefert direkt nach dem Deploy ein kurzes 404-Fenster, während
-      # das CDN umschaltet. Ein einmaliges 200 (oder ein Versions-Check bei
-      # unveränderter index.html) reicht NICHT — die Seite "flappt" zwischen 200/404.
-      # Deshalb: warten, bis die Live-Seite eine STABILE Serie aufeinanderfolgender
-      # 200er liefert. Erst dann ist das CDN-Umschaltfenster sicher vorbei.
-      - name: Wait until Pages-CDN is stable (consecutive HTTP 200)
-        shell: bash
-        run: |
-          set -uo pipefail
-          URL="https://kurpfalz-realschule.github.io/krs-connect/"
-          NEED=3        # so viele 200er in Folge = stabil
-          ATTEMPTS=40   # max 40 × 6s = 4 Min
-          streak=0
-          for i in $(seq 1 "$ATTEMPTS"); do
-            CODE="$(curl -s -o /dev/null -w '%{http_code}' "$URL" || echo 000)"
-            if [ "$CODE" = "200" ]; then
-              streak=$((streak+1))
-              echo "Versuch $i/$ATTEMPTS: HTTP 200 (Serie $streak/$NEED)"
-              if [ "$streak" -ge "$NEED" ]; then
-                echo "✅ Live-Seite stabil ($NEED× HTTP 200 in Folge) — CDN-Fenster vorbei."
-                exit 0
-              fi
-            else
-              [ "$streak" -gt 0 ] && echo "Versuch $i/$ATTEMPTS: HTTP $CODE — Serie zurückgesetzt (war $streak)." || echo "Versuch $i/$ATTEMPTS: HTTP $CODE — warte auf CDN…"
-              streak=0
-            fi
-            sleep 6
-          done
-          echo "⚠️ Timeout: keine stabile 200-Serie nach $((ATTEMPTS*6))s — Health-Check läuft dennoch."
-      - name: Run live health-checks
-        run: npx playwright test --project=live --grep "KRS Connect"
-        env:
-          CI: true
-        # Bleibt non-blocking, bis das Gate ein paar Deploys lang stabil grün ist.
-        # Dann kann diese Zeile entfernt werden, damit der Check ein echtes Gate wird.
-        continue-on-error: true
+  # Hinweis: Der Live-Health-Check läuft NICHT mehr hier (Deploy-Pipeline), weil
+  # GitHub Pages direkt nach dem Deploy minutenlang über verschiedene CDN-Edges
+  # zwischen 200/404 flappt und so falsche Fehler erzeugte. Er liegt jetzt in
+  # einem eigenen geplanten Workflow: .github/workflows/live-health.yml
+  # (prüft die Live-Seite zeitversetzt, wenn das CDN stabil ist = echtes Monitoring).
