@@ -5849,10 +5849,33 @@
       const hubAuthStateRef = useRef({ setupComplete: false, user: null, allUsers: [] });
       hubAuthStateRef.current = { setupComplete, user, allUsers };
 
+      // Findet den passenden Connect-User zum Hub-Profil. Wenn keiner in der
+      // (Demo-)Userliste passt, wird aus dem Hub-Profil ein synthetischer User
+      // erzeugt — so gelingt der Unified-Login immer (Hub ist die Auth-Quelle).
+      const resolveHubUser = useCallback((userList, hubUser) => {
+        const ln = (hubUser.lehrkraft_name || '').toLowerCase();
+        const match = (userList || []).find(u =>
+          (hubUser.kuerzel && u.kuerzel === hubUser.kuerzel) ||
+          (hubUser.display_name && u.display_name === hubUser.display_name) ||
+          (hubUser.lehrkraft_name && u.name === hubUser.lehrkraft_name) ||
+          (ln && u.display_name && u.display_name.toLowerCase().includes(ln))
+        );
+        if (match) return match;
+        return {
+          id: hubUser.id || ('krs-' + (hubUser.kuerzel || 'user')),
+          username: (hubUser.kuerzel || hubUser.display_name || 'user').toLowerCase().replace(/\s+/g, ''),
+          kuerzel: hubUser.kuerzel,
+          name: hubUser.lehrkraft_name,
+          display_name: hubUser.display_name || hubUser.lehrkraft_name || 'Lehrkraft',
+          avatar_color: hubUser.avatar_color || '#7c6ff7',
+          role: hubUser.role || 'member'
+        };
+      }, []);
+
       useEffect(() => {
         const isInHub = window.parent !== window;
         const handleHubAuth = async (event) => {
-          if (!event.origin.includes('benditot.github.io') && event.origin !== window.location.origin) return;
+          if (!event.origin.includes('kurpfalz-realschule.github.io') && event.origin !== window.location.origin) return;
           if (event.data?.type === 'KRS_HUB_AUTH' && event.data?.hub_verified) {
             const hubUser = event.data.user;
             const st = hubAuthStateRef.current;
@@ -5866,25 +5889,16 @@
                 const userList = usersData.length > 0 ? usersData : MOCK_USERS;
                 setAllUsers(userList);
                 setSetupComplete(true);
-                const match = userList.find(u =>
-                  u.kuerzel === hubUser.kuerzel ||
-                  u.display_name === hubUser.display_name ||
-                  u.name === hubUser.lehrkraft_name
-                );
-                if (match) setPendingAuthUser(match);
+                setPendingAuthUser(resolveHubUser(userList, hubUser));
               } catch (e) {
                 setAllUsers(MOCK_USERS);
                 setSetupComplete(true);
+                setPendingAuthUser(resolveHubUser(MOCK_USERS, hubUser));
               }
               setLoadingUsers(false);
             } else if (hubUser && st.setupComplete && !st.user) {
               const userList = st.allUsers.length > 0 ? st.allUsers : MOCK_USERS;
-              const match = userList.find(u =>
-                u.kuerzel === hubUser.kuerzel ||
-                u.display_name === hubUser.display_name ||
-                u.name === hubUser.lehrkraft_name
-              );
-              if (match) setPendingAuthUser(match);
+              setPendingAuthUser(resolveHubUser(userList, hubUser));
             }
           }
         };
@@ -5916,13 +5930,15 @@
         }
       };
 
-      // Pending Auth-User automatisch einloggen sobald dataService bereit ist
+      // Pending Auth-User automatisch einloggen sobald dataService bereit ist.
+      // Phase 2: gilt auch im Demo-Modus — der Hub übernimmt die Auth, daher
+      // darf der eigene User-Select-/Login-Screen übersprungen werden.
       useEffect(() => {
-        if (pendingAuthUser && dataService && !dataService.isDemo && setupComplete) {
+        if (pendingAuthUser && dataService && setupComplete && !user) {
           handleUserSelected(pendingAuthUser);
           setPendingAuthUser(null);
         }
-      }, [pendingAuthUser, dataService, setupComplete]);
+      }, [pendingAuthUser, dataService, setupComplete, user]);
 
       const handleUserSelected = async (selectedUser) => {
         setUser(selectedUser);
