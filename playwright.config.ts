@@ -45,6 +45,12 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         baseURL: undefined, // Live-Tests setzen ihre eigene URL
+        // Health-Monitoring braucht kein Video/Trace/Screenshot. Der CI-Runner
+        // hat kein ffmpeg-Binary → Video-Init würde browserContext.newPage()
+        // werfen und alle Page-Tests rot machen (unabhängig vom Seiten-Status).
+        video: 'off',
+        trace: 'off',
+        screenshot: 'off',
       },
     },
   ],

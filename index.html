@@ -1972,7 +1972,13 @@
       }
 
       async getPosts(channelId, limit = 50, offset = 0) {
-        if (this.isDemo) return MOCK_POSTS[channelId] || [];
+        // Tiefe Kopie zurückgeben: sonst teilen State und MOCK_POSTS dieselben
+        // Objekt-/Array-Referenzen → (a) createPost-unshift + optimistic setPosts
+        // doppeln den Post, (b) Reaktions-Mutation + optimistic Update heben sich auf.
+        if (this.isDemo) return (MOCK_POSTS[channelId] || []).map(p => ({
+          ...p,
+          reactions: (p.reactions || []).map(r => ({ ...r, users: [...(r.users || [])] }))
+        }));
         try {
           const { data, error } = await this.sb.from('posts').select('*, author:users(*)').eq('channel_id', channelId).is('parent_id', null).order('created_at', { ascending: false }).range(offset, offset + limit - 1);
           if (error) throw error;
@@ -2062,7 +2068,8 @@
           const post = { id: 'p' + Date.now(), channel_id: channelId, author, content, title, image_url: imageUrl, is_urgent: isUrgent, reactions: [], replies: 0, reply_users: [], created_at: new Date().toLocaleString('de-DE') };
           if (!MOCK_POSTS[channelId]) MOCK_POSTS[channelId] = [];
           MOCK_POSTS[channelId].unshift(post);
-          return post;
+          // entkoppelte Kopie (eigene reactions-Referenz) für den optimistic insert
+          return { ...post, reactions: [] };
         }
         try {
           const insertObj = { channel_id: channelId, author_id: authorId, content, title };
@@ -2236,7 +2243,7 @@
           };
           if (!MOCK_POSTS[channelId]) MOCK_POSTS[channelId] = [];
           MOCK_POSTS[channelId].unshift(post);
-          return post;
+          return { ...post, reactions: [] };
         }
         try {
           const { data, error } = await this.sb.from('posts').insert({
@@ -2360,7 +2367,7 @@
       }
 
       async getReplies(postId) {
-        if (this.isDemo) return MOCK_REPLIES[postId] || [];
+        if (this.isDemo) return [...(MOCK_REPLIES[postId] || [])];
         try {
           const { data, error } = await this.sb.from('posts').select('*, author:users(*)').eq('parent_id', postId).order('created_at');
           if (error) throw error;
@@ -2438,7 +2445,7 @@
       }
 
       async getMessages(conversationId, limit = 50, offset = 0) {
-        if (this.isDemo) return MOCK_MESSAGES[conversationId] || [];
+        if (this.isDemo) return [...(MOCK_MESSAGES[conversationId] || [])];
         try {
           // Lade die letzten N Nachrichten (neueste zuerst holen, dann umdrehen für Anzeige)
           const { data, error } = await this.sb.from('messages').select('*, sender:users(*)').eq('conversation_id', conversationId).order('created_at', { ascending: false }).range(offset, offset + limit - 1);
@@ -3978,8 +3985,11 @@
       const handleTogglePin = async (post) => {
         const updated = await dataService.togglePin(post.id, !!post.is_pinned);
         if (updated) {
-          setPosts(prev => prev.map(p => p.id === post.id ? { ...p, is_pinned: !post.is_pinned } : p));
-          showToast(post.is_pinned ? 'Post losgelöst' : 'Post angeheftet 📌', 'success');
+          // Bugfix: im Demo-Modus mutiert togglePin das geteilte Post-Objekt,
+          // daher den neuen Zustand aus dem Rückgabewert lesen (nicht aus post).
+          const nowPinned = !!updated.is_pinned;
+          setPosts(prev => prev.map(p => p.id === post.id ? { ...p, is_pinned: nowPinned } : p));
+          showToast(nowPinned ? 'Post angeheftet 📌' : 'Post losgelöst', 'success');
         }
       };
 
@@ -4355,7 +4365,7 @@
     }
 
     // Phase 7.2: Props sind jetzt optional — Fallback auf AppContext
-    function ThreadPanel({ post, replies, dataService: _ds, user: _u, onClose }) {
+    function ThreadPanel({ post, replies, dataService: _ds, user: _u, onClose, onReplyCreated }) {
       const ctx = useApp();
       const dataService = _ds || ctx.dataService;
       const user = _u || ctx.user;
@@ -4366,7 +4376,10 @@
         e.preventDefault();
         if (!replyContent.trim()) return;
         setSaving(true);
-        await dataService.createReply(post.id, post.channel_id || 1, user.id, replyContent);
+        const created = await dataService.createReply(post.id, post.channel_id || 1, user.id, replyContent);
+        // Demo-Modus hat keine Realtime-Subscription → Antwort optimistisch anhängen.
+        // (Prod dedupliziert per id im Parent, daher in beiden Modi sicher.)
+        if (created && onReplyCreated) onReplyCreated(created);
         setReplyContent('');
         setSaving(false);
       };
@@ -6888,7 +6901,7 @@
             : React.createElement(SearchView, { dataService, user, allUsers, teams })
         ),
         // Thread overlay (nur in Teams-View)
-        view === 'teams' && openThread && React.createElement(ThreadPanel, { post: openThread, replies, dataService, user, onClose: () => setOpenThread(null) }),
+        view === 'teams' && openThread && React.createElement(ThreadPanel, { post: openThread, replies, dataService, user, onClose: () => setOpenThread(null), onReplyCreated: (r) => setReplies(prev => prev.some(x => x.id === r.id) ? prev : [...prev, r]) }),
         // Feedback Modal
         showFeedback && React.createElement(FeedbackModal, { user, onClose: () => setShowFeedback(false) }),
         // Onboarding Wizard
