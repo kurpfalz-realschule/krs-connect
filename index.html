@@ -2444,6 +2444,47 @@
         }
       }
 
+      // ── Ausblenden (hidden-Flag) ─ Sprint 4 ─────────────────────────
+      // kind: 'team' → team_members.hidden | 'conv' → conversation_members.hidden
+      // Demo & Supabase-Fallback: localStorage; Supabase-Primär: Membership-Flag.
+      _hiddenLsKey(kind, userId) { return 'krs-hidden-' + kind + '-' + (userId != null ? userId : 'anon'); }
+      _readHiddenLs(kind, userId) {
+        try { return new Set(JSON.parse(localStorage.getItem(this._hiddenLsKey(kind, userId)) || '[]')); }
+        catch (e) { return new Set(); }
+      }
+      _writeHiddenLs(kind, userId, set) {
+        try { localStorage.setItem(this._hiddenLsKey(kind, userId), JSON.stringify(Array.from(set))); } catch (e) {}
+      }
+      async getHiddenIds(kind, userId) {
+        if (this.isDemo) return this._readHiddenLs(kind, userId);
+        try {
+          const table = kind === 'team' ? 'team_members' : 'conversation_members';
+          const idCol = kind === 'team' ? 'team_id' : 'conversation_id';
+          const { data, error } = await this.sb.from(table).select(idCol + ', hidden').eq('user_id', userId).eq('hidden', true);
+          if (error) throw error;
+          return new Set((data || []).map(r => r[idCol]));
+        } catch (err) {
+          console.error('getHiddenIds error:', err);
+          return this._readHiddenLs(kind, userId); // Fallback
+        }
+      }
+      async setHidden(kind, id, userId, hidden) {
+        // localStorage immer mitpflegen (Fallback + Demo)
+        const set = this._readHiddenLs(kind, userId);
+        if (hidden) set.add(id); else set.delete(id);
+        this._writeHiddenLs(kind, userId, set);
+        if (this.isDemo) return true;
+        try {
+          // SECURITY-DEFINER-RPC: setzt NUR die hidden-Spalte der EIGENEN Zeile.
+          const { error } = await this.sb.rpc('set_membership_hidden', { p_kind: kind, p_id: id, p_hidden: hidden });
+          if (error) throw error;
+          return true;
+        } catch (err) {
+          console.error('setHidden error:', err);
+          return false; // localStorage hat trotzdem gegriffen
+        }
+      }
+
       async getMessages(conversationId, limit = 50, offset = 0) {
         if (this.isDemo) return [...(MOCK_MESSAGES[conversationId] || [])];
         try {
@@ -3429,7 +3470,7 @@
     // Tests setzen ?forceMode=demo um den DataService deterministisch
     // in den Demo-Modus zu zwingen — ohne dass dazu Credentials
     // entfernt werden müssen.
-    window.KRS_VERSION = '4.0.0';
+    window.KRS_VERSION = '4.1.0';
     const __KRS_QS = new URLSearchParams(typeof location !== 'undefined' ? location.search : '');
     window.__KRS_FORCE_DEMO = __KRS_QS.get('forceMode') === 'demo';
     window.__KRS_FORCE_USER = __KRS_QS.get('forceUser') || null; // optional: direktes Login als kuerzel
@@ -4662,7 +4703,8 @@
     // CHAT COMPONENTS
     // ============================================================
 
-    function ConversationList({ conversations, currentUser, selectedId, onSelect, onNewChat, allUsers, onlineUsers, onGroupChat }) {
+    function ConversationList({ conversations, currentUser, selectedId, onSelect, onNewChat, allUsers, onlineUsers, onGroupChat, hiddenConversations, showHiddenChats, setShowHiddenChats, onToggleHide }) {
+      const hiddenSet = hiddenConversations || new Set();
       const [showNewChat, setShowNewChat] = useState(false);
       const [showGroupChat, setShowGroupChat] = useState(false);
       const [chatSearch, setChatSearch] = useState('');
@@ -4771,12 +4813,15 @@
           )
         ),
         React.createElement('div', { className: 'conversation-items' },
-          conversations.map(conv =>
-            React.createElement('button', {
-              key: conv.id,
-              className: 'conversation-item' + (selectedId === conv.id ? ' active' : ''),
-              onClick: () => onSelect(conv)
-            },
+          (() => {
+            const visibleConvs = conversations.filter(c => !hiddenSet.has(c.id));
+            const hiddenConvs = conversations.filter(c => hiddenSet.has(c.id));
+            const renderItem = (conv) => React.createElement('button', {
+                key: conv.id,
+                className: 'conversation-item' + (selectedId === conv.id ? ' active' : ''),
+                onClick: () => onSelect(conv),
+                style: { flex: 1, minWidth: 0 }
+              },
               conv.is_group ? React.createElement('div', { className: 'group-avatar', style: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '40px', height: '40px', borderRadius: '8px', background: 'var(--accent)', color: 'white', fontWeight: '600', fontSize: '18px' } }, '👥') : React.createElement('div', { className: 'avatar-wrapper' },
                 React.createElement(Avatar, { user: conv.user || { display_name: '?', avatar_color: '#999' }, size: 40 }),
                 React.createElement('span', { className: 'avatar-status online-dot small' + (onlineUsers && onlineUsers.has(Number(conv.user?.id)) ? '' : ' offline') })
@@ -4789,9 +4834,38 @@
                 React.createElement('span', { className: 'conversation-time' }, conv.time),
                 conv.unread > 0 && React.createElement('span', { className: 'unread-badge' }, conv.unread)
               )
-            )
-          ),
-          conversations.length === 0 && React.createElement('div', { style: { padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '14px' } }, 'Noch keine Chats. Starte einen neuen Chat!')
+            );
+            return React.createElement(React.Fragment, null,
+              visibleConvs.map(conv =>
+                React.createElement('div', { key: conv.id, className: 'team-item', 'data-testid': 'conv-visible', style: { display: 'flex', alignItems: 'center' } },
+                  renderItem(conv),
+                  onToggleHide && React.createElement('button', {
+                    className: 'team-hide-btn', title: 'Chat ausblenden', 'data-testid': 'conv-hide',
+                    onClick: (e) => { e.stopPropagation(); onToggleHide(conv.id); }
+                  }, '👁')
+                )
+              ),
+              visibleConvs.length === 0 && hiddenConvs.length === 0 && React.createElement('div', { style: { padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '14px' } }, 'Noch keine Chats. Starte einen neuen Chat!'),
+              hiddenConvs.length > 0 && React.createElement('div', { style: { marginTop: '4px' } },
+                React.createElement('button', { className: 'hidden-teams-toggle', 'data-testid': 'hidden-chats-toggle', onClick: () => setShowHiddenChats(prev => !prev) },
+                  React.createElement('span', null, showHiddenChats ? '▾' : '▸'),
+                  React.createElement('span', null, 'Ausgeblendet (' + hiddenConvs.length + ')')
+                ),
+                showHiddenChats && hiddenConvs.map(conv =>
+                  React.createElement('button', {
+                    key: conv.id, className: 'conversation-item', 'data-testid': 'conv-hidden-item',
+                    style: { opacity: 0.5, width: '100%' },
+                    onClick: () => onToggleHide && onToggleHide(conv.id)
+                  },
+                    React.createElement('div', { className: 'conversation-info' },
+                      React.createElement('div', { className: 'conversation-name' }, conv.is_group ? (conv.name || 'Gruppenchat') : ((conv.user || {}).display_name || 'Unbekannt'))
+                    ),
+                    React.createElement('span', { style: { fontSize: '11px', color: 'var(--text-muted)', marginLeft: 'auto' } }, '👁 Einblenden')
+                  )
+                )
+              )
+            );
+          })()
         )
       );
     }
@@ -5513,7 +5587,9 @@
       const [replies, setReplies] = useState([]);
       const [openThread, setOpenThread] = useState(null);
       const [hiddenTeams, setHiddenTeams] = useState(new Set());
+      const [hiddenConversations, setHiddenConversations] = useState(new Set());
       const [showHiddenTeams, setShowHiddenTeams] = useState(false);
+      const [showHiddenChats, setShowHiddenChats] = useState(false);
       const [postsLoading, setPostsLoading] = useState(false);
       const [hasMorePosts, setHasMorePosts] = useState(false);
 
@@ -5528,7 +5604,8 @@
 
       return { teams, setTeams, selectedTeam, setSelectedTeam, channels, setChannels,
         selectedChannel, setSelectedChannel, posts, setPosts, replies, setReplies,
-        openThread, setOpenThread, hiddenTeams, showHiddenTeams, setShowHiddenTeams,
+        openThread, setOpenThread, hiddenTeams, setHiddenTeams, showHiddenTeams, setShowHiddenTeams,
+        hiddenConversations, setHiddenConversations, showHiddenChats, setShowHiddenChats,
         postsLoading, setPostsLoading, hasMorePosts, setHasMorePosts, toggleTeamVisibility };
     }
 
@@ -5722,7 +5799,8 @@
       const teamsState = useTeamsState();
       const { teams, setTeams, selectedTeam, setSelectedTeam, channels, setChannels,
         selectedChannel, setSelectedChannel, posts, setPosts, replies, setReplies,
-        openThread, setOpenThread, hiddenTeams, showHiddenTeams, setShowHiddenTeams,
+        openThread, setOpenThread, hiddenTeams, setHiddenTeams, showHiddenTeams, setShowHiddenTeams,
+        hiddenConversations, setHiddenConversations, showHiddenChats, setShowHiddenChats,
         postsLoading, setPostsLoading, hasMorePosts, setHasMorePosts, toggleTeamVisibility } = teamsState;
 
       const chatState = useChatState();
@@ -5996,9 +6074,19 @@
             setUserTeamRole('admin'); // Demo: always admin
           }
         }
+        // Ausgeblendete Foren laden (persistiert) — Sprint 4
+        try {
+          const hiddenT = await dataService.getHiddenIds('team', selectedUser.id);
+          if (hiddenT && hiddenT.size) setHiddenTeams(hiddenT);
+        } catch (e) {}
         // Load conversations + all users for chat
         const convData = await dataService.getConversations(selectedUser.id);
         setConversations(convData || []);
+        // Ausgeblendete Chats laden (persistiert)
+        try {
+          const hiddenC = await dataService.getHiddenIds('conv', selectedUser.id);
+          if (hiddenC && hiddenC.size) setHiddenConversations(hiddenC);
+        } catch (e) {}
         // Initialize unread chat count
         if (!dataService.isDemo && convData?.length > 0) {
           const convUnreads = await dataService.getConversationUnreadCounts(convData, selectedUser.id);
@@ -6375,6 +6463,21 @@
         });
       }, [dataService, user?.id]);
 
+      // ── Ausblenden persistierend (Sprint 4) ──
+      const handleToggleTeamHidden = useCallback((teamId) => {
+        const willHide = !hiddenTeams.has(teamId);
+        setHiddenTeams(prev => { const n = new Set(prev); if (willHide) n.add(teamId); else n.delete(teamId); return n; });
+        if (dataService && user) dataService.setHidden('team', teamId, user.id, willHide);
+        showToast(willHide ? 'Forum ausgeblendet' : 'Forum wieder eingeblendet', 'info');
+      }, [hiddenTeams, dataService, user]);
+
+      const handleToggleConvHidden = useCallback((convId) => {
+        const willHide = !hiddenConversations.has(convId);
+        setHiddenConversations(prev => { const n = new Set(prev); if (willHide) n.add(convId); else n.delete(convId); return n; });
+        if (dataService && user) dataService.setHidden('conv', convId, user.id, willHide);
+        showToast(willHide ? 'Chat ausgeblendet' : 'Chat wieder eingeblendet', 'info');
+      }, [hiddenConversations, dataService, user]);
+
       const handleTeamSelect = async (team) => {
         setSelectedTeam(team);
         const channelsData = await dataService.getChannels(team.id);
@@ -6554,7 +6657,7 @@
               const hiddenTeamsList = teams.filter(t => hiddenTeams.has(t.id));
               return React.createElement(React.Fragment, null,
                 visibleTeams.map(team =>
-                  React.createElement('div', { key: team.id, className: 'team-item' },
+                  React.createElement('div', { key: team.id, className: 'team-item', 'data-testid': 'team-visible' },
                     React.createElement('button', {
                       className: 'list-item' + (selectedTeam?.id === team.id ? ' active' : ''),
                       onClick: () => handleTeamSelect(team),
@@ -6569,11 +6672,11 @@
                         return teamUnread > 0 ? React.createElement('span', { className: 'unread-badge', style: { marginLeft: 'auto' }, 'aria-label': teamUnread + ' ungelesene Nachrichten' }, teamUnread) : null;
                       })()
                     ),
-                    React.createElement('button', { className: 'team-hide-btn', onClick: (e) => { e.stopPropagation(); toggleTeamVisibility(team.id); }, title: 'Team ausblenden' }, '👁')
+                    React.createElement('button', { className: 'team-hide-btn', onClick: (e) => { e.stopPropagation(); handleToggleTeamHidden(team.id); }, title: 'Forum ausblenden', 'data-testid': 'team-hide' }, '👁')
                   )
                 ),
                 hiddenTeamsList.length > 0 && React.createElement('div', { style: { marginTop: '4px' } },
-                  React.createElement('button', { className: 'hidden-teams-toggle', onClick: () => setShowHiddenTeams(prev => !prev) },
+                  React.createElement('button', { className: 'hidden-teams-toggle', 'data-testid': 'hidden-teams-toggle', onClick: () => setShowHiddenTeams(prev => !prev) },
                     React.createElement('span', null, showHiddenTeams ? '▾' : '▸'),
                     React.createElement('span', null, 'Ausgeblendet (' + hiddenTeamsList.length + ')')
                   ),
@@ -6581,8 +6684,9 @@
                     React.createElement('button', {
                       key: team.id,
                       className: 'list-item',
+                      'data-testid': 'team-hidden-item',
                       style: { display: 'flex', gap: '8px', alignItems: 'center', opacity: 0.5 },
-                      onClick: () => { toggleTeamVisibility(team.id); handleTeamSelect(team); }
+                      onClick: () => { handleToggleTeamHidden(team.id); }
                     },
                       React.createElement('div', { style: { width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: team.icon_color, borderRadius: 'var(--radius)', color: 'white', fontSize: '12px', fontWeight: '600' } }, team.icon_text),
                       React.createElement('span', { className: 'list-item-text' }, team.name),
@@ -6660,7 +6764,11 @@
             onNewChat: handleNewChat,
             allUsers,
             onlineUsers,
-            onGroupChat: handleGroupChat
+            onGroupChat: handleGroupChat,
+            hiddenConversations,
+            showHiddenChats,
+            setShowHiddenChats,
+            onToggleHide: handleToggleConvHidden
           })
         ),
         React.createElement('div', { className: 'content' },
