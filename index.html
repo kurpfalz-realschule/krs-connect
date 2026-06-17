@@ -2818,6 +2818,9 @@
           const { error } = await this.sb.auth.signInWithOtp({
             email,
             options: {
+              // Signups sind in Supabase deaktiviert (Lehrkräfte werden vorab provisioniert).
+              // Ohne shouldCreateUser:false liefert GoTrue sonst "Signups not allowed" — auch für existierende User.
+              shouldCreateUser: false,
               emailRedirectTo: window.location.origin + window.location.pathname
             }
           });
