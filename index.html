@@ -2832,6 +2832,19 @@
         }
       }
 
+      // E-Mail + Passwort Login (Personal-Accounts; Magic-Link-Mailversand unzuverlässig)
+      async signInWithPassword(email, password) {
+        if (this.isDemo) return { error: null };
+        try {
+          const { error } = await this.sb.auth.signInWithPassword({ email, password });
+          if (error) throw error;
+          return { error: null };
+        } catch (err) {
+          console.error('signInWithPassword error:', err);
+          return { error: err.message || 'Anmeldung fehlgeschlagen.' };
+        }
+      }
+
       // Aktuelle Session prüfen
       async getSession() {
         if (this.isDemo || !this.sb) return null;
@@ -3533,6 +3546,7 @@
       const [error, setError] = useState('');
       const [loading, setLoading] = useState(false);
       const [email, setEmail] = useState('');
+      const [password, setPassword] = useState('');
       const [magicLinkSent, setMagicLinkSent] = useState(false);
       const [checkingSession, setCheckingSession] = useState(true);
 
@@ -3585,33 +3599,34 @@
           setError('Bitte verwende deine Schul-E-Mail-Adresse (@realschule-schriesheim.de).');
           return;
         }
+        if (!password) {
+          setError('Bitte Passwort eingeben.');
+          return;
+        }
         setLoading(true);
         setError('');
         try {
           const client = getSupabaseClient();
           if (!client) throw new Error('Supabase nicht verfügbar');
           const ds = new DataService(client);
-          const { error: linkErr } = await ds.sendMagicLink(trimmedEmail);
-          if (linkErr) {
-            setError(linkErr);
+          const { error: loginErr } = await ds.signInWithPassword(trimmedEmail, password);
+          if (loginErr) {
+            setError(/invalid login credentials/i.test(loginErr) ? 'E-Mail oder Passwort falsch.' : loginErr);
             setLoading(false);
             return;
           }
-          setMagicLinkSent(true);
-          setLoading(false);
-
-          // Lausche auf Auth-Callback (Magic Link Rückkehr)
-          client.auth.onAuthStateChange(async (event, session) => {
-            if (event === 'SIGNED_IN' && session?.user) {
-              const appUser = await ds.resolveAuthUser(session.user);
-              if (appUser) {
-                onSetupComplete({ isDemo: false, client, authUser: appUser });
-              } else {
-                setError('Kein Benutzerprofil gefunden. Bitte wende dich an die Schulleitung (Petra oder Daniel).');
-                setMagicLinkSent(false);
-              }
+          const { data: { session } } = await client.auth.getSession();
+          if (session && session.user) {
+            const appUser = await ds.resolveAuthUser(session.user);
+            if (appUser) {
+              onSetupComplete({ isDemo: false, client, authUser: appUser });
+              return;
             }
-          });
+            setError('Kein Benutzerprofil gefunden. Bitte wende dich an die Schulleitung (Petra oder Daniel).');
+          } else {
+            setError('Anmeldung fehlgeschlagen.');
+          }
+          setLoading(false);
         } catch (err) {
           setError('Verbindung fehlgeschlagen: ' + err.message);
           setLoading(false);
@@ -3650,7 +3665,7 @@
         React.createElement('h1', null, 'KRS Connect'),
         React.createElement('p', { style: { color: 'var(--text-secondary)', marginBottom: '24px' } }, 'Kommunikationsplattform der Kurpfalz-Realschule Schriesheim'),
 
-        // Magic Link Login
+        // E-Mail + Passwort Login
         React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', maxWidth: '320px', marginBottom: '16px' } },
           React.createElement('input', {
             type: 'email',
@@ -3659,16 +3674,27 @@
             onChange: (e) => setEmail(e.target.value),
             onKeyDown: (e) => e.key === 'Enter' && handleMagicLink(),
             disabled: loading,
+            autoComplete: 'username',
+            style: { padding: '12px 16px', fontSize: '15px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', outline: 'none', textAlign: 'center' }
+          }),
+          React.createElement('input', {
+            type: 'password',
+            placeholder: 'Passwort',
+            value: password,
+            onChange: (e) => setPassword(e.target.value),
+            onKeyDown: (e) => e.key === 'Enter' && handleMagicLink(),
+            disabled: loading,
+            autoComplete: 'current-password',
             style: { padding: '12px 16px', fontSize: '15px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', outline: 'none', textAlign: 'center' }
           }),
           React.createElement('button', {
             onClick: handleMagicLink,
-            disabled: loading || !email.trim(),
+            disabled: loading || !email.trim() || !password,
             style: { padding: '12px 40px', fontSize: '16px' }
-          }, loading ? 'Link wird gesendet...' : '🔗 Anmeldelink senden')
+          }, loading ? 'Anmelden...' : '🔓 Anmelden')
         ),
 
-        React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: '12px', marginBottom: '16px' } }, 'Kein Passwort nötig — du bekommst einen Link per E-Mail.'),
+        React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: '12px', marginBottom: '16px' } }, 'Passwort von der Schulleitung erhalten? Sonst bei Norbert melden.'),
 
         // Demo-Modus
         React.createElement('button', {
