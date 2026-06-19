@@ -2883,7 +2883,7 @@
           const { data: prefs } = await this.sb.from('user_preferences')
             .select('*').eq('user_id', data.id).single();
           if (!prefs) {
-            await this.sb.from('user_preferences').insert({ user_id: data.id }).catch(() => {});
+            try { await this.sb.from('user_preferences').insert({ user_id: data.id }); } catch (e) { /* prefs optional */ }
           }
           return data;
         } catch (err) {
