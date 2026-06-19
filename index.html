@@ -1849,7 +1849,10 @@
       }
 
       async getChannels(teamId) {
-        if (this.isDemo) return MOCK_CHANNELS[teamId] || [{ id: `default-${teamId}`, name: 'Allgemein', team_id: teamId }];
+        if (this.isDemo) {
+          const channels = MOCK_CHANNELS[teamId] || [{ id: `default-${teamId}`, name: 'Allgemein', team_id: teamId }];
+          return channels.map(ch => ({ ...ch }));
+        }
         try {
           const { data, error } = await this.sb.from('channels').select('*').eq('team_id', teamId).order('name');
           if (error) throw error;
@@ -2129,7 +2132,7 @@
             for (const id of targetIds) {
               const post = allPosts.find(p => p.id === id);
               if (post && post.reactions && post.reactions.length > 0) {
-                result.set(id, post.reactions);
+                result.set(id, post.reactions.map(r => ({ ...r, users: [...(r.users || [])] })));
               }
             }
           }
@@ -3201,6 +3204,13 @@
 
     // ── Formatting Toolbar ──
     function FormatToolbar({ textareaRef, value, onChange }) {
+      const htmlAttr = (text) => String(text).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+      const htmlText = (text) => String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const [showLinkForm, setShowLinkForm] = useState(false);
+      const [linkUrl, setLinkUrl] = useState('https://');
+      const [linkLabel, setLinkLabel] = useState('');
+      const linkSelectionRef = useRef({ start: 0, end: 0, selected: '' });
+
       const wrapSelection = useCallback((before, after) => {
         const ta = textareaRef.current;
         if (!ta) return;
@@ -3222,36 +3232,86 @@
       const insertList = useCallback(() => {
         const ta = textareaRef.current;
         if (!ta) return;
-        const pos = ta.selectionStart;
-        const before = value.substring(0, pos);
-        const needsNewline = before.length > 0 && !before.endsWith('\n') ? '\n' : '';
-        const newText = before + needsNewline + '• Punkt 1\n• Punkt 2\n• Punkt 3\n' + value.substring(pos);
+        const start = ta.selectionStart;
+        const end = ta.selectionEnd;
+        const selected = value.substring(start, end);
+        const listItems = (selected || 'Punkt')
+          .split(/\r?\n/)
+          .map(line => line.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim())
+          .filter(Boolean);
+        const listHtml = '<ul>\n' + listItems.map(item => '<li>' + item + '</li>').join('\n') + '\n</ul>';
+        const prefix = start > 0 && !value.substring(0, start).endsWith('\n') ? '\n' : '';
+        const suffix = end < value.length && !value.substring(end).startsWith('\n') ? '\n' : '';
+        const insert = prefix + listHtml + suffix;
+        const newText = value.substring(0, start) + insert + value.substring(end);
         onChange(newText);
-        setTimeout(() => { ta.focus(); }, 0);
+        setTimeout(() => {
+          ta.focus();
+          if (!selected) {
+            const itemStart = start + prefix.length + '<ul>\n<li>'.length;
+            ta.setSelectionRange(itemStart, itemStart + 'Punkt'.length);
+          }
+        }, 0);
       }, [textareaRef, value, onChange]);
 
-      const insertLink = useCallback(() => {
+      const openLinkForm = useCallback(() => {
         const ta = textareaRef.current;
         if (!ta) return;
         const start = ta.selectionStart;
         const end = ta.selectionEnd;
         const selected = value.substring(start, end);
-        const linkText = selected || 'Linktext';
-        const newText = value.substring(0, start) + '<a href="https://">' + linkText + '</a>' + value.substring(end);
+        linkSelectionRef.current = { start, end, selected };
+        setLinkUrl('https://');
+        setLinkLabel(selected);
+        setShowLinkForm(true);
+      }, [textareaRef, value]);
+
+      const insertLink = useCallback(() => {
+        const ta = textareaRef.current;
+        if (!ta) return;
+        const { start, end, selected } = linkSelectionRef.current;
+        let url = linkUrl.trim();
+        if (!url || url === 'https://') {
+          setShowLinkForm(false);
+          setTimeout(() => ta.focus(), 0);
+          return;
+        }
+        if (!/^(https?:\/\/|mailto:)/i.test(url)) url = 'https://' + url;
+        const linkText = (linkLabel || selected || url).trim() || url;
+        const linkHtml = '<a href="' + htmlAttr(url) + '">' + htmlText(linkText) + '</a>';
+        const newText = value.substring(0, start) + linkHtml + value.substring(end);
         onChange(newText);
-        setTimeout(() => { ta.focus(); ta.setSelectionRange(start + 10, start + 18); }, 0);
-      }, [textareaRef, value, onChange]);
+        setShowLinkForm(false);
+        setTimeout(() => {
+          ta.focus();
+          const labelStart = start + linkHtml.indexOf('>') + 1;
+          ta.setSelectionRange(labelStart, labelStart + linkText.length);
+        }, 0);
+      }, [textareaRef, value, onChange, linkUrl, linkLabel]);
+
+      const cancelLink = useCallback(() => {
+        setShowLinkForm(false);
+        setTimeout(() => textareaRef.current?.focus(), 0);
+      }, [textareaRef]);
 
       const btnStyle = { background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px', color: 'var(--text-muted)', fontSize: '13px', borderRadius: 'var(--radius)', minWidth: '32px', minHeight: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' };
 
-      return React.createElement('div', { style: { display: 'flex', gap: '2px', padding: '4px 0', borderBottom: '1px solid var(--border)', marginBottom: '4px' } },
-        React.createElement('button', { type: 'button', onClick: () => wrapSelection('<strong>', '</strong>'), title: 'Fett (Ctrl+B)', style: { ...btnStyle, fontWeight: '700' } }, 'B'),
-        React.createElement('button', { type: 'button', onClick: () => wrapSelection('<em>', '</em>'), title: 'Kursiv (Ctrl+I)', style: { ...btnStyle, fontStyle: 'italic' } }, 'I'),
-        React.createElement('button', { type: 'button', onClick: () => wrapSelection('<u>', '</u>'), title: 'Unterstrichen', style: { ...btnStyle, textDecoration: 'underline' } }, 'U'),
-        React.createElement('div', { style: { width: '1px', background: 'var(--border)', margin: '4px 4px' } }),
-        React.createElement('button', { type: 'button', onClick: insertList, title: 'Liste', style: btnStyle }, '≡'),
-        React.createElement('button', { type: 'button', onClick: insertLink, title: 'Link einfügen', style: btnStyle }, '🔗'),
-        React.createElement('button', { type: 'button', onClick: () => wrapSelection('<code>', '</code>'), title: 'Code', style: { ...btnStyle, fontFamily: 'monospace', fontSize: '12px' } }, '</>'),
+      return React.createElement(React.Fragment, null,
+        React.createElement('div', { style: { display: 'flex', gap: '2px', padding: '4px 0', borderBottom: '1px solid var(--border)', marginBottom: '4px' } },
+          React.createElement('button', { type: 'button', onClick: () => wrapSelection('<strong>', '</strong>'), title: 'Fett (Ctrl+B)', 'aria-label': 'Fett', style: { ...btnStyle, fontWeight: '700' } }, 'B'),
+          React.createElement('button', { type: 'button', onClick: () => wrapSelection('<em>', '</em>'), title: 'Kursiv (Ctrl+I)', 'aria-label': 'Kursiv', style: { ...btnStyle, fontStyle: 'italic' } }, 'I'),
+          React.createElement('button', { type: 'button', onClick: () => wrapSelection('<u>', '</u>'), title: 'Unterstrichen', 'aria-label': 'Unterstrichen', style: { ...btnStyle, textDecoration: 'underline' } }, 'U'),
+          React.createElement('div', { style: { width: '1px', background: 'var(--border)', margin: '4px 4px' } }),
+          React.createElement('button', { type: 'button', onClick: insertList, title: 'Liste', 'aria-label': 'Liste einfügen', style: btnStyle }, '≡'),
+          React.createElement('button', { type: 'button', onClick: openLinkForm, title: 'Link einfügen', 'aria-label': 'Link einfügen', style: { ...btnStyle, background: showLinkForm ? 'var(--accent-light)' : 'none', color: showLinkForm ? 'var(--accent)' : 'var(--text-muted)' } }, '🔗'),
+          React.createElement('button', { type: 'button', onClick: () => wrapSelection('<code>', '</code>'), title: 'Code', 'aria-label': 'Code', style: { ...btnStyle, fontFamily: 'monospace', fontSize: '12px' } }, '</>')
+        ),
+        showLinkForm && React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'minmax(130px, 1fr) minmax(110px, 0.8fr) auto auto', gap: '6px', alignItems: 'center', padding: '6px 0 8px', borderBottom: '1px solid var(--border)', marginBottom: '6px' } },
+          React.createElement('input', { type: 'url', value: linkUrl, onChange: e => setLinkUrl(e.target.value), onKeyDown: e => { if (e.key === 'Enter') { e.preventDefault(); insertLink(); } if (e.key === 'Escape') cancelLink(); }, autoFocus: true, placeholder: 'https://...', 'aria-label': 'Link-Adresse', style: { minWidth: 0, padding: '7px 9px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: '13px' } }),
+          React.createElement('input', { type: 'text', value: linkLabel, onChange: e => setLinkLabel(e.target.value), onKeyDown: e => { if (e.key === 'Enter') { e.preventDefault(); insertLink(); } if (e.key === 'Escape') cancelLink(); }, placeholder: 'Linktext', 'aria-label': 'Linktext', style: { minWidth: 0, padding: '7px 9px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: '13px' } }),
+          React.createElement('button', { type: 'button', onClick: insertLink, 'aria-label': 'Link übernehmen', style: { padding: '7px 10px', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontSize: '13px', fontWeight: '600' } }, 'Einfügen'),
+          React.createElement('button', { type: 'button', onClick: cancelLink, style: { padding: '7px 8px', background: 'transparent', color: 'var(--text-muted)', border: 'none', cursor: 'pointer', fontSize: '13px' } }, 'Abbrechen')
+        )
       );
     }
 
@@ -4274,7 +4334,10 @@
             // Action bar
             React.createElement('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--border)' } },
               React.createElement('input', { ref: fileInputRef, type: 'file', multiple: true, accept: 'image/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt', onChange: handleFileSelect, style: { display: 'none' } }),
-              React.createElement('button', { type: 'button', onClick: () => fileInputRef.current?.click(), title: 'Dateien anhängen (max. 10)', 'aria-label': 'Dateien anhängen', style: { padding: '6px 8px', background: 'transparent', border: 'none', borderRadius: 'var(--radius)', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }, dangerouslySetInnerHTML: { __html: Icons.paperclip } }),
+              React.createElement('button', { type: 'button', onClick: () => fileInputRef.current?.click(), title: 'Dateien anhängen (max. 10)', 'aria-label': 'Dateien anhängen', style: { padding: '6px 10px', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: '18px', cursor: 'pointer', color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: '6px', minHeight: '36px', fontSize: '13px' } },
+                React.createElement('span', { style: { width: '16px', height: '16px', display: 'inline-flex' }, dangerouslySetInnerHTML: { __html: Icons.paperclip } }),
+                React.createElement('span', null, 'Anhang')
+              ),
               selectedFiles.length > 0 && React.createElement('span', { style: { fontSize: '11px', color: 'var(--text-muted)' } }, selectedFiles.length + '/10'),
               // Dringend-Button nur für Admins sichtbar (Phase 7.5)
               user?.role === 'admin' && React.createElement('button', {
@@ -4575,7 +4638,7 @@
           ),
           React.createElement('div', { className: 'modal-footer' },
             React.createElement('button', { type: 'button', className: 'btn-secondary', onClick: onClose }, 'Abbrechen'),
-            React.createElement('button', { type: 'submit', className: 'btn-primary', disabled: saving || !name.trim() }, saving ? 'Wird erstellt...' : 'Erstellen')
+            React.createElement('button', { type: 'button', className: 'btn-primary', disabled: saving || !name.trim(), onClick: handleCreate }, saving ? 'Wird erstellt...' : 'Erstellen')
           )
         )
       );
@@ -5076,7 +5139,10 @@
         ),
         React.createElement('form', { className: 'chat-input-bar', onSubmit: handleSend },
           React.createElement('input', { ref: chatFileRef, type: 'file', multiple: true, accept: 'image/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt', onChange: handleChatFileSelect, style: { display: 'none' } }),
-          React.createElement('button', { type: 'button', onClick: () => chatFileRef.current?.click(), title: 'Dateien senden (max. 10)', 'aria-label': 'Dateien senden', className: 'chat-image-btn', style: { background: 'none', border: 'none', cursor: 'pointer', padding: '6px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }, dangerouslySetInnerHTML: { __html: Icons.paperclip } }),
+          React.createElement('button', { type: 'button', onClick: () => chatFileRef.current?.click(), title: 'Dateien senden (max. 10)', 'aria-label': 'Dateien senden', className: 'chat-image-btn', style: { background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: '18px', cursor: 'pointer', padding: '6px 10px', color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', minHeight: '36px' } },
+            React.createElement('span', { style: { width: '16px', height: '16px', display: 'inline-flex' }, dangerouslySetInnerHTML: { __html: Icons.paperclip } }),
+            React.createElement('span', null, 'Datei')
+          ),
           React.createElement('input', {
             type: 'text',
             placeholder: 'Nachricht schreiben...',
