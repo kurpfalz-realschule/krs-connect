@@ -1947,10 +1947,10 @@
         try { localStorage.setItem(`krs-lastread-ch-${channelId}`, now); } catch(e) {}
         // Supabase upsert (async, non-blocking)
         if (!this.isDemo && this.sb && userId) {
-          this.sb.from('channel_reads').upsert(
+          Promise.resolve(this.sb.from('channel_reads').upsert(
             { user_id: userId, channel_id: channelId, last_read_at: now },
             { onConflict: 'user_id,channel_id' }
-          ).catch(e => console.warn('markChannelRead error:', e));
+          )).catch(e => console.warn('markChannelRead error:', e));
         }
       }
 
@@ -1959,10 +1959,10 @@
         const now = new Date().toISOString();
         try { localStorage.setItem(`krs-lastread-conv-${conversationId}`, now); } catch(e) {}
         if (!this.isDemo && this.sb && userId) {
-          this.sb.from('conversation_reads').upsert(
+          Promise.resolve(this.sb.from('conversation_reads').upsert(
             { user_id: userId, conversation_id: conversationId, last_read_at: now },
             { onConflict: 'user_id,conversation_id' }
-          ).catch(e => console.warn('markConversationRead error:', e));
+          )).catch(e => console.warn('markConversationRead error:', e));
         }
       }
 
