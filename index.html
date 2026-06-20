@@ -1215,7 +1215,36 @@
   <link rel="preload" href="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" as="script" crossorigin>
   <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js" as="script">
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- supabase-js resilient laden: Fallback-CDN-Kette + Timeout, damit ein
+       CDN-Haenger nicht die ganze App mit "Supabase nicht verfuegbar" killt.
+       window.__supabaseReady = Promise, auf das die App vor Client-Nutzung wartet. -->
+  <script>
+    (function () {
+      var CDNS = [
+        'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
+        'https://unpkg.com/@supabase/supabase-js@2',
+        'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js'
+      ];
+      var i = 0, settled = false;
+      window.__supabaseReady = new Promise(function (resolve, reject) {
+        function ok()  { if (!settled) { settled = true; resolve(window.supabase); } }
+        function bad(e){ if (!settled) { settled = true; reject(e); } }
+        function tryNext() {
+          if (window.supabase && window.supabase.createClient) return ok();
+          if (i >= CDNS.length) return bad(new Error('Alle Supabase-CDNs fehlgeschlagen'));
+          var url = CDNS[i++];
+          var s = document.createElement('script');
+          s.src = url; s.async = false;
+          s.onload  = function () { (window.supabase && window.supabase.createClient) ? ok() : tryNext(); };
+          s.onerror = function () { console.warn('[CDN] supabase-js fehlgeschlagen:', url); tryNext(); };
+          document.head.appendChild(s);
+        }
+        tryNext();
+        setTimeout(function () { if (!(window.supabase && window.supabase.createClient)) bad(new Error('Supabase-CDN Timeout (15s)')); }, 15000);
+      });
+      window.__supabaseReady.catch(function (e) { console.error('[CDN] supabase init:', e && e.message); });
+    })();
+  </script>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js"></script>
@@ -3001,6 +3030,11 @@
           return true;
         } catch (err) {
           console.error('addTeamMember error:', err);
+          // Stillen Fehler sichtbar machen: haeufigste Ursache ist fehlende Team-Admin-Berechtigung (RLS).
+          const msg = /row-level security|policy|permission|denied/i.test(err.message || '')
+            ? 'Keine Berechtigung: Nur Team-Admins koennen Mitglieder hinzufuegen.'
+            : ('Mitglied konnte nicht hinzugefuegt werden: ' + (err.message || 'Unbekannter Fehler'));
+          showToast(msg, 'error');
           return false;
         }
       }
@@ -3724,6 +3758,12 @@
       }
       return _supabaseClientSingleton;
     }
+    // Wartet (inkl. Fallback-CDN) bis supabase-js geladen ist, dann Client zurueckgeben.
+    // Verhindert "Supabase nicht verfuegbar" bei langsamem/ausgefallenem CDN.
+    async function ensureSupabaseClient() {
+      try { if (window.__supabaseReady) await window.__supabaseReady; } catch (e) { /* getSupabaseClient liefert dann null -> sauberer Fehler */ }
+      return getSupabaseClient();
+    }
 
     // Hilfsfunktion: Datum lesbar formatieren
     function formatDate(dateStr) {
@@ -3781,7 +3821,7 @@
     // Tests setzen ?forceMode=demo um den DataService deterministisch
     // in den Demo-Modus zu zwingen — ohne dass dazu Credentials
     // entfernt werden müssen.
-    window.KRS_VERSION = '4.1.0';
+    window.KRS_VERSION = '4.2.0';
     const __KRS_QS = new URLSearchParams(typeof location !== 'undefined' ? location.search : '');
     window.__KRS_FORCE_DEMO = __KRS_QS.get('forceMode') === 'demo';
     window.__KRS_FORCE_USER = __KRS_QS.get('forceUser') || null; // optional: direktes Login als kuerzel
@@ -3854,7 +3894,7 @@
         }
         const checkExistingSession = async () => {
           try {
-            const client = getSupabaseClient();
+            const client = await ensureSupabaseClient();
             if (!client) { setCheckingSession(false); return; }
             // Timeout: Wenn Supabase nicht in 6s antwortet → Login-Screen zeigen
             const sessionPromise = client.auth.getSession();
@@ -3901,8 +3941,8 @@
         setLoading(true);
         setError('');
         try {
-          const client = getSupabaseClient();
-          if (!client) throw new Error('Supabase nicht verfügbar');
+          const client = await ensureSupabaseClient();
+          if (!client) throw new Error('Verbindung zum Server fehlgeschlagen. Bitte Seite neu laden (Netzwerk/CDN).');
           const ds = new DataService(client);
           const { error: loginErr } = await ds.signInWithPassword(trimmedEmail, password);
           if (loginErr) {
@@ -5937,7 +5977,7 @@
     // ============================================================
     // PROFILE MODAL — Profilansicht mit Avatar-Upload
     // ============================================================
-    function ProfileModal({ user, onClose, onAvatarUpload }) {
+    function ProfileModal({ user, onClose, onAvatarUpload, onLogout }) {
       return React.createElement('div', {
         className: 'online-panel',
         style: { bottom: '70px', left: '76px', minWidth: '220px' }
@@ -5951,6 +5991,13 @@
           },
             '📷 Profilbild ändern',
             React.createElement('input', { type: 'file', accept: 'image/*', onChange: onAvatarUpload, style: { display: 'none' } })
+          ),
+          onLogout && React.createElement('div', { style: { borderTop: '1px solid var(--border)', margin: '14px -16px 0', paddingTop: '12px' } },
+            React.createElement('button', {
+              onClick: onLogout,
+              'aria-label': 'Abmelden',
+              style: { display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', fontSize: '13px', fontWeight: '500', color: 'var(--accent-red, #d33)', minHeight: '40px' }
+            }, '🚪 Abmelden')
           )
         )
       );
@@ -7454,7 +7501,7 @@
           )
         ),
           // Profile Panel
-          showProfile && user && React.createElement(ProfileModal, { user, onClose: () => setShowProfile(false), onAvatarUpload: handleAvatarUpload }),
+          showProfile && user && React.createElement(ProfileModal, { user, onClose: () => setShowProfile(false), onAvatarUpload: handleAvatarUpload, onLogout: () => { setShowProfile(false); handleLogout(); } }),
         // Main content: Teams oder Chat
         React.createElement('div', { className: 'main' },
           view === 'teams' ? React.createElement(ErrorBoundary, { fallbackMessage: 'Der Teams-Bereich hatte einen Fehler.' }, teamsView)
