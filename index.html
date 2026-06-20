@@ -1003,6 +1003,10 @@
     .chat-text { font-size: 14px; line-height: 1.5; }
     .chat-time { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
     .chat-bubble.own .chat-time { color: rgba(255,255,255,0.7); }
+    /* DM Bearbeiten/Löschen — am Desktop bei Hover, auf Touch (iPad) immer sichtbar */
+    .chat-msg-actions { position: absolute; top: -12px; right: 6px; display: flex; gap: 2px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 14px; padding: 1px 2px; opacity: 0; transition: opacity .12s; box-shadow: 0 1px 4px var(--shadow); z-index: 2; }
+    .chat-msg:hover .chat-msg-actions, .chat-msg-actions:focus-within { opacity: 1; }
+    @media (hover: none) { .chat-msg-actions { opacity: 1; } }
 
     .chat-input-bar { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); align-items: flex-end; }
     .chat-input-bar input { flex: 1; padding: 10px 14px; border-radius: 20px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); font-size: 14px; }
@@ -1337,6 +1341,194 @@
         if (_lbKeyHandler) {
           document.removeEventListener('keydown', _lbKeyHandler);
           _lbKeyHandler = null;
+        }
+      }
+    })();
+  </script>
+
+  <!-- ============================================================ -->
+  <!-- DATEI-VIEWER — Teams-artige Anhang-Vorschau (Bilder, PDF,     -->
+  <!-- Word/Excel client-seitig, Text) + Download + Weiterleiten.    -->
+  <!-- Vollständig DSGVO-konform: kein Dritt-Viewer, alles im Browser-->
+  <!-- ============================================================ -->
+  <script>
+    (function () {
+      // ---- CSS einmalig injizieren ----
+      var css = '' +
+        '.fv-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px}' +
+        '.fv-box{position:relative;background:var(--bg,#fff);color:var(--text-primary,#1a1a1a);width:min(980px,96vw);height:min(90vh,920px);border-radius:12px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.45)}' +
+        '.fv-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border,#e2e4e8);flex-wrap:wrap}' +
+        '.fv-title{font-weight:600;font-size:14px;display:flex;align-items:center;min-width:0}' +
+        '.fv-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:38vw}' +
+        '.fv-size,.fv-count{color:var(--text-muted,#888);font-weight:500;font-size:12px;margin-left:2px}' +
+        '.fv-tools{display:flex;gap:6px;align-items:center;flex-wrap:wrap}' +
+        '.fv-btn{display:inline-flex;align-items:center;gap:4px;padding:6px 10px;background:var(--bg-tertiary,#f1f3f5);border:1px solid var(--border,#e2e4e8);border-radius:8px;cursor:pointer;font-size:13px;color:var(--text-primary,#1a1a1a);text-decoration:none;min-height:36px}' +
+        '.fv-btn:hover{background:var(--bg-secondary,#e9ecef)}' +
+        '.fv-close{font-weight:700}' +
+        '.fv-body{flex:1;overflow:auto;background:var(--bg-secondary,#f6f7f9);display:flex;flex-direction:column}' +
+        '.fv-img{max-width:100%;max-height:100%;margin:auto;object-fit:contain;display:block}' +
+        '.fv-frame{width:100%;height:100%;border:0;flex:1}' +
+        '.fv-text{margin:0;padding:16px;white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;color:var(--text-primary,#1a1a1a)}' +
+        '.fv-doc{background:#fff;color:#111;margin:16px auto;padding:32px;max-width:820px;width:calc(100% - 32px);border-radius:6px;box-shadow:0 1px 6px rgba(0,0,0,.12);line-height:1.55;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif}' +
+        '.fv-doc img{max-width:100%}' +
+        '.fv-doc table{border-collapse:collapse;font-size:12px;margin:4px 0}' +
+        '.fv-doc td,.fv-doc th{border:1px solid #ccc;padding:3px 7px}' +
+        '.fv-sheetname{font-weight:700;margin:14px 0 4px;color:#111}' +
+        '.fv-loading,.fv-msg{margin:auto;padding:40px;text-align:center;color:var(--text-muted,#888);font-size:14px}' +
+        '.fv-nav{position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.5);color:#fff;border:0;width:42px;height:42px;border-radius:50%;cursor:pointer;font-size:24px;line-height:1;z-index:2}' +
+        '.fv-nav:hover{background:rgba(0,0,0,.7)}' +
+        '.fv-navprev{left:12px}.fv-navnext{right:12px}' +
+        '.fv-bigdl{margin-top:14px}' +
+        '@media(max-width:768px){.fv-box{width:100vw;height:100vh;border-radius:0}.fv-name{max-width:46vw}}';
+      var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
+
+      // ---- Helfer ----
+      var EXT_ICON = { pdf:'📕', doc:'📘', docx:'📘', xls:'📗', xlsx:'📗', csv:'📗', ppt:'📙', pptx:'📙', txt:'📄', md:'📄', zip:'🗜️' };
+      function extOf(f){ var n = (f.name || f.url || '').split('?')[0]; return (n.split('.').pop() || '').toLowerCase(); }
+      function isImage(f){ return /^image\//.test(f.type || '') || /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i.test(f.url || ''); }
+      function iconFor(f){ if (isImage(f)) return '🖼️'; return EXT_ICON[extOf(f)] || '📎'; }
+      function fmtSize(b){ if (b == null || isNaN(b)) return ''; if (b < 1024) return b + ' B'; if (b < 1048576) return Math.round(b/1024) + ' KB'; return (b/1048576).toFixed(1) + ' MB'; }
+
+      // ---- Lazy CDN-Loader mit Fallback ----
+      var _loaded = {};
+      function loadScript(key, urls){
+        if (_loaded[key]) return _loaded[key];
+        _loaded[key] = new Promise(function(resolve, reject){
+          var i = 0;
+          (function tryNext(){
+            if (i >= urls.length) { reject(new Error('cdn-fail')); return; }
+            var s = document.createElement('script'); s.src = urls[i++];
+            s.onload = function(){ resolve(); };
+            s.onerror = function(){ tryNext(); };
+            document.head.appendChild(s);
+          })();
+        });
+        return _loaded[key];
+      }
+
+      // ---- Download erzwingen (mit Originalnamen) ----
+      function forceDownload(file){
+        fetch(file.url).then(function(r){ return r.blob(); }).then(function(blob){
+          var u = URL.createObjectURL(blob);
+          var a = document.createElement('a'); a.href = u; a.download = file.name || 'datei';
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(function(){ URL.revokeObjectURL(u); }, 5000);
+        }).catch(function(){
+          var a = document.createElement('a'); a.href = file.url; a.download = file.name || 'datei'; a.target = '_blank'; a.rel = 'noopener'; a.click();
+        });
+      }
+      window.__krsDownloadFile = forceDownload;
+      window.fvHelpers = { extOf: extOf, isImage: isImage, iconFor: iconFor, fmtSize: fmtSize, forceDownload: forceDownload };
+
+      // ---- Viewer-State ----
+      var _files = [], _idx = 0, _key = null;
+
+      window.openFileViewer = function(files, startIdx){
+        _files = Array.isArray(files) ? files.slice() : [files];
+        _idx = Math.max(0, Math.min(startIdx || 0, _files.length - 1));
+        if (_files.length === 0) return;
+        render();
+      };
+
+      function close(){ var o = document.querySelector('.fv-overlay'); if (o) o.remove(); if (_key) { document.removeEventListener('keydown', _key); _key = null; } }
+      function next(){ _idx = (_idx + 1) % _files.length; render(); }
+      function prev(){ _idx = (_idx - 1 + _files.length) % _files.length; render(); }
+
+      function render(){
+        close();
+        var file = _files[_idx]; if (!file) return;
+        var ov = document.createElement('div'); ov.className = 'fv-overlay';
+        ov.onclick = function(e){ if (e.target === ov) close(); };
+        var box = document.createElement('div'); box.className = 'fv-box';
+
+        var head = document.createElement('div'); head.className = 'fv-head';
+        var title = document.createElement('div'); title.className = 'fv-title';
+        title.appendChild(document.createTextNode(iconFor(file) + ' '));
+        var nameSpan = document.createElement('span'); nameSpan.className = 'fv-name'; nameSpan.textContent = file.name || 'Datei'; title.appendChild(nameSpan);
+        if (file.size) { var sz = document.createElement('span'); sz.className = 'fv-size'; sz.textContent = '· ' + fmtSize(file.size); title.appendChild(sz); }
+        if (_files.length > 1) { var c = document.createElement('span'); c.className = 'fv-count'; c.textContent = '(' + (_idx + 1) + '/' + _files.length + ')'; title.appendChild(c); }
+        head.appendChild(title);
+
+        var tools = document.createElement('div'); tools.className = 'fv-tools';
+        var dl = document.createElement('button'); dl.className = 'fv-btn'; dl.textContent = '⬇ Herunterladen'; dl.onclick = function(){ forceDownload(file); }; tools.appendChild(dl);
+        if (window.__krsForwardFile) { var fw = document.createElement('button'); fw.className = 'fv-btn'; fw.textContent = '↪ Weiterleiten'; fw.onclick = function(){ close(); window.__krsForwardFile(file); }; tools.appendChild(fw); }
+        var nt = document.createElement('a'); nt.className = 'fv-btn'; nt.href = file.url; nt.target = '_blank'; nt.rel = 'noopener'; nt.textContent = '↗ Neuer Tab'; tools.appendChild(nt);
+        var cl = document.createElement('button'); cl.className = 'fv-btn fv-close'; cl.setAttribute('aria-label', 'Schließen'); cl.textContent = '✕'; cl.onclick = close; tools.appendChild(cl);
+        head.appendChild(tools);
+        box.appendChild(head);
+
+        var body = document.createElement('div'); body.className = 'fv-body'; box.appendChild(body);
+
+        if (_files.length > 1) {
+          var pb = document.createElement('button'); pb.className = 'fv-nav fv-navprev'; pb.setAttribute('aria-label', 'Vorherige Datei'); pb.textContent = '‹'; pb.onclick = prev; box.appendChild(pb);
+          var nb = document.createElement('button'); nb.className = 'fv-nav fv-navnext'; nb.setAttribute('aria-label', 'Nächste Datei'); nb.textContent = '›'; nb.onclick = next; box.appendChild(nb);
+        }
+
+        ov.appendChild(box); document.body.appendChild(ov);
+        _key = function(e){ if (!document.querySelector('.fv-overlay')) return; if (e.key === 'Escape') close(); else if (e.key === 'ArrowRight' && _files.length > 1) next(); else if (e.key === 'ArrowLeft' && _files.length > 1) prev(); };
+        document.addEventListener('keydown', _key);
+        renderPreview(file, body);
+      }
+
+      function noPreview(body, text, file){
+        body.innerHTML = '';
+        var d = document.createElement('div'); d.className = 'fv-msg';
+        d.appendChild(document.createTextNode(text));
+        d.appendChild(document.createElement('br'));
+        var b = document.createElement('button'); b.className = 'fv-btn fv-bigdl'; b.textContent = '⬇ ' + (file.name || 'Datei') + ' herunterladen'; b.onclick = function(){ forceDownload(file); };
+        d.appendChild(b);
+        body.appendChild(d);
+      }
+
+      function purify(html){
+        if (window.DOMPurify && window.DOMPurify.sanitize) return window.DOMPurify.sanitize(html);
+        // Fallback ohne DOMPurify: kein rohes HTML rendern (XSS-Schutz) → als Text escapen
+        var d = document.createElement('div'); d.textContent = String(html || ''); return d.innerHTML;
+      }
+
+      function renderPreview(file, body){
+        var ext = extOf(file);
+        body.innerHTML = '<div class="fv-loading">Vorschau wird geladen…</div>';
+        try {
+          if (isImage(file)) {
+            body.innerHTML = ''; var img = document.createElement('img'); img.className = 'fv-img'; img.src = file.url; img.alt = file.name || ''; body.appendChild(img); return;
+          }
+          if (ext === 'pdf') {
+            body.innerHTML = ''; var ifr = document.createElement('iframe'); ifr.className = 'fv-frame'; ifr.src = file.url; ifr.title = file.name || 'PDF'; body.appendChild(ifr); return;
+          }
+          if (ext === 'txt' || ext === 'csv' || ext === 'md') {
+            fetch(file.url).then(function(r){ return r.text(); }).then(function(t){
+              body.innerHTML = ''; var pre = document.createElement('pre'); pre.className = 'fv-text'; pre.textContent = t.slice(0, 300000); body.appendChild(pre);
+            }).catch(function(){ noPreview(body, 'Vorschau konnte nicht geladen werden.', file); });
+            return;
+          }
+          if (ext === 'docx') {
+            loadScript('mammoth', ['https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js', 'https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js'])
+              .then(function(){ return fetch(file.url); }).then(function(r){ return r.arrayBuffer(); })
+              .then(function(buf){ return window.mammoth.convertToHtml({ arrayBuffer: buf }); })
+              .then(function(out){ body.innerHTML = ''; var d = document.createElement('div'); d.className = 'fv-doc'; d.innerHTML = purify(out.value || '<em>Leeres Dokument</em>'); body.appendChild(d); })
+              .catch(function(){ noPreview(body, 'Word-Vorschau nicht verfügbar.', file); });
+            return;
+          }
+          if (ext === 'xlsx' || ext === 'xls') {
+            loadScript('xlsx', ['https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'])
+              .then(function(){ return fetch(file.url); }).then(function(r){ return r.arrayBuffer(); })
+              .then(function(buf){
+                var wb = window.XLSX.read(buf, { type: 'array' });
+                body.innerHTML = ''; var wrap = document.createElement('div'); wrap.className = 'fv-doc';
+                wb.SheetNames.forEach(function(sn){
+                  var h = document.createElement('div'); h.className = 'fv-sheetname'; h.textContent = sn; wrap.appendChild(h);
+                  var t = document.createElement('div'); t.innerHTML = purify(window.XLSX.utils.sheet_to_html(wb.Sheets[sn])); wrap.appendChild(t);
+                });
+                body.appendChild(wrap);
+              })
+              .catch(function(){ noPreview(body, 'Excel-Vorschau nicht verfügbar.', file); });
+            return;
+          }
+          // .doc, .ppt, .pptx, sonstige → keine Inline-Vorschau
+          noPreview(body, 'Für diesen Dateityp ist keine Vorschau möglich.', file);
+        } catch (e) {
+          noPreview(body, 'Vorschau konnte nicht geladen werden.', file);
         }
       }
     })();
@@ -2097,9 +2289,15 @@
           return null;
         }
         try {
-          const { data, error } = await this.sb.from('posts').update({ content, title, edited_at: new Date().toISOString() }).eq('id', postId).select('*, author:users(*)').single();
-          if (error) throw error;
-          return data;
+          const nowIso = new Date().toISOString();
+          // Robust: falls die Spalte edited_at (noch) fehlt, ohne sie speichern,
+          // damit Bearbeiten nie hart blockiert (siehe Befund 2026-06-20).
+          let resp = await this.sb.from('posts').update({ content, title, edited_at: nowIso }).eq('id', postId).select('*, author:users(*)').single();
+          if (resp.error && /edited_at/i.test(resp.error.message || '')) {
+            resp = await this.sb.from('posts').update({ content, title }).eq('id', postId).select('*, author:users(*)').single();
+          }
+          if (resp.error) throw resp.error;
+          return resp.data;
         } catch (err) { console.error('updatePost error:', err); showToast('Beitrag konnte nicht gespeichert werden. Bitte versuche es erneut.', 'error'); return null; }
       }
 
@@ -2381,16 +2579,18 @@
         }
       }
 
-      async createReply(postId, channelId, authorId, content) {
+      async createReply(postId, channelId, authorId, content, imageUrl = null) {
         if (this.isDemo) {
           const author = MOCK_USERS.find(u => u.id === authorId);
-          const reply = { id: 'r' + Date.now(), parent_id: postId, author, content, created_at: new Date().toLocaleString('de-DE') };
+          const reply = { id: 'r' + Date.now(), parent_id: postId, author, content, image_url: imageUrl, created_at: new Date().toLocaleString('de-DE') };
           if (!MOCK_REPLIES[postId]) MOCK_REPLIES[postId] = [];
           MOCK_REPLIES[postId].push(reply);
           return reply;
         }
         try {
-          const { data, error } = await this.sb.from('posts').insert({ parent_id: postId, channel_id: channelId, author_id: authorId, content }).select('*, author:users(*)').single();
+          const insertObj = { parent_id: postId, channel_id: channelId, author_id: authorId, content };
+          if (imageUrl) insertObj.image_url = imageUrl;
+          const { data, error } = await this.sb.from('posts').insert(insertObj).select('*, author:users(*)').single();
           if (error) throw error;
           return data;
         } catch (err) {
@@ -2519,6 +2719,41 @@
           console.error('sendMessage error:', err);
           return null;
         }
+      }
+
+      async updateMessage(messageId, content) {
+        if (this.isDemo) {
+          for (const conv of Object.values(MOCK_MESSAGES)) {
+            const m = conv.find(x => x.id === messageId);
+            if (m) { m.content = content; m.edited_at = new Date().toISOString(); return { ...m }; }
+          }
+          return null;
+        }
+        try {
+          const nowIso = new Date().toISOString();
+          // Robust: falls Spalte edited_at fehlt, ohne sie speichern (kein Hart-Fail).
+          let resp = await this.sb.from('messages').update({ content, edited_at: nowIso }).eq('id', messageId).select('*, sender:users(*)').single();
+          if (resp.error && /edited_at/i.test(resp.error.message || '')) {
+            resp = await this.sb.from('messages').update({ content }).eq('id', messageId).select('*, sender:users(*)').single();
+          }
+          if (resp.error) throw resp.error;
+          return resp.data;
+        } catch (err) { console.error('updateMessage error:', err); showToast('Nachricht konnte nicht gespeichert werden. Bitte versuche es erneut.', 'error'); return null; }
+      }
+
+      async deleteMessage(messageId) {
+        if (this.isDemo) {
+          for (const conv of Object.values(MOCK_MESSAGES)) {
+            const idx = conv.findIndex(x => x.id === messageId);
+            if (idx !== -1) { conv.splice(idx, 1); return true; }
+          }
+          return false;
+        }
+        try {
+          const { error } = await this.sb.from('messages').delete().eq('id', messageId);
+          if (error) throw error;
+          return true;
+        } catch (err) { console.error('deleteMessage error:', err); showToast('Nachricht konnte nicht gelöscht werden. Bitte versuche es erneut.', 'error'); return false; }
       }
 
       async search(query) {
@@ -4062,6 +4297,57 @@
       );
     }
 
+    // ============================================================
+    // ANHÄNGE — gemeinsame Render-Komponente (Posts + Chat)
+    // Bilder als Thumbnails, Dokumente als Teams-artige Datei-Karten.
+    // Klick öffnet den Datei-Viewer (Vorschau), Karte hat Download-Button.
+    // ============================================================
+    function _attExt(f){ var n = (f.name || f.url || '').split('?')[0]; return (n.split('.').pop() || '').toLowerCase(); }
+    function _attIsImage(f){ return /^image\//.test(f.type || '') || /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i.test(f.url || ''); }
+    function _attIcon(f){ if (_attIsImage(f)) return '🖼️'; var m = { pdf:'📕', doc:'📘', docx:'📘', xls:'📗', xlsx:'📗', csv:'📗', ppt:'📙', pptx:'📙', txt:'📄', md:'📄', zip:'🗜️' }; return m[_attExt(f)] || '📎'; }
+    function _attSize(b){ if (b == null || isNaN(b)) return ''; if (b < 1024) return b + ' B'; if (b < 1048576) return Math.round(b/1024) + ' KB'; return (b/1048576).toFixed(1) + ' MB'; }
+    function _attParse(image_url){
+      var files = [];
+      try { var p = JSON.parse(image_url); if (Array.isArray(p)) files = p; } catch (e) {}
+      if (files.length === 0 && image_url) {
+        var nm = 'Datei'; try { nm = decodeURIComponent(image_url.split('?')[0].split('/').pop()) || 'Datei'; } catch (e) {}
+        files = [{ url: image_url, name: nm, type: '' }];
+      }
+      return files;
+    }
+    function FileCard({ file, compact }) {
+      var ext = _attExt(file);
+      var meta = (ext ? ext.toUpperCase() : '') + (file.size ? (' · ' + _attSize(file.size)) : '');
+      return React.createElement('div', { onClick: () => window.openFileViewer([file], 0), title: 'Vorschau öffnen', role: 'button', tabIndex: 0,
+        onKeyDown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); window.openFileViewer([file], 0); } },
+        style: { display: 'inline-flex', alignItems: 'center', gap: '8px', padding: compact ? '6px 8px' : '8px 10px', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', maxWidth: '280px', minHeight: '44px' } },
+        React.createElement('span', { style: { fontSize: compact ? '18px' : '22px', flexShrink: 0 } }, _attIcon(file)),
+        React.createElement('div', { style: { minWidth: 0, flex: 1 } },
+          React.createElement('div', { style: { fontSize: compact ? '12px' : '13px', color: 'var(--text-primary)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, file.name || 'Datei'),
+          meta && React.createElement('div', { style: { fontSize: '11px', color: 'var(--text-muted)' } }, meta)
+        ),
+        React.createElement('button', { title: 'Herunterladen', 'aria-label': 'Herunterladen', onClick: (e) => { e.stopPropagation(); (window.__krsDownloadFile || function(){})(file); },
+          style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color: 'var(--text-muted)', padding: '6px', flexShrink: 0, minWidth: '32px', minHeight: '32px' } }, '⬇')
+      );
+    }
+    function AttachmentBlock({ image_url, compact }) {
+      var files = _attParse(image_url);
+      if (files.length === 0) return null;
+      var images = files.filter(_attIsImage);
+      var docs = files.filter(function(f){ return !_attIsImage(f); });
+      function openAt(f){ return function(){ window.openFileViewer(files, files.indexOf(f)); }; }
+      return React.createElement('div', { style: { margin: compact ? '0 0 4px' : '8px 0' } },
+        images.length > 0 && React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: docs.length > 0 ? '6px' : 0 } },
+          images.map(function(img, i){ return React.createElement('img', { key: i, src: img.url, alt: img.name || '', title: img.name || '',
+            style: { maxWidth: images.length === 1 ? (compact ? '240px' : '100%') : (compact ? '120px' : '48%'), maxHeight: images.length === 1 ? (compact ? '200px' : '400px') : (compact ? '100px' : '200px'), borderRadius: 'var(--radius)', cursor: 'pointer', objectFit: 'cover', display: 'block' },
+            onClick: openAt(img) }); })
+        ),
+        docs.length > 0 && React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px' } },
+          docs.map(function(doc, i){ return React.createElement(FileCard, { key: i, file: doc, compact: compact }); })
+        )
+      );
+    }
+
     function PostList({ posts, setPosts, channelId, dataService, user, allUsers, onOpenThread, hasMore, onLoadMore, loadingMore, onForward, onSave, savedPosts, onDragDrop, readReceiptsEnabled }) {
       const [newPostTitle, setNewPostTitle] = useState('');
       const [newPostContent, setNewPostContent] = useState('');
@@ -4270,14 +4556,17 @@
           // Upload all selected files
           let fileUrls = [];
           if (selectedFiles.length > 0) {
-            for (const sf of selectedFiles) {
+            showToast(selectedFiles.length > 1 ? 'Dateien werden hochgeladen…' : 'Datei wird hochgeladen…', 'info');
+            // Parallel statt nacheinander → spürbar schneller bei mehreren Dateien.
+            const results = await Promise.all(selectedFiles.map(async sf => {
               const url = await dataService.uploadFile(sf.file);
-              if (url) fileUrls.push({ url, name: sf.file.name, type: sf.file.type });
-            }
+              return url ? { url, name: sf.file.name, type: sf.file.type, size: sf.file.size } : null;
+            }));
+            fileUrls = results.filter(Boolean);
             if (fileUrls.length === 0) { setPostError('Dateien konnten nicht hochgeladen werden.'); setSaving(false); return; }
           }
           // Store as JSON array string in image_url field, or single URL for backward compat
-          const imageUrlValue = fileUrls.length === 1 ? fileUrls[0].url : fileUrls.length > 1 ? JSON.stringify(fileUrls) : null;
+          const imageUrlValue = fileUrls.length > 0 ? JSON.stringify(fileUrls) : null;
           const contentText = newPostContent || (fileUrls.length > 0 ? ('📎 ' + fileUrls.length + ' Datei' + (fileUrls.length > 1 ? 'en' : '')) : '');
           const newPost = await dataService.createPost(channelId, user.id, contentText, newPostTitle || undefined, imageUrlValue, isUrgent);
           if (newPost) {
@@ -4427,28 +4716,7 @@
                   // Poll anzeigen falls vorhanden
                   post.poll_data && React.createElement(PollDisplay, { pollData: post.poll_data, postId: post.id, userId: user.id, dataService, onVoted: handlePollVote })
                 ),
-            post.image_url && (() => {
-              // Parse multi-file JSON or single URL
-              let files = [];
-              try {
-                const parsed = JSON.parse(post.image_url);
-                if (Array.isArray(parsed)) files = parsed;
-              } catch { /* single URL */ }
-              if (files.length === 0) files = [{ url: post.image_url, name: post.image_url.split('/').pop().split('?')[0] || 'Datei', type: '' }];
-              const images = files.filter(f => /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i.test(f.url) || (f.type && f.type.startsWith('image/')));
-              const docs = files.filter(f => !images.includes(f));
-              return React.createElement('div', { style: { margin: '8px 0' } },
-                images.length > 0 && React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: docs.length > 0 ? '6px' : 0 } },
-                  images.map((img, i) => React.createElement('img', { key: i, src: img.url, style: { maxWidth: images.length === 1 ? '100%' : '48%', maxHeight: images.length === 1 ? '400px' : '200px', borderRadius: 'var(--radius)', cursor: 'pointer', objectFit: 'cover' }, onClick: () => window.openLightbox(images, i) }))
-                ),
-                docs.length > 0 && React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px' } },
-                  docs.map((doc, i) => React.createElement('a', { key: i, href: doc.url, target: '_blank', style: { display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 12px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', color: 'var(--accent)', textDecoration: 'none', fontSize: '13px' } },
-                    React.createElement('span', null, '📎'),
-                    React.createElement('span', null, doc.name || 'Datei herunterladen')
-                  ))
-                )
-              );
-            })(),
+            post.image_url && React.createElement(AttachmentBlock, { image_url: post.image_url }),
             React.createElement('div', { className: 'post-reactions' },
               (post.reactions || []).map(r =>
                 React.createElement('button', {
@@ -4504,16 +4772,43 @@
       const user = _u || ctx.user;
       const [replyContent, setReplyContent] = useState('');
       const [saving, setSaving] = useState(false);
+      const [replyFiles, setReplyFiles] = useState([]); // Array of { file, preview }
+      const replyFileRef = useRef(null);
+
+      const handleReplyFileSelect = (e) => {
+        const newFiles = Array.from(e.target.files);
+        const valid = [];
+        for (const file of newFiles) {
+          if (file.size > CONFIG.MAX_FILE_SIZE_POST) { showToast('Datei "' + file.name + '" zu groß (max. ' + Math.round(CONFIG.MAX_FILE_SIZE_POST / 1024 / 1024) + ' MB)', 'error'); continue; }
+          const ext = file.name.split('.').pop()?.toLowerCase();
+          if (ext && CONFIG.BLOCKED_EXTENSIONS.has(ext)) { showToast('Dateityp ".' + ext + '" nicht erlaubt.', 'error'); continue; }
+          valid.push({ file, preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null });
+        }
+        if (valid.length) setReplyFiles(prev => (prev.length + valid.length > CONFIG.MAX_FILES_PER_MESSAGE) ? (showToast('Maximal ' + CONFIG.MAX_FILES_PER_MESSAGE + ' Dateien', 'error'), prev) : [...prev, ...valid]);
+        if (replyFileRef.current) replyFileRef.current.value = '';
+      };
+      const removeReplyFile = (i) => setReplyFiles(prev => { const r = prev[i]; if (r?.preview) URL.revokeObjectURL(r.preview); return prev.filter((_, idx) => idx !== i); });
 
       const handleSendReply = async (e) => {
-        e.preventDefault();
-        if (!replyContent.trim()) return;
+        if (e) e.preventDefault();
+        if (!replyContent.trim() && replyFiles.length === 0) return;
         setSaving(true);
-        const created = await dataService.createReply(post.id, post.channel_id || 1, user.id, replyContent);
-        // Demo-Modus hat keine Realtime-Subscription → Antwort optimistisch anhängen.
-        // (Prod dedupliziert per id im Parent, daher in beiden Modi sicher.)
-        if (created && onReplyCreated) onReplyCreated(created);
-        setReplyContent('');
+        try {
+          let fileUrls = [];
+          for (const sf of replyFiles) {
+            const url = await dataService.uploadFile(sf.file);
+            if (url) fileUrls.push({ url, name: sf.file.name, type: sf.file.type, size: sf.file.size });
+          }
+          if (replyFiles.length > 0 && fileUrls.length === 0) { showToast('Dateien konnten nicht hochgeladen werden.', 'error'); setSaving(false); return; }
+          const imageUrlValue = fileUrls.length > 0 ? JSON.stringify(fileUrls) : null;
+          const contentText = replyContent || (fileUrls.length > 0 ? ('📎 ' + fileUrls.length + ' Datei' + (fileUrls.length > 1 ? 'en' : '')) : '');
+          const created = await dataService.createReply(post.id, post.channel_id || 1, user.id, contentText, imageUrlValue);
+          // Demo-Modus hat keine Realtime-Subscription → Antwort optimistisch anhängen.
+          if (created && onReplyCreated) onReplyCreated(created);
+          setReplyContent('');
+          replyFiles.forEach(f => { if (f.preview) URL.revokeObjectURL(f.preview); });
+          setReplyFiles([]);
+        } catch (err) { console.error('reply error', err); showToast('Antwort konnte nicht gesendet werden.', 'error'); }
         setSaving(false);
       };
 
@@ -4533,21 +4828,38 @@
                 )
               ),
               post.title && React.createElement('div', { className: 'post-title' }, post.title),
-              React.createElement('div', { className: 'post-content', dangerouslySetInnerHTML: { __html: sanitizeHtml(post.content) } })
+              React.createElement('div', { className: 'post-content', dangerouslySetInnerHTML: { __html: sanitizeHtml(post.content) } }),
+              post.image_url && React.createElement(AttachmentBlock, { image_url: post.image_url })
             ),
             replies.map(reply => {
               const replyAuthor = reply.author || { display_name: 'Unbekannt' };
+              const replyFileOnly = reply.content && (reply.content.startsWith('📎 ') || reply.content === '📷 Bild');
               return React.createElement('div', { key: reply.id, className: 'thread-reply' },
                 React.createElement('div', { className: 'thread-reply-author' }, replyAuthor.display_name),
                 React.createElement('div', { className: 'thread-reply-time' }, formatDate(reply.created_at)),
-                React.createElement('div', { className: 'thread-reply-content', dangerouslySetInnerHTML: { __html: sanitizeHtml(reply.content) } })
+                !replyFileOnly && React.createElement('div', { className: 'thread-reply-content', dangerouslySetInnerHTML: { __html: sanitizeHtml(reply.content) } }),
+                reply.image_url && React.createElement(AttachmentBlock, { image_url: reply.image_url, compact: true })
               );
             })
           ),
           React.createElement('div', { className: 'thread-footer' },
-            React.createElement('form', { onSubmit: handleSendReply, style: { display: 'flex', gap: '8px', width: '100%' } },
-              React.createElement('textarea', { placeholder: 'Antwort schreiben...', value: replyContent, onChange: e => setReplyContent(e.target.value), style: { flex: 1, padding: '10px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: '14px', minHeight: '60px', fontFamily: 'inherit', fontWeight: 'inherit', resize: 'none' } }),
-              React.createElement('button', { type: 'submit', disabled: saving, style: { padding: '8px 16px', background: saving ? 'var(--text-muted)' : 'var(--accent)', color: 'white', border: 'none', borderRadius: 'var(--radius)', cursor: saving ? 'not-allowed' : 'pointer', alignSelf: 'flex-end', whiteSpace: 'nowrap', fontSize: '14px' } }, saving ? 'Wird gesendet...' : 'Senden')
+            React.createElement('form', { onSubmit: handleSendReply, style: { display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' } },
+              replyFiles.length > 0 && React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px' } },
+                replyFiles.map((sf, idx) => React.createElement('div', { key: idx, style: { position: 'relative', display: 'inline-block' } },
+                  sf.preview
+                    ? React.createElement('img', { src: sf.preview, style: { width: '56px', height: '56px', objectFit: 'cover', borderRadius: 'var(--radius)', border: '1px solid var(--border)' } })
+                    : React.createElement('div', { style: { width: '56px', height: '56px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', fontSize: '9px', color: 'var(--text-muted)', padding: '2px', textAlign: 'center', overflow: 'hidden' } },
+                        React.createElement('span', { style: { fontSize: '16px' } }, '📎'),
+                        React.createElement('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '50px' } }, sf.file.name)),
+                  React.createElement('button', { type: 'button', onClick: () => removeReplyFile(idx), 'aria-label': 'Datei entfernen', style: { position: 'absolute', top: '-6px', right: '-6px', width: '18px', height: '18px', borderRadius: '50%', background: 'var(--danger)', color: 'white', border: 'none', cursor: 'pointer', fontSize: '10px', lineHeight: '18px', textAlign: 'center', padding: 0 } }, '✕')
+                ))
+              ),
+              React.createElement('div', { style: { display: 'flex', gap: '8px', width: '100%', alignItems: 'flex-end' } },
+                React.createElement('textarea', { placeholder: 'Antwort schreiben...', value: replyContent, onChange: e => setReplyContent(e.target.value), onKeyDown: e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendReply(); } }, style: { flex: 1, padding: '10px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: '14px', minHeight: '60px', fontFamily: 'inherit', fontWeight: 'inherit', resize: 'none' } }),
+                React.createElement('input', { ref: replyFileRef, type: 'file', multiple: true, accept: 'image/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt', onChange: handleReplyFileSelect, style: { display: 'none' } }),
+                React.createElement('button', { type: 'button', onClick: () => replyFileRef.current?.click(), title: 'Datei anhängen', 'aria-label': 'Datei anhängen', style: { padding: '8px 10px', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', color: 'var(--text-secondary)', alignSelf: 'flex-end', minHeight: '44px', minWidth: '44px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }, dangerouslySetInnerHTML: { __html: Icons.paperclip } }),
+                React.createElement('button', { type: 'submit', disabled: saving, style: { padding: '8px 16px', background: saving ? 'var(--text-muted)' : 'var(--accent)', color: 'white', border: 'none', borderRadius: 'var(--radius)', cursor: saving ? 'not-allowed' : 'pointer', alignSelf: 'flex-end', whiteSpace: 'nowrap', fontSize: '14px', minHeight: '44px' } }, saving ? 'Wird gesendet...' : 'Senden')
+              )
             )
           )
         )
@@ -4808,7 +5120,7 @@
         .filter(u => !chatSearch || u.display_name.toLowerCase().includes(chatSearch.toLowerCase()));
 
       const handleCreateGroup = async (e) => {
-        e.preventDefault();
+        if (e) e.preventDefault();
         if (!groupName.trim() || selectedMembers.size === 0) return;
         const memberArray = Array.from(selectedMembers).map(id => Number(id));
         await onGroupChat(groupName, memberArray);
@@ -4900,7 +5212,7 @@
             ),
             React.createElement('div', { className: 'modal-footer' },
               React.createElement('button', { type: 'button', className: 'btn-secondary', onClick: () => setShowGroupChat(false) }, 'Abbrechen'),
-              React.createElement('button', { type: 'submit', className: 'btn-primary', disabled: !groupName.trim() || selectedMembers.size === 0 }, 'Erstellen')
+              React.createElement('button', { type: 'button', className: 'btn-primary', onClick: () => handleCreateGroup(), disabled: !groupName.trim() || selectedMembers.size === 0 }, 'Erstellen')
             )
           )
         ),
@@ -4966,6 +5278,8 @@
       const [input, setInput] = useState('');
       const [sending, setSending] = useState(false);
       const [chatFiles, setChatFiles] = useState([]);  // Array of { file, preview }
+      const [editingMsgId, setEditingMsgId] = useState(null);
+      const [editMsgContent, setEditMsgContent] = useState('');
       const messagesEndRef = useRef(null);
       const chatFileRef = useRef(null);
 
@@ -5028,12 +5342,15 @@
         try {
           let fileUrls = [];
           if (chatFiles.length > 0) {
-            for (const sf of chatFiles) {
+            showToast(chatFiles.length > 1 ? 'Dateien werden hochgeladen…' : 'Datei wird hochgeladen…', 'info');
+            // Parallel statt nacheinander → spürbar schneller bei mehreren Dateien.
+            const results = await Promise.all(chatFiles.map(async sf => {
               const url = await dataService.uploadFile(sf.file);
-              if (url) fileUrls.push({ url, name: sf.file.name, type: sf.file.type });
-            }
+              return url ? { url, name: sf.file.name, type: sf.file.type, size: sf.file.size } : null;
+            }));
+            fileUrls = results.filter(Boolean);
           }
-          const imageUrlValue = fileUrls.length === 1 ? fileUrls[0].url : fileUrls.length > 1 ? JSON.stringify(fileUrls) : null;
+          const imageUrlValue = fileUrls.length > 0 ? JSON.stringify(fileUrls) : null;
           const contentText = input || (fileUrls.length > 0 ? ('📎 ' + fileUrls.length + ' Datei' + (fileUrls.length > 1 ? 'en' : '')) : '');
           const sentMsg = await dataService.sendMessage(conversation.id, currentUser.id, contentText, imageUrlValue);
           if (sentMsg && setMessages) {
@@ -5049,6 +5366,23 @@
           showToast('Nachricht konnte nicht gesendet werden. Bitte pr\u00fcfe deine Verbindung.', 'error');
         }
         setSending(false);
+      };
+
+      const handleEditMsg = (msg) => { setEditingMsgId(msg.id); setEditMsgContent(msg.content || ''); };
+      const handleSaveMsgEdit = async (msgId) => {
+        const text = editMsgContent.trim();
+        if (!text) { setEditingMsgId(null); return; }
+        const updated = await dataService.updateMessage(msgId, text);
+        if (updated && setMessages) {
+          setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: text, edited_at: (updated.edited_at || new Date().toISOString()) } : m));
+          showToast('Nachricht gespeichert', 'success');
+        }
+        setEditingMsgId(null);
+      };
+      const handleDeleteMsg = async (msgId) => {
+        if (!confirm('Nachricht wirklich löschen?')) return;
+        const okDel = await dataService.deleteMessage(msgId);
+        if (okDel && setMessages) { setMessages(prev => prev.filter(m => m.id !== msgId)); showToast('Nachricht gelöscht', 'success'); }
       };
 
       const isOwn = (msg) => {
@@ -5090,34 +5424,39 @@
               style: { padding: '4px 16px', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: '12px', cursor: loadingMore ? 'not-allowed' : 'pointer', color: 'var(--text-muted)', fontSize: '12px' }
             }, loadingMore ? '...' : '↑ Ältere Nachrichten')
           ),
-          messages.map(msg =>
-            React.createElement('div', {
+          messages.map(msg => {
+            const own = isOwn(msg);
+            const editing = editingMsgId === msg.id;
+            const isFileOnly = msg.content && (msg.content.startsWith('📎 ') || msg.content === '📷 Bild');
+            return React.createElement('div', {
               key: msg.id,
-              className: 'chat-msg ' + (isOwn(msg) ? 'own' : 'other')
+              className: 'chat-msg ' + (own ? 'own' : 'other')
             },
-              !isOwn(msg) && React.createElement(Avatar, { user: msg.sender, size: 28 }),
-              React.createElement('div', { className: 'chat-bubble ' + (isOwn(msg) ? 'own' : 'other') },
-                msg.image_url && (() => {
-                  let files = [];
-                  try { const p = JSON.parse(msg.image_url); if (Array.isArray(p)) files = p; } catch {}
-                  if (files.length === 0) files = [{ url: msg.image_url, name: msg.image_url.split('/').pop().split('?')[0] || 'Datei', type: '' }];
-                  const imgs = files.filter(f => /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i.test(f.url) || (f.type && f.type.startsWith('image/')));
-                  const docs = files.filter(f => !imgs.includes(f));
-                  return React.createElement(React.Fragment, null,
-                    imgs.length > 0 && React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '4px' } },
-                      imgs.map((img, i) => React.createElement('img', { key: i, src: img.url, style: { maxWidth: imgs.length === 1 ? '240px' : '120px', maxHeight: imgs.length === 1 ? '200px' : '100px', borderRadius: '8px', cursor: 'pointer', display: 'block', objectFit: 'cover' }, onClick: () => window.openLightbox(imgs, i) }))
-                    ),
-                    docs.length > 0 && docs.map((doc, i) => React.createElement('a', { key: i, href: doc.url, target: '_blank', style: { display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 10px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', color: 'var(--accent)', textDecoration: 'none', fontSize: '12px', marginBottom: '4px', marginRight: '4px' } },
-                      React.createElement('span', null, '📎'),
-                      React.createElement('span', null, doc.name || 'Datei herunterladen')
-                    ))
-                  );
-                })(),
-                msg.content && !msg.content.startsWith('📎 ') && msg.content !== '📷 Bild' && React.createElement('div', { className: 'chat-text' }, msg.content),
-                React.createElement('div', { className: 'chat-time' }, formatDate(msg.created_at))
+              !own && React.createElement(Avatar, { user: msg.sender, size: 28 }),
+              React.createElement('div', { className: 'chat-bubble ' + (own ? 'own' : 'other'), style: { position: 'relative' } },
+                msg.image_url && React.createElement(AttachmentBlock, { image_url: msg.image_url, compact: true }),
+                editing
+                  ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } },
+                      React.createElement('textarea', {
+                        value: editMsgContent, autoFocus: true,
+                        onChange: e => setEditMsgContent(e.target.value),
+                        onKeyDown: e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSaveMsgEdit(msg.id); } else if (e.key === 'Escape') { setEditingMsgId(null); } },
+                        style: { width: '100%', minHeight: '52px', padding: '6px 8px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: '14px', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }
+                      }),
+                      React.createElement('div', { style: { display: 'flex', gap: '6px', justifyContent: 'flex-end' } },
+                        React.createElement('button', { type: 'button', onClick: () => setEditingMsgId(null), style: { padding: '4px 10px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '12px', minHeight: '32px' } }, 'Abbrechen'),
+                        React.createElement('button', { type: 'button', onClick: () => handleSaveMsgEdit(msg.id), style: { padding: '4px 12px', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', minHeight: '32px' } }, 'Speichern')
+                      )
+                    )
+                  : (msg.content && !isFileOnly && React.createElement('div', { className: 'chat-text' }, msg.content)),
+                !editing && React.createElement('div', { className: 'chat-time' }, formatDate(msg.created_at), msg.edited_at && ' (bearbeitet)'),
+                own && !editing && React.createElement('div', { className: 'chat-msg-actions' },
+                  !isFileOnly && React.createElement('button', { type: 'button', onClick: () => handleEditMsg(msg), title: 'Bearbeiten', 'aria-label': 'Nachricht bearbeiten', style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', padding: '4px', minWidth: '30px', minHeight: '30px' } }, '✏️'),
+                  React.createElement('button', { type: 'button', onClick: () => handleDeleteMsg(msg.id), title: 'Löschen', 'aria-label': 'Nachricht löschen', style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', padding: '4px', minWidth: '30px', minHeight: '30px' } }, '🗑️')
+                )
               )
-            )
-          ),
+            );
+          }),
           messages.length === 0 && React.createElement('div', { className: 'chat-empty' },
             React.createElement('div', null, 'Noch keine Nachrichten. Schreib die erste!')
           ),
@@ -5336,11 +5675,11 @@
         { id: 'sonstiges', label: '📝 Sonstiges' }
       ];
 
+      const canSend = !!category && !!message.trim();
       const handleSubmit = async () => {
-        if (!message.trim() && !category) {
-          showToast('Bitte schreibe eine Nachricht oder wähle eine Kategorie.', 'info');
-          return;
-        }
+        // Pflichtfelder werden über den deaktivierten Button + Inline-Hinweis klar
+        // gemacht — kein verwirrender Fehler-Toast mehr (Wunsch Norbert 20.06.).
+        if (!canSend) return;
         // Rate-Limiting: 10 Sekunden Cooldown
         if (Date.now() - lastSubmit < 10000) {
           showToast('Bitte warte einen Moment vor dem nächsten Feedback.', 'info');
@@ -5383,7 +5722,7 @@
         React.createElement('div', { className: 'feedback-modal' },
           React.createElement('div', { className: 'feedback-title' }, '📣', ' Feedback geben'),
 
-          React.createElement('div', { className: 'feedback-label' }, 'Kategorie'),
+          React.createElement('div', { className: 'feedback-label' }, 'Kategorie ', React.createElement('span', { style: { color: 'var(--danger)' } }, '*'), React.createElement('span', { style: { fontWeight: 400, color: 'var(--text-muted)', fontSize: '12px' } }, ' (bitte wählen)')),
           React.createElement('div', { className: 'feedback-categories' },
             categories.map(cat =>
               React.createElement('button', {
@@ -5406,7 +5745,7 @@
             )
           ),
 
-          React.createElement('div', { className: 'feedback-label' }, 'Deine Nachricht'),
+          React.createElement('div', { className: 'feedback-label' }, 'Deine Nachricht ', React.createElement('span', { style: { color: 'var(--danger)' } }, '*')),
           React.createElement('textarea', {
             className: 'feedback-textarea',
             placeholder: 'Was funktioniert gut? Was können wir verbessern? Wo hakt es?',
@@ -5418,12 +5757,15 @@
             message.length + ' / 2000'
           ),
 
+          !canSend && React.createElement('div', { style: { fontSize: '12px', color: 'var(--text-muted)', marginTop: '8px' } },
+            !category ? 'Bitte zuerst ein Thema wählen.' : 'Bitte noch eine Nachricht schreiben.'),
           React.createElement('div', { className: 'feedback-actions' },
             React.createElement('button', { className: 'feedback-btn feedback-btn-cancel', onClick: onClose }, 'Abbrechen'),
             React.createElement('button', {
               className: 'feedback-btn feedback-btn-send',
               onClick: handleSubmit,
-              disabled: sending
+              disabled: sending || !canSend,
+              title: !canSend ? 'Thema und Nachricht sind erforderlich' : ''
             }, sending ? 'Sende...' : '📨 Absenden')
           )
         )
@@ -6000,14 +6342,38 @@
       }, [user]);
 
       // Forward post to another channel or DM
-      const handleForwardPost = useCallback(async (post, targetChannelId) => {
-        const fwdContent = '<p><em>↪ Weitergeleitet von #' + (selectedChannel?.name || '') + ':</em></p>' + (post.content || '');
-        const result = await dataService.createPost(targetChannelId, user.id, fwdContent, '', null, false);
-        if (result) {
-          showToast('Nachricht weitergeleitet', 'success');
+      const handleForwardPost = useCallback(async (payload, target) => {
+        // target: { type: 'channel' | 'dm', id }   payload: Post-Objekt ODER { __file }
+        const isFile = !!(payload && payload.__file);
+        const fromLabel = selectedChannel?.name ? ('#' + selectedChannel.name) : 'einem Chat';
+        try {
+          if (target.type === 'channel') {
+            if (isFile) {
+              await dataService.createPost(target.id, user.id, '<p><em>↪ Weitergeleitete Datei</em></p>', '', JSON.stringify([payload.__file]), false);
+            } else {
+              const fwdContent = '<p><em>↪ Weitergeleitet von ' + fromLabel + ':</em></p>' + (payload.content || '');
+              await dataService.createPost(target.id, user.id, fwdContent, '', payload.image_url || null, false);
+            }
+          } else {
+            if (isFile) {
+              await dataService.sendMessage(target.id, user.id, '📎 Weitergeleitete Datei', JSON.stringify([payload.__file]));
+            } else {
+              await dataService.sendMessage(target.id, user.id, payload.content || '📎 Weitergeleitet', payload.image_url || null);
+            }
+          }
+          showToast('Weitergeleitet', 'success');
           setShowForwardModal(null);
+        } catch (e) {
+          console.error('forward error:', e);
+          showToast('Weiterleiten fehlgeschlagen. Bitte erneut versuchen.', 'error');
         }
       }, [dataService, user, selectedChannel]);
+
+      // Bridge: „Weiterleiten" aus dem Datei-Viewer öffnet das Forward-Modal mit der Datei
+      useEffect(() => {
+        window.__krsForwardFile = (file) => setShowForwardModal({ __file: file });
+        return () => { try { delete window.__krsForwardFile; } catch (e) { window.__krsForwardFile = null; } };
+      }, []);
 
       // Saved/Bookmarked posts
       const toggleSavePost = useCallback((post) => {
@@ -6943,20 +7309,38 @@
         // Nachricht weiterleiten Modal
         showForwardModal && React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', onClick: () => setShowForwardModal(null) },
           React.createElement('div', { className: 'channel-dialog', style: { width: '340px' }, onClick: e => e.stopPropagation() },
-            React.createElement('h3', null, '↪ Nachricht weiterleiten'),
-            React.createElement('p', { style: { fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 12px 0' } }, 'An welchen Kanal weiterleiten?'),
-            React.createElement('div', { style: { maxHeight: '250px', overflowY: 'auto' } },
-              teams.flatMap(t => (channels.length > 0 || t.id === selectedTeam?.id) ? channels.filter(ch => ch.id !== selectedChannel?.id).map(ch => (
+            React.createElement('h3', null, showForwardModal.__file ? '↪ Datei weiterleiten' : '↪ Nachricht weiterleiten'),
+            showForwardModal.__file && React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)', margin: '0 0 10px 0', fontSize: '13px' } },
+              React.createElement('span', null, _attIcon(showForwardModal.__file)),
+              React.createElement('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, showForwardModal.__file.name || 'Datei')
+            ),
+            React.createElement('p', { style: { fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 8px 0' } }, 'Ziel auswählen:'),
+            React.createElement('div', { style: { maxHeight: '300px', overflowY: 'auto' } },
+              React.createElement('div', { style: { fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', margin: '4px 4px', fontWeight: 700 } }, 'Kanäle'),
+              channels.filter(ch => ch.id !== selectedChannel?.id).map(ch =>
                 React.createElement('button', {
-                  key: ch.id,
-                  style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', width: '100%', border: 'none', background: 'none', cursor: 'pointer', borderRadius: 'var(--radius)', fontSize: '13px', color: 'var(--text-primary)' },
+                  key: 'c' + ch.id,
+                  style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', width: '100%', border: 'none', background: 'none', cursor: 'pointer', borderRadius: 'var(--radius)', fontSize: '13px', color: 'var(--text-primary)', minHeight: '40px' },
                   className: 'list-item',
-                  onClick: () => handleForwardPost(showForwardModal, ch.id)
+                  onClick: () => handleForwardPost(showForwardModal, { type: 'channel', id: ch.id })
                 },
                   React.createElement('span', { style: { color: 'var(--text-muted)' } }, '#'),
                   React.createElement('span', null, ch.name)
                 )
-              )) : [])
+              ),
+              conversations.length > 0 && React.createElement('div', { style: { fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', margin: '10px 4px 4px', fontWeight: 700 } }, 'Direktnachrichten'),
+              conversations.map(cv => {
+                const nm = cv.is_group ? (cv.name || 'Gruppenchat') : ((cv.user || {}).display_name || 'Chat');
+                return React.createElement('button', {
+                  key: 'd' + cv.id,
+                  style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', width: '100%', border: 'none', background: 'none', cursor: 'pointer', borderRadius: 'var(--radius)', fontSize: '13px', color: 'var(--text-primary)', minHeight: '40px' },
+                  className: 'list-item',
+                  onClick: () => handleForwardPost(showForwardModal, { type: 'dm', id: cv.id })
+                },
+                  React.createElement('span', null, '💬'),
+                  React.createElement('span', null, nm)
+                );
+              })
             ),
             React.createElement('div', { className: 'dialog-actions' },
               React.createElement('button', { onClick: () => setShowForwardModal(null) }, 'Abbrechen')
