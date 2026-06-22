@@ -4052,7 +4052,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.7.1';
+    window.KRS_VERSION = '4.7.2';
     const __KRS_QS = new URLSearchParams(typeof location !== 'undefined' ? location.search : '');
     window.__KRS_FORCE_DEMO = __KRS_QS.get('forceMode') === 'demo';
     window.__KRS_FORCE_USER = __KRS_QS.get('forceUser') || null; // optional: direktes Login als kuerzel
@@ -6142,7 +6142,7 @@
     // ── Dateiablage-Platzhalter ──────────────────────────────────────────
     // Bewusster Hinweis: eigene Dateiablage (wie OneDrive) wird mit Nextcloud
     // nachgerüstet. Bis dahin Verweis auf die iServ-Dateiablage der Schule.
-    const ISERV_FILES_URL = 'https://krs.sh-schulen.de/iserv/file';
+    const ISERV_FILES_URL = 'https://krs.sh-schulen.de';
     function FilesPlaceholderModal({ onClose }) {
       React.useEffect(() => {
         const onKey = (e) => { if (e.key === 'Escape') onClose(); };
