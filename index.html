@@ -3463,6 +3463,7 @@
       logout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>',
       x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
       search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
+      files: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
       image: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>',
       users: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>',
       settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>',
@@ -4051,7 +4052,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.5.0';
+    window.KRS_VERSION = '4.7.0';
     const __KRS_QS = new URLSearchParams(typeof location !== 'undefined' ? location.search : '');
     window.__KRS_FORCE_DEMO = __KRS_QS.get('forceMode') === 'demo';
     window.__KRS_FORCE_USER = __KRS_QS.get('forceUser') || null; // optional: direktes Login als kuerzel
@@ -5247,6 +5248,59 @@
       );
     }
 
+    // #15: Mehrere Teams gleichzeitig löschen (Schuljahresende-Aufräumen, nur globaler Admin)
+    function BulkDeleteTeamsModal({ teams, archivedTeams, dataService, onClose, onDeleted }) {
+      const all = [...(teams || []), ...(archivedTeams || []).map(t => ({ ...t, _archived: true }))];
+      const [selected, setSelected] = useState(new Set());
+      const [busy, setBusy] = useState(false);
+      const toggle = (id) => setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+      const handleDelete = async () => {
+        if (selected.size === 0) return;
+        const names = all.filter(t => selected.has(t.id)).map(t => t.name);
+        if (!window.confirm(selected.size + ' Team(s) endgültig löschen?\n\n' + names.join(', ') + '\n\nAlle Kanäle, Beiträge und Mitgliedschaften dieser Teams werden unwiderruflich entfernt. Das kann NICHT rückgängig gemacht werden.')) return;
+        setBusy(true);
+        const okIds = [];
+        for (const id of selected) { const ok = await dataService.deleteTeam(id); if (ok) okIds.push(id); }
+        setBusy(false);
+        if (okIds.length) { onDeleted(okIds); showToast(okIds.length + ' Team(s) gelöscht', 'success'); }
+        if (okIds.length === selected.size) onClose();
+        else setSelected(prev => { const n = new Set(prev); okIds.forEach(i => n.delete(i)); return n; });
+      };
+
+      return React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', onClick: onClose },
+        React.createElement('div', { className: 'modal', onClick: e => e.stopPropagation(), style: { width: '520px', maxWidth: '96vw', maxHeight: '88vh', display: 'flex', flexDirection: 'column' } },
+          React.createElement('div', { className: 'modal-header' }, React.createElement('h3', null, '🧹 Teams aufräumen')),
+          React.createElement('div', { className: 'modal-body', style: { overflowY: 'auto' } },
+            React.createElement('p', { style: { fontSize: '13px', color: 'var(--text-muted)', marginTop: 0 } }, 'Wähle Teams aus, die endgültig gelöscht werden sollen (z. B. am Schuljahresende). Tipp: Zum Übertragen ins neue Schuljahr ein Team lieber umbenennen (mu7a → mu8a) statt löschen.'),
+            all.length === 0
+              ? React.createElement('div', { style: { color: 'var(--text-muted)', padding: '20px', textAlign: 'center' } }, 'Keine Teams vorhanden.')
+              : all.map(t => React.createElement('label', {
+                  key: t.id,
+                  style: { display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 6px', borderBottom: '1px solid var(--border)', cursor: 'pointer' }
+                },
+                  React.createElement('input', { type: 'checkbox', checked: selected.has(t.id), onChange: () => toggle(t.id), style: { width: '18px', height: '18px', cursor: 'pointer' } }),
+                  React.createElement('span', { style: { width: '28px', height: '28px', borderRadius: '8px', background: t.icon_color || 'var(--accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, flexShrink: 0 } }, (t.icon_text || (t.name || '?').substring(0, 2)).toUpperCase()),
+                  React.createElement('span', { style: { flex: 1, fontSize: '14px' } }, t.name),
+                  t._archived && React.createElement('span', { style: { fontSize: '11px', color: 'var(--text-muted)', background: 'var(--bg-tertiary)', padding: '2px 8px', borderRadius: '10px' } }, 'archiviert')
+                ))
+          ),
+          React.createElement('div', { className: 'modal-footer', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+            React.createElement('span', { style: { fontSize: '13px', color: 'var(--text-muted)' } }, selected.size + ' ausgewählt'),
+            React.createElement('div', { style: { display: 'flex', gap: '8px' } },
+              React.createElement('button', { type: 'button', className: 'btn-secondary', onClick: onClose }, 'Schließen'),
+              React.createElement('button', {
+                type: 'button',
+                onClick: handleDelete,
+                disabled: busy || selected.size === 0,
+                style: { padding: '8px 16px', borderRadius: 'var(--radius)', border: 'none', cursor: (busy || selected.size === 0) ? 'not-allowed' : 'pointer', background: (busy || selected.size === 0) ? 'var(--text-muted)' : 'var(--danger, #dc2626)', color: '#fff', fontWeight: 600 }
+              }, busy ? 'Löscht…' : '🗑️ Ausgewählte löschen')
+            )
+          )
+        )
+      );
+    }
+
     function TeamMembersModal({ teamId, dataService, onClose, onMembersUpdated, currentUser, isAdmin, onArchive, onDelete, isGlobalAdmin, teamName }) {
       const [members, setMembers] = useState([]);
       const [availableUsers, setAvailableUsers] = useState([]);
@@ -6085,6 +6139,44 @@
     // ============================================================
     const FEEDBACK_GAS_URL = 'https://script.google.com/macros/s/AKfycbwr9ZV9108jpkfN4nKboTuwMEgUhBOxW2c2ksWgazKNeSgiINL4G2ZNUMKeEzfaOj3H_g/exec';
 
+    // ── Dateiablage-Platzhalter ──────────────────────────────────────────
+    // Bewusster Hinweis: eigene Dateiablage (wie OneDrive) wird mit Nextcloud
+    // nachgerüstet. Bis dahin Verweis auf die iServ-Dateiablage der Schule.
+    const ISERV_FILES_URL = 'https://iserv.schriesheim.de/iserv/file';
+    function FilesPlaceholderModal({ onClose }) {
+      React.useEffect(() => {
+        const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+      }, [onClose]);
+      return React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Dateiablage', onClick: onClose },
+        React.createElement('div', { className: 'modal', onClick: e => e.stopPropagation(), style: { width: '480px', maxWidth: '96vw' } },
+          React.createElement('div', { className: 'modal-header' },
+            React.createElement('h3', null, '📁 Dateiablage'),
+            React.createElement('button', { className: 'icon-btn', onClick: onClose, title: 'Schließen', 'aria-label': 'Schließen', dangerouslySetInnerHTML: { __html: Icons.x } })
+          ),
+          React.createElement('div', { className: 'modal-body' },
+            React.createElement('div', {
+              style: { background: 'var(--accent-light)', color: 'var(--text-primary)', borderRadius: 'var(--radius)', padding: '14px 16px', fontSize: '14px', lineHeight: 1.5, marginBottom: '16px' }
+            },
+              React.createElement('strong', null, 'In Arbeit: '),
+              'Eine eigene Dateiablage (wie OneDrive) wird gerade mit ',
+              React.createElement('strong', null, 'Nextcloud'),
+              ' nachgerüstet. Dateien aus KRS Connect liegen dann an einem Ort, mit Versionen und Freigaben.'
+            ),
+            React.createElement('p', { style: { fontSize: '14px', color: 'var(--text-secondary)', margin: '0 0 16px' } },
+              'Bis dahin nutzt bitte die ', React.createElement('strong', null, 'iServ-Dateiablage'), ' der Schule für gemeinsame Dateien.'
+            ),
+            React.createElement('a', {
+              href: ISERV_FILES_URL, target: '_blank', rel: 'noopener noreferrer',
+              style: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', boxSizing: 'border-box', padding: '12px 16px', background: 'var(--accent)', color: '#fff', borderRadius: 'var(--radius)', fontSize: '15px', fontWeight: 600, textDecoration: 'none', minHeight: '48px' }
+            }, '🔗 iServ-Dateiablage öffnen'),
+            React.createElement('p', { style: { fontSize: '12px', color: 'var(--text-muted)', margin: '12px 0 0', textAlign: 'center' } }, 'Öffnet iserv.schriesheim.de in einem neuen Tab (Login mit deinem iServ-Zugang).')
+          )
+        )
+      );
+    }
+
     function FeedbackModal({ user, dataService, onClose, onOpenBoard }) {
       const [category, setCategory] = useState('');
       const [rating, setRating] = useState(0);
@@ -6602,6 +6694,8 @@
       const [showOnlinePanel, setShowOnlinePanel] = useState(false);
       const [showFeedback, setShowFeedback] = useState(false);
       const [showFeedbackBoard, setShowFeedbackBoard] = useState(false);
+      const [showFiles, setShowFiles] = useState(false); // Dateiablage-Platzhalter (Nextcloud kommt, bis dahin iServ)
+      const [showBulkTeams, setShowBulkTeams] = useState(false);
       const [showProfile, setShowProfile] = useState(false);
       const [showPrivacy, setShowPrivacy] = useState(false);
       const [showOnboarding, setShowOnboarding] = useState(false);
@@ -6619,6 +6713,7 @@
       });
       return { showOnlinePanel, setShowOnlinePanel, showFeedback, setShowFeedback,
         showFeedbackBoard, setShowFeedbackBoard,
+        showBulkTeams, setShowBulkTeams,
         showProfile, setShowProfile, showPrivacy, setShowPrivacy,
         showOnboarding, setShowOnboarding, showCreateTeam, setShowCreateTeam,
         showTeamMembers, setShowTeamMembers, mobileSidebarOpen, setMobileSidebarOpen,
@@ -6789,6 +6884,7 @@
       const modals = useModals();
       const { showOnlinePanel, setShowOnlinePanel, showFeedback, setShowFeedback,
         showFeedbackBoard, setShowFeedbackBoard,
+        showBulkTeams, setShowBulkTeams,
         showProfile, setShowProfile, showPrivacy, setShowPrivacy,
         showOnboarding, setShowOnboarding, showCreateTeam, setShowCreateTeam,
         showTeamMembers, setShowTeamMembers, mobileSidebarOpen, setMobileSidebarOpen,
@@ -7673,12 +7769,21 @@
         React.createElement('div', { className: 'sidebar-content' + (mobileSidebarOpen ? ' mobile-open' : '') },
           React.createElement('div', { className: 'sidebar-header', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
             React.createElement('h2', null, 'Teams'),
-            React.createElement('button', {
-              className: 'new-chat-btn',
-              onClick: () => setShowCreateTeam(true),
-              title: 'Neues Team erstellen',
-              'aria-label': 'Neues Team erstellen'
-            }, '+')
+            React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
+              // Aufräumen (mehrere Teams löschen) — nur globaler Admin
+              user?.role === 'admin' && React.createElement('button', {
+                className: 'feedback-trigger',
+                onClick: () => setShowBulkTeams(true),
+                title: 'Teams aufräumen (mehrere löschen)',
+                'aria-label': 'Teams aufräumen'
+              }, '🧹'),
+              React.createElement('button', {
+                className: 'new-chat-btn',
+                onClick: () => setShowCreateTeam(true),
+                title: 'Neues Team erstellen',
+                'aria-label': 'Neues Team erstellen'
+              }, '+')
+            )
           ),
           React.createElement('div', { className: 'sidebar-list' },
             (() => {
@@ -7991,6 +8096,14 @@
             },
               '🔖',
               savedPosts.length > 0 && React.createElement('span', { className: 'nav-badge', style: { fontSize: '9px' } }, savedPosts.length)
+            ),
+            React.createElement('button', {
+              className: 'nav-item' + (showFiles ? ' active' : ''),
+              onClick: () => setShowFiles(true),
+              title: 'Dateiablage (iServ – Nextcloud folgt)',
+              'aria-label': 'Dateiablage'
+            },
+              React.createElement('span', { dangerouslySetInnerHTML: { __html: Icons.files } })
             )
           ),
           // #12: Großer Beta-Feedback-Button — öffnet das Feedback-Board (für alle sichtbar)
@@ -8105,6 +8218,17 @@
         React.createElement(UpdateBanner, null),
         showFeedback && React.createElement(FeedbackModal, { user, dataService, onClose: () => setShowFeedback(false), onOpenBoard: () => setShowFeedbackBoard(true) }),
         showFeedbackBoard && React.createElement(FeedbackBoardModal, { dataService, isAdmin: user?.role === 'admin', onClose: () => setShowFeedbackBoard(false), onNewFeedback: () => setShowFeedback(true) }),
+        showFiles && React.createElement(FilesPlaceholderModal, { onClose: () => setShowFiles(false) }),
+        showBulkTeams && React.createElement(BulkDeleteTeamsModal, {
+          teams, archivedTeams, dataService,
+          onClose: () => setShowBulkTeams(false),
+          onDeleted: (ids) => {
+            const del = new Set(ids);
+            setTeams(prev => prev.filter(t => !del.has(t.id)));
+            setArchivedTeams(prev => prev.filter(t => !del.has(t.id)));
+            if (selectedTeam && del.has(selectedTeam.id)) { setSelectedTeam(null); setSelectedChannel(null); setChannels([]); }
+          }
+        }),
         // Onboarding Wizard
         showOnboarding && React.createElement(OnboardingWizard, { onClose: () => {
           setShowOnboarding(false);
