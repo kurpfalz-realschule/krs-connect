@@ -13,9 +13,10 @@ import { openConnect } from '../fixtures/connect';
 test.describe('KRS Connect — Smoke: CDN-Resilience (supabase-js)', () => {
   test('window.__supabaseReady existiert und resolved zum supabase-Global', async ({ page }) => {
     await openConnect(page);
-    // App ist gebootet (Version-Marker da)
+    // App ist gebootet (Version-Marker da). Versionsunabhängig prüfen, damit
+    // ein Release-Bump (window.KRS_VERSION) diesen Test nicht mehr bricht.
     const version = await page.evaluate(() => (window as any).KRS_VERSION);
-    expect(version).toBe('4.2.0');
+    expect(version).toMatch(/^\d+\.\d+\.\d+$/);
 
     // __supabaseReady ist ein Promise und resolved (Fallback-Kette hat geladen)
     const ready = await page.evaluate(async () => {
