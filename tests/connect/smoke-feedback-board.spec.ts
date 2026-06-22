@@ -15,6 +15,9 @@ test.describe('#12 Feedback-Board — DataService (Demo)', () => {
       const ds = new DS(null); // Demo
       const before = await ds.getFeedback();
       const created = await ds.submitFeedback({ userId: 1, name: 'Test', category: 'bug', rating: 3, message: 'E2E-Eintrag' });
+      // Status SOFORT festhalten: im Demo ist `created` dieselbe Referenz wie im
+      // Store, ein späteres updateFeedbackStatus würde created.status mitmutieren.
+      const createdStatus = created.status;
       const after = await ds.getFeedback();
 
       // Status-Wechsel
@@ -29,7 +32,7 @@ test.describe('#12 Feedback-Board — DataService (Demo)', () => {
         afterCount: after.length,
         firstId: String(after[0]?.id),
         createdId: String(created.id),
-        createdStatus: created.status,
+        createdStatus: createdStatus,
         updStatus: upd?.status,
         invalidThrew,
       };
