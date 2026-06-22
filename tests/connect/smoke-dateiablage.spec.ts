@@ -23,7 +23,7 @@ test.describe('Dateiablage — Nav-Button & Modal (Demo)', () => {
 
     // iServ-Link korrekt und in neuem Tab
     const link = dialog.locator('a[target="_blank"]').first();
-    await expect(link).toHaveAttribute('href', 'https://iserv.schriesheim.de/iserv/file');
+    await expect(link).toHaveAttribute('href', 'https://krs.sh-schulen.de/iserv/file');
     await expect(link).toHaveAttribute('rel', /noopener/);
   });
 

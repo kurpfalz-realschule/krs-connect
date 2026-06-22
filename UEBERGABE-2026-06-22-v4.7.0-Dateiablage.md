@@ -4,7 +4,7 @@
 Linker Sidebar-Button **„Dateiablage"** (Ordner-Icon), der die vom Beta-Team
 erwartete OneDrive-artige Ablage **imitiert** und bewusst kommuniziert:
 - Hinweis: eigene Dateiablage wird **mit Nextcloud nachgerüstet** (in Arbeit).
-- Bis dahin: Button **„iServ-Dateiablage öffnen"** → `https://iserv.schriesheim.de/iserv/file`
+- Bis dahin: Button **„iServ-Dateiablage öffnen"** → `https://krs.sh-schulen.de/iserv/file`
   (neuer Tab, Login mit iServ-Zugang).
 
 Es ist ein **Platzhalter/Modal**, keine echte Dateifunktion — genau wie gewünscht.

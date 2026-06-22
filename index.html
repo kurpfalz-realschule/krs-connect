@@ -4052,7 +4052,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.7.0';
+    window.KRS_VERSION = '4.7.1';
     const __KRS_QS = new URLSearchParams(typeof location !== 'undefined' ? location.search : '');
     window.__KRS_FORCE_DEMO = __KRS_QS.get('forceMode') === 'demo';
     window.__KRS_FORCE_USER = __KRS_QS.get('forceUser') || null; // optional: direktes Login als kuerzel
@@ -6142,7 +6142,7 @@
     // ── Dateiablage-Platzhalter ──────────────────────────────────────────
     // Bewusster Hinweis: eigene Dateiablage (wie OneDrive) wird mit Nextcloud
     // nachgerüstet. Bis dahin Verweis auf die iServ-Dateiablage der Schule.
-    const ISERV_FILES_URL = 'https://iserv.schriesheim.de/iserv/file';
+    const ISERV_FILES_URL = 'https://krs.sh-schulen.de/iserv/file';
     function FilesPlaceholderModal({ onClose }) {
       React.useEffect(() => {
         const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -6171,7 +6171,7 @@
               href: ISERV_FILES_URL, target: '_blank', rel: 'noopener noreferrer',
               style: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', boxSizing: 'border-box', padding: '12px 16px', background: 'var(--accent)', color: '#fff', borderRadius: 'var(--radius)', fontSize: '15px', fontWeight: 600, textDecoration: 'none', minHeight: '48px' }
             }, '🔗 iServ-Dateiablage öffnen'),
-            React.createElement('p', { style: { fontSize: '12px', color: 'var(--text-muted)', margin: '12px 0 0', textAlign: 'center' } }, 'Öffnet iserv.schriesheim.de in einem neuen Tab (Login mit deinem iServ-Zugang).')
+            React.createElement('p', { style: { fontSize: '12px', color: 'var(--text-muted)', margin: '12px 0 0', textAlign: 'center' } }, 'Öffnet krs.sh-schulen.de in einem neuen Tab (Login mit deinem iServ-Zugang).')
           )
         )
       );
