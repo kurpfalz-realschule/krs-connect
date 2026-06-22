@@ -7695,11 +7695,11 @@
             React.createElement('div', { className: 'sidebar-header', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
               React.createElement('h2', null, '# Kanäle'),
               user?.role === 'admin' && React.createElement('button', {
-                style: { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: '4px', display: 'flex', alignItems: 'center' },
+                className: 'new-chat-btn',
                 onClick: () => setShowCreateChannel(true),
                 title: 'Neuen Kanal erstellen',
                 'aria-label': 'Neuen Kanal erstellen'
-              }, React.createElement('span', { dangerouslySetInnerHTML: { __html: Icons.plus }, style: { fontSize: '18px' } }))
+              }, '+')
             ),
             React.createElement('div', { className: 'sidebar-list' },
               channels.map(ch => {
