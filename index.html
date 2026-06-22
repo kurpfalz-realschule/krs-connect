@@ -1154,6 +1154,13 @@
     .fb-status-select { font-size: 12px; padding: 4px 8px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); min-height: 32px; }
     .fb-empty { text-align: center; color: var(--text-muted); padding: 32px 12px; font-size: 14px; }
 
+    /* Update-Banner (#13): neue Version verfügbar */
+    .update-banner { position: fixed; top: 0; left: 0; right: 0; z-index: 10000; display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; padding: 10px 16px; background: var(--accent, #4f46e5); color: #fff; font-size: 14px; font-weight: 600; box-shadow: 0 2px 10px rgba(0,0,0,0.18); }
+    .update-banner button { background: #fff; color: var(--accent, #4f46e5); border: none; border-radius: 8px; padding: 8px 16px; font-weight: 700; font-size: 13px; cursor: pointer; min-height: 36px; }
+    .update-banner button:hover { filter: brightness(0.96); }
+    .update-banner .later { background: transparent; color: #fff; text-decoration: underline; font-weight: 500; padding: 8px 6px; }
+    .app-version { font-size: 11px; color: var(--text-muted); text-align: center; padding: 4px 0 2px; letter-spacing: 0.3px; }
+
     @media (max-width: 768px) {
       .toast-container { top: 8px; right: 8px; left: 8px; }
       .toast { max-width: 100%; }
@@ -3464,6 +3471,41 @@
     // ============================================================
     const { useState, useEffect, useMemo, useRef, useCallback } = React;
 
+    // ============================================================
+    // UPDATE-BANNER (#13) — ohne Service Worker: pollt die live index.html
+    // und vergleicht KRS_VERSION. Bei neuer Version: Hinweis + Reload-Button.
+    // ============================================================
+    function UpdateBanner() {
+      const [newVersion, setNewVersion] = useState(null);
+      const [dismissed, setDismissed] = useState(false);
+      useEffect(() => {
+        if (window.__KRS_FORCE_DEMO) return; // im Test-/Demo-Modus nicht pollen
+        const current = window.KRS_VERSION;
+        let stopped = false;
+        const check = async () => {
+          try {
+            const res = await fetch('index.html?_=' + Date.now(), { cache: 'no-store' });
+            if (!res.ok) return;
+            const txt = await res.text();
+            const m = txt.match(/KRS_VERSION\s*=\s*'([^']+)'/);
+            const remote = m && m[1];
+            if (!stopped && remote && remote !== current) setNewVersion(remote);
+          } catch (e) { /* offline / CDN — still ignorieren */ }
+        };
+        check();
+        const id = setInterval(check, 5 * 60 * 1000); // alle 5 Minuten
+        const onFocus = () => check();
+        window.addEventListener('focus', onFocus);
+        return () => { stopped = true; clearInterval(id); window.removeEventListener('focus', onFocus); };
+      }, []);
+      if (!newVersion || dismissed) return null;
+      return React.createElement('div', { className: 'update-banner', role: 'alert' },
+        React.createElement('span', null, '🔄 Neue Version ' + newVersion + ' verfügbar — du nutzt v' + window.KRS_VERSION + '.'),
+        React.createElement('button', { onClick: () => location.reload() }, 'Jetzt aktualisieren'),
+        React.createElement('button', { className: 'later', onClick: () => setDismissed(true) }, 'Später')
+      );
+    }
+
     function getInitials(name) {
       return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
     }
@@ -4002,7 +4044,10 @@
     // Tests setzen ?forceMode=demo um den DataService deterministisch
     // in den Demo-Modus zu zwingen — ohne dass dazu Credentials
     // entfernt werden müssen.
-    window.KRS_VERSION = '4.2.0';
+    // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
+    // vergleicht diese laufende Version mit der live ausgelieferten index.html
+    // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
+    window.KRS_VERSION = '4.3.0';
     const __KRS_QS = new URLSearchParams(typeof location !== 'undefined' ? location.search : '');
     window.__KRS_FORCE_DEMO = __KRS_QS.get('forceMode') === 'demo';
     window.__KRS_FORCE_USER = __KRS_QS.get('forceUser') || null; // optional: direktes Login als kuerzel
@@ -7929,6 +7974,7 @@
             onClick: () => setShowFeedbackBoard(true),
             title: 'Feedback geben & alle Rückmeldungen ansehen'
           }, '📣 Feedback', React.createElement('span', { className: 'beta-tag' }, 'BETA')),
+          React.createElement('div', { className: 'app-version' }, 'KRS Connect v' + window.KRS_VERSION + ' · Beta'),
           React.createElement('div', { className: 'sidebar-bottom' },
             React.createElement('button', {
               className: 'online-indicator',
@@ -8031,6 +8077,7 @@
         // Thread overlay (nur in Teams-View)
         view === 'teams' && openThread && React.createElement(ThreadPanel, { post: openThread, replies, dataService, user, onClose: () => setOpenThread(null), onReplyCreated: (r) => setReplies(prev => prev.some(x => x.id === r.id) ? prev : [...prev, r]) }),
         // Feedback Modal
+        React.createElement(UpdateBanner, null),
         showFeedback && React.createElement(FeedbackModal, { user, dataService, onClose: () => setShowFeedback(false), onOpenBoard: () => setShowFeedbackBoard(true) }),
         showFeedbackBoard && React.createElement(FeedbackBoardModal, { dataService, isAdmin: user?.role === 'admin', onClose: () => setShowFeedbackBoard(false), onNewFeedback: () => setShowFeedback(true) }),
         // Onboarding Wizard
