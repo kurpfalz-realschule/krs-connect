@@ -3182,13 +3182,17 @@
           return newTeam;
         }
         try {
-          const { data: team, error: teamErr } = await this.sb.from('teams').insert({ name, description, icon_text: iconText, icon_color: iconColor, category: 'Teams' }).select().single();
-          if (teamErr) throw teamErr;
-          const { error: memberErr } = await this.sb.from('team_members').insert({ team_id: team.id, user_id: creatorId, role: 'admin' });
-          if (memberErr) throw memberErr;
-          const { data: defaultChannel, error: chanErr } = await this.sb.from('channels').insert({ team_id: team.id, name: 'Allgemein', is_default: true }).select().single();
-          if (chanErr) throw chanErr;
-          return team;
+          // Atomar via SECURITY-DEFINER-RPC: Team + Ersteller-als-Admin +
+          // Standardkanal. Funktioniert für ALLE angemeldeten App-User und
+          // umgeht das RLS-Bootstrap-/Rekursions-Problem (siehe create_team()).
+          const { data, error } = await this.sb.rpc('create_team', {
+            p_name: name,
+            p_description: description || null,
+            p_icon_text: iconText || null,
+            p_icon_color: iconColor || null
+          });
+          if (error) throw error;
+          return Array.isArray(data) ? data[0] : data;
         } catch (err) {
           // Fehler NICHT mehr still schlucken — Aufrufer (handleCreateTeam) zeigt Toast.
           console.error('createTeam error:', err);
@@ -4047,7 +4051,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.3.0';
+    window.KRS_VERSION = '4.5.0';
     const __KRS_QS = new URLSearchParams(typeof location !== 'undefined' ? location.search : '');
     window.__KRS_FORCE_DEMO = __KRS_QS.get('forceMode') === 'demo';
     window.__KRS_FORCE_USER = __KRS_QS.get('forceUser') || null; // optional: direktes Login als kuerzel
@@ -4617,6 +4621,7 @@
     function PostList({ posts, setPosts, channelId, dataService, user, allUsers, onOpenThread, hasMore, onLoadMore, loadingMore, onForward, onSave, savedPosts, onDragDrop, readReceiptsEnabled }) {
       const [newPostTitle, setNewPostTitle] = useState('');
       const [newPostContent, setNewPostContent] = useState('');
+      const [showPostEmoji, setShowPostEmoji] = useState(false);
       const [saving, setSaving] = useState(false);
       const [postError, setPostError] = useState('');
       const [selectedFiles, setSelectedFiles] = useState([]);  // Array of { file, preview }
@@ -4910,8 +4915,21 @@
                 'aria-label': 'Umfrage erstellen',
                 style: { padding: '4px 10px', background: showPollCreator ? 'var(--accent-light)' : 'transparent', border: showPollCreator ? '1px solid var(--accent)' : '1px solid transparent', borderRadius: '16px', cursor: 'pointer', fontSize: '13px', color: showPollCreator ? 'var(--accent)' : 'var(--text-muted)', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: '4px', minHeight: '44px' }
               }, '📊'),
+              // Emoji-Button für Beiträge
+              React.createElement('button', {
+                type: 'button',
+                'data-testid': 'post-emoji-btn',
+                onClick: () => setShowPostEmoji(v => !v),
+                title: 'Emoji einfügen', 'aria-label': 'Emoji einfügen',
+                style: { padding: '4px 10px', background: showPostEmoji ? 'var(--accent-light)' : 'transparent', border: showPostEmoji ? '1px solid var(--accent)' : '1px solid transparent', borderRadius: '16px', cursor: 'pointer', fontSize: '16px', minHeight: '44px', display: 'flex', alignItems: 'center' }
+              }, '😊'),
+              showPostEmoji && React.createElement(EmojiPicker, {
+                onSelect: (e) => { setNewPostContent(c => (c || '') + e); setShowPostEmoji(false); },
+                onClose: () => setShowPostEmoji(false),
+                position: { top: '50%', left: '50%' }
+              }),
               React.createElement('div', { style: { flex: 1 } }),
-              React.createElement('button', { type: 'button', onClick: () => { setShowPostForm(false); setNewPostTitle(''); setNewPostContent(''); clearAllFiles(); setShowPollCreator(false); }, style: { padding: '6px 14px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '13px' } }, 'Abbrechen'),
+              React.createElement('button', { type: 'button', onClick: () => { setShowPostForm(false); setNewPostTitle(''); setNewPostContent(''); clearAllFiles(); setShowPollCreator(false); setShowPostEmoji(false); }, style: { padding: '6px 14px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '13px' } }, 'Abbrechen'),
               React.createElement('button', { type: 'submit', disabled: saving, style: { padding: '6px 16px', background: saving ? 'var(--text-muted)' : 'var(--accent)', color: 'white', border: 'none', borderRadius: 'var(--radius)', cursor: saving ? 'not-allowed' : 'pointer', fontSize: '13px', fontWeight: '500' } }, saving ? 'Wird gesendet...' : 'Posten')
             ),
             postError && React.createElement('p', { style: { color: 'var(--danger)', fontSize: '12px', margin: '6px 0 0' } }, postError)
@@ -5037,6 +5055,7 @@
       const dataService = _ds || ctx.dataService;
       const user = _u || ctx.user;
       const [replyContent, setReplyContent] = useState('');
+      const [showReplyEmoji, setShowReplyEmoji] = useState(false);
       const [saving, setSaving] = useState(false);
       const [replyFiles, setReplyFiles] = useState([]); // Array of { file, preview }
       const replyFileRef = useRef(null);
@@ -5123,6 +5142,12 @@
               React.createElement('div', { style: { display: 'flex', gap: '8px', width: '100%', alignItems: 'flex-end' } },
                 React.createElement('textarea', { placeholder: 'Antwort schreiben...', value: replyContent, onChange: e => setReplyContent(e.target.value), onKeyDown: e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendReply(); } }, style: { flex: 1, padding: '10px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: '14px', minHeight: '60px', fontFamily: 'inherit', fontWeight: 'inherit', resize: 'none' } }),
                 React.createElement('input', { ref: replyFileRef, type: 'file', multiple: true, accept: 'image/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt', onChange: handleReplyFileSelect, style: { display: 'none' } }),
+                React.createElement('button', { type: 'button', 'data-testid': 'reply-emoji-btn', onClick: () => setShowReplyEmoji(v => !v), title: 'Emoji einfügen', 'aria-label': 'Emoji einfügen', style: { padding: '8px 10px', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', color: 'var(--text-secondary)', alignSelf: 'flex-end', minHeight: '44px', minWidth: '44px', fontSize: '16px' } }, '😊'),
+                showReplyEmoji && React.createElement(EmojiPicker, {
+                  onSelect: (e) => { setReplyContent(c => (c || '') + e); setShowReplyEmoji(false); },
+                  onClose: () => setShowReplyEmoji(false),
+                  position: { top: '50%', left: '50%' }
+                }),
                 React.createElement('button', { type: 'button', onClick: () => replyFileRef.current?.click(), title: 'Datei anhängen', 'aria-label': 'Datei anhängen', style: { padding: '8px 10px', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', color: 'var(--text-secondary)', alignSelf: 'flex-end', minHeight: '44px', minWidth: '44px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }, dangerouslySetInnerHTML: { __html: Icons.paperclip } }),
                 React.createElement('button', { type: 'submit', disabled: saving, style: { padding: '8px 16px', background: saving ? 'var(--text-muted)' : 'var(--accent)', color: 'white', border: 'none', borderRadius: 'var(--radius)', cursor: saving ? 'not-allowed' : 'pointer', alignSelf: 'flex-end', whiteSpace: 'nowrap', fontSize: '14px', minHeight: '44px' } }, saving ? 'Wird gesendet...' : 'Senden')
               )
