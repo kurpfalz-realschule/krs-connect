@@ -13,9 +13,10 @@ import { test, expect } from '@playwright/test';
  * Damit sind sie auch in CI gegen Production sicher.
  */
 
+// Org-URLs nach Repo-Umzug zu kurpfalz-realschule (alte benditot.github.io → 404)
 const URLS = {
-  connect: 'https://benditot.github.io/krs-connect/',
-  hub: 'https://benditot.github.io/krs-hub/',
+  connect: 'https://kurpfalz-realschule.github.io/krs-connect/',
+  hub: 'https://kurpfalz-realschule.github.io/krs-hub/',
 };
 
 test.describe('Live-Health: KRS Connect (Production)', () => {

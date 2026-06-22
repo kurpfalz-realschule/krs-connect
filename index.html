@@ -1130,6 +1130,30 @@
     .feedback-trigger { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 4px; font-size: 18px; min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; transition: color 0.15s; }
     .feedback-trigger:hover { color: var(--accent-orange); }
 
+    /* #12: Großer Beta-Feedback-Button in der Sidebar */
+    .beta-feedback-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px 14px; margin-bottom: 8px; border: none; border-radius: var(--radius); background: var(--accent-orange, #f59e0b); color: #fff; font-size: 14px; font-weight: 700; cursor: pointer; min-height: 44px; box-shadow: 0 2px 8px rgba(0,0,0,0.12); transition: transform 0.12s, filter 0.12s; }
+    .beta-feedback-btn:hover { filter: brightness(1.06); transform: translateY(-1px); }
+    .beta-feedback-btn .beta-tag { font-size: 10px; font-weight: 800; letter-spacing: 0.5px; background: rgba(255,255,255,0.25); padding: 2px 6px; border-radius: 10px; }
+
+    /* #12: Feedback-Board */
+    .fb-board-modal { width: 720px; max-width: 96vw; max-height: 90vh; display: flex; flex-direction: column; }
+    .fb-board-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 16px; }
+    .fb-board-filter { padding: 6px 12px; min-height: 36px; border-radius: 18px; border: 1px solid var(--border); background: var(--bg-primary); cursor: pointer; font-size: 13px; }
+    .fb-board-filter.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .fb-board-list { overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 4px; }
+    .fb-item { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; background: var(--bg-primary); }
+    .fb-item-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+    .fb-item-name { font-weight: 600; font-size: 14px; }
+    .fb-item-meta { font-size: 12px; color: var(--text-muted); }
+    .fb-item-msg { font-size: 14px; white-space: pre-wrap; word-break: break-word; margin: 4px 0 8px; }
+    .fb-badge { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 12px; }
+    .fb-badge-offen { background: #fde68a; color: #92400e; }
+    .fb-badge-in_arbeit { background: #bfdbfe; color: #1e40af; }
+    .fb-badge-erledigt { background: #bbf7d0; color: #166534; }
+    .fb-cat-chip { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--bg-tertiary); color: var(--text-secondary); }
+    .fb-status-select { font-size: 12px; padding: 4px 8px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); min-height: 32px; }
+    .fb-empty { text-align: center; color: var(--text-muted); padding: 32px 12px; font-size: 14px; }
+
     @media (max-width: 768px) {
       .toast-container { top: 8px; right: 8px; left: 8px; }
       .toast { max-width: 100%; }
@@ -1693,6 +1717,16 @@
       { id: 10, name: 'Gourmetküche', icon_text: 'G', icon_color: '#ef4444', category: 'Kurse', description: 'AG Kochen', members: 3 },
     ];
 
+    // Demo-Store für Nachrichten-Reaktionen (#11): { [messageId]: [{emoji, users:[], count}] }
+    let MOCK_MESSAGE_REACTIONS = {};
+
+    // Demo-Store für Feedback-Board (#12): Status offen | in_arbeit | erledigt
+    let MOCK_FEEDBACK = [
+      { id: 'fb1', user_id: 2, name: 'Petra Carse', category: 'verbesserung', rating: 4, message: 'Könnte man Beiträge auch anpinnen?', page: '', status: 'erledigt', created_at: '2026-06-21T09:12:00.000Z' },
+      { id: 'fb2', user_id: 3, name: 'Daniel Schmitt', category: 'bug', rating: 0, message: 'Beim Hochladen eines PDFs passiert manchmal nichts.', page: '', status: 'in_arbeit', created_at: '2026-06-21T14:30:00.000Z' },
+      { id: 'fb3', user_id: null, name: 'Anonym', category: 'lob', rating: 5, message: 'Viel besser als Teams – danke!', page: '', status: 'offen', created_at: '2026-06-22T07:45:00.000Z' }
+    ];
+
     const MOCK_CHANNELS = {
       1: [
         { id: 1, name: 'Allgemein', is_default: true, unread: 0 },
@@ -1988,7 +2022,8 @@
       }
 
       async getTeams(userId) {
-        if (this.isDemo) return [...MOCK_TEAMS];
+        // Aktive (nicht archivierte) Teams. Archivierte über getArchivedTeams().
+        if (this.isDemo) return MOCK_TEAMS.filter(t => !t.archived_at);
         try {
           if (userId) {
             // Nur Teams laden, in denen der User Mitglied ist
@@ -1996,16 +2031,98 @@
             if (memErr) throw memErr;
             if (!memberships || memberships.length === 0) return [];
             const teamIds = memberships.map(m => m.team_id);
-            const { data, error } = await this.sb.from('teams').select('*').in('id', teamIds).order('category, name');
+            const { data, error } = await this.sb.from('teams').select('*').in('id', teamIds).is('archived_at', null).order('category, name');
             if (error) throw error;
             return data || [];
           }
-          const { data, error } = await this.sb.from('teams').select('*').order('category, name');
+          const { data, error } = await this.sb.from('teams').select('*').is('archived_at', null).order('category, name');
           if (error) throw error;
           return data || [];
         } catch (err) {
           console.error('getTeams error:', err);
           return [];
+        }
+      }
+
+      // ── Team-Archivierung (#8) ──────────────────────────
+      async getArchivedTeams(userId) {
+        if (this.isDemo) return MOCK_TEAMS.filter(t => t.archived_at);
+        try {
+          if (userId) {
+            const { data: memberships, error: memErr } = await this.sb.from('team_members').select('team_id').eq('user_id', userId);
+            if (memErr) throw memErr;
+            if (!memberships || memberships.length === 0) return [];
+            const teamIds = memberships.map(m => m.team_id);
+            const { data, error } = await this.sb.from('teams').select('*').in('id', teamIds).not('archived_at', 'is', null).order('name');
+            if (error) throw error;
+            return data || [];
+          }
+          const { data, error } = await this.sb.from('teams').select('*').not('archived_at', 'is', null).order('name');
+          if (error) throw error;
+          return data || [];
+        } catch (err) {
+          console.error('getArchivedTeams error:', err);
+          return [];
+        }
+      }
+
+      _teamMutationError(err, verb) {
+        const isPerm = /row-level security|policy|permission|denied/i.test(err && err.message || '');
+        showToast(isPerm
+          ? ('Keine Berechtigung: Nur Team-Admins können das Team ' + verb + '.')
+          : ('Team konnte nicht ' + verb + ' werden: ' + ((err && err.message) || 'Unbekannter Fehler')), 'error');
+      }
+
+      async archiveTeam(teamId) {
+        if (this.isDemo) {
+          const t = MOCK_TEAMS.find(x => x.id === teamId);
+          if (t) t.archived_at = new Date().toISOString();
+          return true;
+        }
+        try {
+          const { error } = await this.sb.from('teams').update({ archived_at: new Date().toISOString() }).eq('id', teamId);
+          if (error) throw error;
+          return true;
+        } catch (err) {
+          console.error('archiveTeam error:', err);
+          this._teamMutationError(err, 'archivieren');
+          return false;
+        }
+      }
+
+      async restoreTeam(teamId) {
+        if (this.isDemo) {
+          const t = MOCK_TEAMS.find(x => x.id === teamId);
+          if (t) delete t.archived_at;
+          return true;
+        }
+        try {
+          const { error } = await this.sb.from('teams').update({ archived_at: null }).eq('id', teamId);
+          if (error) throw error;
+          return true;
+        } catch (err) {
+          console.error('restoreTeam error:', err);
+          this._teamMutationError(err, 'wiederherstellen');
+          return false;
+        }
+      }
+
+      async deleteTeam(teamId) {
+        if (this.isDemo) {
+          const i = MOCK_TEAMS.findIndex(x => x.id === teamId);
+          if (i >= 0) MOCK_TEAMS.splice(i, 1);
+          delete MOCK_CHANNELS[teamId];
+          return true;
+        }
+        try {
+          // DB-seitige FK-Cascade (Migration #8) räumt Channels/Posts/Members weg.
+          const { error } = await this.sb.from('teams').delete().eq('id', teamId);
+          if (error) throw error;
+          return true;
+        } catch (err) {
+          console.error('deleteTeam error:', err);
+          this._teamMutationError(err, 'löschen');
+          return false;
         }
       }
 
@@ -2347,6 +2464,55 @@
         } catch (err) { console.error('deletePost error:', err); showToast('Beitrag konnte nicht gel\u00f6scht werden. Bitte versuche es erneut.', 'error'); return false; }
       }
 
+      // ── Feedback-Board (#12) ───────────────────
+      async getFeedback() {
+        if (this.isDemo) {
+          return [...MOCK_FEEDBACK].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        }
+        try {
+          const { data, error } = await this.sb.from('feedback').select('*').order('created_at', { ascending: false });
+          if (error) throw error;
+          return data || [];
+        } catch (err) { console.error('getFeedback error:', err); return []; }
+      }
+
+      async submitFeedback({ userId = null, name = 'Anonym', category = 'sonstiges', rating = 0, message = '', page = '' }) {
+        const clean = {
+          name: String(name || 'Anonym').substring(0, 100),
+          category: String(category || 'sonstiges').substring(0, 40),
+          rating: Math.min(Math.max(parseInt(rating, 10) || 0, 0), 5),
+          message: String(message || '').trim().substring(0, 2000),
+          page: String(page || '').substring(0, 200),
+          status: 'offen'
+        };
+        if (this.isDemo) {
+          const fb = { id: 'fb' + Date.now(), user_id: userId, ...clean, created_at: new Date().toISOString() };
+          MOCK_FEEDBACK.unshift(fb);
+          return fb;
+        }
+        // Fehler bewusst NICHT schlucken — Aufrufer zeigt Toast.
+        const insertObj = { ...clean };
+        if (userId) insertObj.user_id = userId;
+        const { data, error } = await this.sb.from('feedback').insert(insertObj).select('*').single();
+        if (error) throw error;
+        return data;
+      }
+
+      async updateFeedbackStatus(id, status) {
+        const allowed = ['offen', 'in_arbeit', 'erledigt'];
+        if (!allowed.includes(status)) throw new Error('Ungültiger Status');
+        if (this.isDemo) {
+          const fb = MOCK_FEEDBACK.find(f => String(f.id) === String(id));
+          if (fb) { fb.status = status; fb.updated_at = new Date().toISOString(); return fb; }
+          return null;
+        }
+        try {
+          const { data, error } = await this.sb.from('feedback').update({ status, updated_at: new Date().toISOString() }).eq('id', id).select('*').single();
+          if (error) throw error;
+          return data;
+        } catch (err) { console.error('updateFeedbackStatus error:', err); showToast('Status konnte nicht geändert werden.', 'error'); return null; }
+      }
+
       // ── Reactions ──────────────────────────────
       async getReactions(targetType, targetIds) {
         // Returns Map<targetId, [{emoji, users: [userId,...], count}]>
@@ -2361,6 +2527,11 @@
               if (post && post.reactions && post.reactions.length > 0) {
                 result.set(id, post.reactions.map(r => ({ ...r, users: [...(r.users || [])] })));
               }
+            }
+          } else if (targetType === 'message') {
+            for (const id of targetIds) {
+              const rs = MOCK_MESSAGE_REACTIONS[id];
+              if (rs && rs.length > 0) result.set(id, rs.map(r => ({ ...r, users: [...(r.users || [])] })));
             }
           }
           return result;
@@ -2558,24 +2729,33 @@
           return false;
         }
         if (this.isDemo) {
-          // Toggle in mock data
-          const postsArray = targetType === 'post' ? Object.values(MOCK_POSTS).flat() : [];
-          const target = postsArray.find(p => p.id === targetId);
-          if (target) {
-            if (!target.reactions) target.reactions = [];
-            const existing = target.reactions.find(r => r.emoji === emoji);
+          // Toggle in mock data — Posts an den Post-Objekten, Messages im Store.
+          const applyToggle = (list) => {
+            const existing = list.find(r => r.emoji === emoji);
             if (existing) {
               if (existing.users.includes(userId)) {
                 existing.users = existing.users.filter(u => u !== userId);
                 existing.count = existing.users.length;
-                if (existing.count === 0) target.reactions = target.reactions.filter(r => r.emoji !== emoji);
+                if (existing.count === 0) return list.filter(r => r.emoji !== emoji);
               } else {
                 existing.users.push(userId);
                 existing.count = existing.users.length;
               }
             } else {
-              target.reactions.push({ emoji, users: [userId], count: 1 });
+              list.push({ emoji, users: [userId], count: 1 });
             }
+            return list;
+          };
+          if (targetType === 'message') {
+            const list = MOCK_MESSAGE_REACTIONS[targetId] ? [...MOCK_MESSAGE_REACTIONS[targetId]] : [];
+            MOCK_MESSAGE_REACTIONS[targetId] = applyToggle(list);
+            return true;
+          }
+          const postsArray = targetType === 'post' ? Object.values(MOCK_POSTS).flat() : [];
+          const target = postsArray.find(p => p.id === targetId);
+          if (target) {
+            if (!target.reactions) target.reactions = [];
+            target.reactions = applyToggle(target.reactions);
           }
           return true;
         }
@@ -3003,8 +3183,9 @@
           if (chanErr) throw chanErr;
           return team;
         } catch (err) {
+          // Fehler NICHT mehr still schlucken — Aufrufer (handleCreateTeam) zeigt Toast.
           console.error('createTeam error:', err);
-          return null;
+          throw err;
         }
       }
 
@@ -4996,7 +5177,7 @@
       );
     }
 
-    function TeamMembersModal({ teamId, dataService, onClose, onMembersUpdated, currentUser, isAdmin }) {
+    function TeamMembersModal({ teamId, dataService, onClose, onMembersUpdated, currentUser, isAdmin, onArchive, onDelete, isGlobalAdmin, teamName }) {
       const [members, setMembers] = useState([]);
       const [availableUsers, setAvailableUsers] = useState([]);
       const [loading, setLoading] = useState(true);
@@ -5134,6 +5315,31 @@
                   )
                 ) : React.createElement('div', { style: { padding: '8px 0', color: 'var(--text-muted)', fontSize: '13px' } }, 'Kein Treffer für "' + searchTerm + '"')
               )
+            ),
+            // Team-Verwaltung (#8) — nur für Team-Admins
+            isAdmin && (onArchive || onDelete) && React.createElement('div', {
+              'data-testid': 'team-admin-actions',
+              style: { marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--border)' }
+            },
+              React.createElement('h4', { style: { fontSize: '14px', fontWeight: '600', marginBottom: '10px' } }, 'Team-Verwaltung'),
+              React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px' } },
+                onArchive && React.createElement('button', {
+                  type: 'button',
+                  className: 'btn-secondary',
+                  'data-testid': 'team-archive-btn',
+                  onClick: () => onArchive(teamId),
+                  title: 'Team archivieren — bleibt erhalten, verschwindet aus der aktiven Liste'
+                }, '🗄 Archivieren'),
+                onDelete && React.createElement('button', {
+                  type: 'button',
+                  'data-testid': 'team-delete-btn',
+                  onClick: () => onDelete(teamId),
+                  style: { background: 'var(--danger-bg, #fee)', color: 'var(--danger, #c33)', border: '1px solid var(--danger, #c33)', borderRadius: 'var(--radius)', padding: '8px 14px', cursor: 'pointer', fontSize: '13px' },
+                  title: 'Team unwiderruflich löschen'
+                }, '🗑 Löschen')
+              ),
+              React.createElement('p', { style: { fontSize: '12px', color: 'var(--text-muted)', marginTop: '8px', marginBottom: 0 } },
+                'Archivieren ist umkehrbar. Löschen entfernt das Team mit allen Kanälen und Beiträgen endgültig.')
             )
           ),
           React.createElement('div', { className: 'modal-footer' },
@@ -5320,14 +5526,61 @@
       const [chatFiles, setChatFiles] = useState([]);  // Array of { file, preview }
       const [editingMsgId, setEditingMsgId] = useState(null);
       const [editMsgContent, setEditMsgContent] = useState('');
+      const [showEmoji, setShowEmoji] = useState(false);
+      const [msgReactions, setMsgReactions] = useState(new Map()); // #11: Map<msgId,[{emoji,users,count}]>
+      const [reactionPickerMsgId, setReactionPickerMsgId] = useState(null);
       const messagesEndRef = useRef(null);
       const chatFileRef = useRef(null);
+      const chatInputRef = useRef(null);
 
       useEffect(() => {
         if (messagesEndRef.current) {
           messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
         }
       }, [messages]);
+
+      // #11: Reaktionen für die aktuell geladenen Nachrichten laden
+      useEffect(() => {
+        let cancelled = false;
+        const ids = messages.map(m => m.id).filter(Boolean);
+        if (ids.length === 0) { setMsgReactions(new Map()); return; }
+        dataService.getReactions('message', ids)
+          .then(map => { if (!cancelled) setMsgReactions(map || new Map()); })
+          .catch(() => {});
+        return () => { cancelled = true; };
+      }, [messages, dataService]);
+
+      const handleToggleMsgReaction = async (msgId, emoji) => {
+        setReactionPickerMsgId(null);
+        // Optimistisches Update
+        setMsgReactions(prev => {
+          const next = new Map(prev);
+          const list = [...(next.get(msgId) || [])];
+          const idx = list.findIndex(r => r.emoji === emoji);
+          if (idx >= 0) {
+            const r = list[idx];
+            const cur = r.users || [];
+            if (cur.includes(currentUser.id)) {
+              const users = cur.filter(u => u !== currentUser.id);
+              if (users.length === 0) list.splice(idx, 1);
+              else list[idx] = { ...r, users, count: users.length };
+            } else {
+              const users = [...cur, currentUser.id];
+              list[idx] = { ...r, users, count: users.length };
+            }
+          } else {
+            list.push({ emoji, users: [currentUser.id], count: 1 });
+          }
+          next.set(msgId, list);
+          return next;
+        });
+        const ok = await dataService.toggleReaction('message', msgId, currentUser.id, emoji);
+        if (!ok) {
+          // Rollback: frisch laden
+          dataService.getReactions('message', messages.map(m => m.id).filter(Boolean))
+            .then(map => setMsgReactions(map || new Map())).catch(() => {});
+        }
+      };
 
       const CHAT_ALLOWED_TYPES = new Set([
         'image/jpeg', 'image/png', 'image/gif', 'image/webp',
@@ -5373,6 +5626,22 @@
         chatFiles.forEach(f => { if (f.preview) URL.revokeObjectURL(f.preview); });
         setChatFiles([]);
         if (chatFileRef.current) chatFileRef.current.value = '';
+      };
+
+      // Emoji in den Chat-Composer einfügen (#10) — an Cursor-Position, sonst ans Ende.
+      const insertEmoji = (emoji) => {
+        setInput(prev => {
+          const el = chatInputRef.current;
+          if (el && typeof el.selectionStart === 'number') {
+            const s = el.selectionStart, e = el.selectionEnd;
+            const next = prev.slice(0, s) + emoji + prev.slice(e);
+            requestAnimationFrame(() => {
+              try { el.focus(); el.selectionStart = el.selectionEnd = s + emoji.length; } catch (_) {}
+            });
+            return next;
+          }
+          return prev + emoji;
+        });
       };
 
       const handleSend = async (e) => {
@@ -5493,7 +5762,35 @@
                 own && !editing && React.createElement('div', { className: 'chat-msg-actions' },
                   !isFileOnly && React.createElement('button', { type: 'button', onClick: () => handleEditMsg(msg), title: 'Bearbeiten', 'aria-label': 'Nachricht bearbeiten', style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', padding: '4px', minWidth: '30px', minHeight: '30px' } }, '✏️'),
                   React.createElement('button', { type: 'button', onClick: () => handleDeleteMsg(msg.id), title: 'Löschen', 'aria-label': 'Nachricht löschen', style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', padding: '4px', minWidth: '30px', minHeight: '30px' } }, '🗑️')
-                )
+                ),
+                // #11: Reaktionen — Chips + „Reagieren"-Button
+                !editing && React.createElement('div', { className: 'chat-reactions', 'data-testid': 'chat-reactions', style: { display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px', alignItems: 'center' } },
+                  (msgReactions.get(msg.id) || []).map(r =>
+                    React.createElement('button', {
+                      key: r.emoji,
+                      type: 'button',
+                      className: 'msg-reaction-chip' + ((r.users || []).includes(currentUser.id) ? ' mine' : ''),
+                      'data-testid': 'msg-reaction-chip',
+                      onClick: () => handleToggleMsgReaction(msg.id, r.emoji),
+                      title: r.count + 'x',
+                      style: { display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '1px 7px', borderRadius: '12px', border: '1px solid ' + ((r.users || []).includes(currentUser.id) ? 'var(--accent)' : 'var(--border)'), background: (r.users || []).includes(currentUser.id) ? 'var(--accent-light)' : 'var(--bg-tertiary)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '12px', lineHeight: '18px' }
+                    }, r.emoji, React.createElement('span', { style: { fontSize: '11px' } }, r.count))
+                  ),
+                  React.createElement('button', {
+                    type: 'button',
+                    className: 'msg-react-add',
+                    'data-testid': 'msg-react-btn',
+                    onClick: () => setReactionPickerMsgId(prev => prev === msg.id ? null : msg.id),
+                    title: 'Reagieren',
+                    'aria-label': 'Auf Nachricht reagieren',
+                    style: { background: 'none', border: '1px dashed var(--border)', borderRadius: '12px', cursor: 'pointer', fontSize: '12px', color: 'var(--text-muted)', padding: '1px 7px', lineHeight: '18px', minHeight: '22px' }
+                  }, '🙂﹢')
+                ),
+                reactionPickerMsgId === msg.id && React.createElement(EmojiPicker, {
+                  onSelect: (emoji) => handleToggleMsgReaction(msg.id, emoji),
+                  onClose: () => setReactionPickerMsgId(null),
+                  position: { bottom: '60px', right: '24px' }
+                })
               )
             );
           }),
@@ -5523,11 +5820,26 @@
             React.createElement('span', null, 'Datei')
           ),
           React.createElement('input', {
+            ref: chatInputRef,
             type: 'text',
             placeholder: 'Nachricht schreiben...',
             value: input,
             onChange: e => setInput(e.target.value),
             disabled: sending
+          }),
+          React.createElement('button', {
+            type: 'button',
+            className: 'chat-emoji-btn',
+            'data-testid': 'chat-emoji-btn',
+            onClick: () => setShowEmoji(v => !v),
+            title: 'Emoji einfügen',
+            'aria-label': 'Emoji einfügen',
+            style: { background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: '18px', cursor: 'pointer', padding: '6px 10px', color: 'var(--text-secondary)', minHeight: '36px', fontSize: '16px' }
+          }, '😊'),
+          showEmoji && React.createElement(EmojiPicker, {
+            onSelect: insertEmoji,
+            onClose: () => setShowEmoji(false),
+            position: { bottom: '60px', right: '24px' }
           }),
           React.createElement('button', {
             type: 'submit',
@@ -5700,7 +6012,7 @@
     // ============================================================
     const FEEDBACK_GAS_URL = 'https://script.google.com/macros/s/AKfycbwr9ZV9108jpkfN4nKboTuwMEgUhBOxW2c2ksWgazKNeSgiINL4G2ZNUMKeEzfaOj3H_g/exec';
 
-    function FeedbackModal({ user, onClose }) {
+    function FeedbackModal({ user, dataService, onClose, onOpenBoard }) {
       const [category, setCategory] = useState('');
       const [rating, setRating] = useState(0);
       const [message, setMessage] = useState('');
@@ -5726,36 +6038,45 @@
           return;
         }
         setSending(true);
+        // 1) Primär: ins Feedback-Board (Supabase bzw. Demo-Store) speichern
         try {
-          const payload = {
-            name: String(user?.display_name || 'Anonym').substring(0, 100),
-            category: category || 'Sonstiges',
+          await dataService.submitFeedback({
+            userId: user?.id || null,
+            name: user?.display_name || 'Anonym',
+            category: category || 'sonstiges',
             rating: Math.min(Math.max(rating, 0), 5),
-            message: String(message.trim()).substring(0, 2000),
-            page: String(window.location.href).substring(0, 200),
-            userAgent: String(navigator.userAgent).substring(0, 300)
-          };
-
-          if (FEEDBACK_GAS_URL) {
-            const resp = await fetch(FEEDBACK_GAS_URL, {
-              method: 'POST',
-              body: JSON.stringify(payload),
-              mode: 'no-cors'
-            });
-            // mode: 'no-cors' returns opaque response — we trust GAS handled it
-          } else {
-            // Kein Endpoint konfiguriert — Demo-Hinweis
-            console.log('Feedback (Demo-Modus, kein GAS-Endpoint):', payload);
-          }
-
-          setLastSubmit(Date.now());
-          showToast('Danke für dein Feedback!', 'success');
-          onClose();
+            message: message.trim(),
+            page: window.location.href
+          });
         } catch (err) {
-          console.error('Feedback send error:', err);
-          showToast('Feedback konnte nicht gesendet werden. Bitte versuche es später erneut.', 'error');
+          console.error('submitFeedback error:', err);
+          const msg = (err && (err.message || err.hint || err.details)) || 'Unbekannter Fehler';
+          showToast('Feedback konnte nicht gespeichert werden: ' + msg, 'error');
           setSending(false);
+          return;
         }
+
+        // 2) Best-effort: zusätzlich ins bestehende Google-Sheet (Archiv, optional)
+        if (FEEDBACK_GAS_URL) {
+          try {
+            await fetch(FEEDBACK_GAS_URL, {
+              method: 'POST',
+              mode: 'no-cors',
+              body: JSON.stringify({
+                name: String(user?.display_name || 'Anonym').substring(0, 100),
+                category: category || 'sonstiges',
+                rating: Math.min(Math.max(rating, 0), 5),
+                message: String(message.trim()).substring(0, 2000),
+                page: String(window.location.href).substring(0, 200),
+                userAgent: String(navigator.userAgent).substring(0, 300)
+              })
+            });
+          } catch (e) { console.warn('GAS-Feedback (optional) fehlgeschlagen:', e); }
+        }
+
+        setLastSubmit(Date.now());
+        showToast('Danke für dein Feedback!', 'success');
+        onClose();
       };
 
       return React.createElement('div', { className: 'feedback-overlay', role: 'dialog', 'aria-modal': 'true', onClick: (ev) => { if (ev.target === ev.currentTarget) onClose(); } },
@@ -5799,6 +6120,10 @@
 
           !canSend && React.createElement('div', { style: { fontSize: '12px', color: 'var(--text-muted)', marginTop: '8px' } },
             !category ? 'Bitte zuerst ein Thema wählen.' : 'Bitte noch eine Nachricht schreiben.'),
+          onOpenBoard && React.createElement('button', {
+            onClick: () => { onClose(); onOpenBoard(); },
+            style: { background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '13px', padding: '8px 0', textDecoration: 'underline' }
+          }, '📋 Alle Feedbacks ansehen'),
           React.createElement('div', { className: 'feedback-actions' },
             React.createElement('button', { className: 'feedback-btn feedback-btn-cancel', onClick: onClose }, 'Abbrechen'),
             React.createElement('button', {
@@ -5807,6 +6132,93 @@
               disabled: sending || !canSend,
               title: !canSend ? 'Thema und Nachricht sind erforderlich' : ''
             }, sending ? 'Sende...' : '📨 Absenden')
+          )
+        )
+      );
+    }
+
+    // ============================================================
+    // FEEDBACK-BOARD (#12) — Liste aller Feedbacks mit Status-Workflow
+    // ============================================================
+    function FeedbackBoardModal({ dataService, isAdmin, onClose, onNewFeedback }) {
+      const [items, setItems] = useState(null); // null = lädt
+      const [filter, setFilter] = useState('alle');
+      const [savingId, setSavingId] = useState(null);
+
+      const CAT = { bug: '🐛 Bug', verbesserung: '💡 Verbesserung', lob: '👍 Lob', frage: '❓ Frage', sonstiges: '📝 Sonstiges' };
+      const STATUS_LABEL = { offen: 'Offen', in_arbeit: 'In Arbeit', erledigt: 'Erledigt' };
+
+      useEffect(() => {
+        let cancelled = false;
+        dataService.getFeedback()
+          .then(rows => { if (!cancelled) setItems(rows || []); })
+          .catch(err => { console.error('getFeedback error:', err); if (!cancelled) setItems([]); });
+        return () => { cancelled = true; };
+      }, [dataService]);
+
+      const handleStatus = async (id, status) => {
+        setSavingId(id);
+        const updated = await dataService.updateFeedbackStatus(id, status);
+        setSavingId(null);
+        if (updated) {
+          setItems(prev => prev.map(it => String(it.id) === String(id) ? { ...it, status } : it));
+          showToast('Status: ' + (STATUS_LABEL[status] || status), 'success');
+        }
+      };
+
+      const fmtDate = (d) => { try { return new Date(d).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }); } catch (e) { return ''; } };
+      const filtered = (items || []).filter(it => filter === 'alle' || it.status === filter);
+      const countBy = (s) => (items || []).filter(it => it.status === s).length;
+
+      return React.createElement('div', { className: 'feedback-overlay', role: 'dialog', 'aria-modal': 'true', onClick: (ev) => { if (ev.target === ev.currentTarget) onClose(); } },
+        React.createElement('div', { className: 'feedback-modal fb-board-modal' },
+          React.createElement('div', { className: 'feedback-title', style: { justifyContent: 'space-between' } },
+            React.createElement('span', null, '📋 Feedback-Board ', React.createElement('span', { style: { fontSize: '11px', fontWeight: 800, background: 'var(--accent-orange,#f59e0b)', color: '#fff', padding: '2px 7px', borderRadius: '10px', verticalAlign: 'middle' } }, 'BETA')),
+            React.createElement('button', { onClick: onClose, 'aria-label': 'Schließen', style: { background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'var(--text-muted)' } }, '✕')
+          ),
+          React.createElement('div', { className: 'fb-board-toolbar' },
+            ['alle', 'offen', 'in_arbeit', 'erledigt'].map(f =>
+              React.createElement('button', {
+                key: f,
+                className: 'fb-board-filter' + (filter === f ? ' active' : ''),
+                onClick: () => setFilter(f)
+              }, (f === 'alle' ? 'Alle' : STATUS_LABEL[f]) + (f === 'alle' ? ' (' + (items ? items.length : 0) + ')' : ' (' + countBy(f) + ')'))
+            ),
+            onNewFeedback && React.createElement('button', {
+              onClick: () => { onClose(); onNewFeedback(); },
+              style: { marginLeft: 'auto', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--radius)', padding: '6px 12px', minHeight: '36px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }
+            }, '＋ Feedback schreiben')
+          ),
+          React.createElement('div', { className: 'fb-board-list' },
+            items === null
+              ? React.createElement('div', { className: 'fb-empty' }, 'Lädt…')
+              : filtered.length === 0
+                ? React.createElement('div', { className: 'fb-empty' }, 'Keine Feedbacks in dieser Ansicht.')
+                : filtered.map(it =>
+                    React.createElement('div', { key: it.id, className: 'fb-item' },
+                      React.createElement('div', { className: 'fb-item-head' },
+                        React.createElement('span', { className: 'fb-item-name' }, it.name || 'Anonym'),
+                        React.createElement('span', { className: 'fb-cat-chip' }, CAT[it.category] || it.category || 'Sonstiges'),
+                        it.rating > 0 && React.createElement('span', { className: 'fb-item-meta' }, '★'.repeat(it.rating)),
+                        React.createElement('span', { className: 'fb-badge fb-badge-' + it.status, style: { marginLeft: 'auto' } }, STATUS_LABEL[it.status] || it.status)
+                      ),
+                      React.createElement('div', { className: 'fb-item-msg' }, it.message),
+                      React.createElement('div', { className: 'fb-item-head', style: { marginBottom: 0 } },
+                        React.createElement('span', { className: 'fb-item-meta' }, fmtDate(it.created_at)),
+                        isAdmin && React.createElement('select', {
+                          className: 'fb-status-select',
+                          style: { marginLeft: 'auto' },
+                          value: it.status,
+                          disabled: savingId === it.id,
+                          onChange: (ev) => handleStatus(it.id, ev.target.value)
+                        },
+                          React.createElement('option', { value: 'offen' }, 'Offen'),
+                          React.createElement('option', { value: 'in_arbeit' }, 'In Arbeit'),
+                          React.createElement('option', { value: 'erledigt' }, 'Erledigt')
+                        )
+                      )
+                    )
+                  )
           )
         )
       );
@@ -6073,6 +6485,8 @@
       const [hiddenTeams, setHiddenTeams] = useState(new Set());
       const [hiddenConversations, setHiddenConversations] = useState(new Set());
       const [showHiddenTeams, setShowHiddenTeams] = useState(false);
+      const [archivedTeams, setArchivedTeams] = useState([]);
+      const [showArchivedTeams, setShowArchivedTeams] = useState(false);
       const [showHiddenChats, setShowHiddenChats] = useState(false);
       const [postsLoading, setPostsLoading] = useState(false);
       const [hasMorePosts, setHasMorePosts] = useState(false);
@@ -6089,6 +6503,7 @@
       return { teams, setTeams, selectedTeam, setSelectedTeam, channels, setChannels,
         selectedChannel, setSelectedChannel, posts, setPosts, replies, setReplies,
         openThread, setOpenThread, hiddenTeams, setHiddenTeams, showHiddenTeams, setShowHiddenTeams,
+        archivedTeams, setArchivedTeams, showArchivedTeams, setShowArchivedTeams,
         hiddenConversations, setHiddenConversations, showHiddenChats, setShowHiddenChats,
         postsLoading, setPostsLoading, hasMorePosts, setHasMorePosts, toggleTeamVisibility };
     }
@@ -6113,6 +6528,7 @@
     function useModals() {
       const [showOnlinePanel, setShowOnlinePanel] = useState(false);
       const [showFeedback, setShowFeedback] = useState(false);
+      const [showFeedbackBoard, setShowFeedbackBoard] = useState(false);
       const [showProfile, setShowProfile] = useState(false);
       const [showPrivacy, setShowPrivacy] = useState(false);
       const [showOnboarding, setShowOnboarding] = useState(false);
@@ -6129,6 +6545,7 @@
         try { return JSON.parse(localStorage.getItem('krs-saved-posts') || '[]'); } catch(e) { return []; }
       });
       return { showOnlinePanel, setShowOnlinePanel, showFeedback, setShowFeedback,
+        showFeedbackBoard, setShowFeedbackBoard,
         showProfile, setShowProfile, showPrivacy, setShowPrivacy,
         showOnboarding, setShowOnboarding, showCreateTeam, setShowCreateTeam,
         showTeamMembers, setShowTeamMembers, mobileSidebarOpen, setMobileSidebarOpen,
@@ -6284,6 +6701,7 @@
       const { teams, setTeams, selectedTeam, setSelectedTeam, channels, setChannels,
         selectedChannel, setSelectedChannel, posts, setPosts, replies, setReplies,
         openThread, setOpenThread, hiddenTeams, setHiddenTeams, showHiddenTeams, setShowHiddenTeams,
+        archivedTeams, setArchivedTeams, showArchivedTeams, setShowArchivedTeams,
         hiddenConversations, setHiddenConversations, showHiddenChats, setShowHiddenChats,
         postsLoading, setPostsLoading, hasMorePosts, setHasMorePosts, toggleTeamVisibility } = teamsState;
 
@@ -6297,6 +6715,7 @@
 
       const modals = useModals();
       const { showOnlinePanel, setShowOnlinePanel, showFeedback, setShowFeedback,
+        showFeedbackBoard, setShowFeedbackBoard,
         showProfile, setShowProfile, showPrivacy, setShowPrivacy,
         showOnboarding, setShowOnboarding, showCreateTeam, setShowCreateTeam,
         showTeamMembers, setShowTeamMembers, mobileSidebarOpen, setMobileSidebarOpen,
@@ -6476,29 +6895,13 @@
         const handleHubAuth = async (event) => {
           if (!event.origin.includes('kurpfalz-realschule.github.io') && event.origin !== window.location.origin) return;
           if (event.data?.type === 'KRS_HUB_AUTH' && event.data?.hub_verified) {
-            const hubUser = event.data.user;
-            const st = hubAuthStateRef.current;
-            if (hubUser && !st.setupComplete) {
-              // Auto-Setup im Demo-Modus (Hub übernimmt Auth)
-              setIsDemo(true);
-              setLoadingUsers(true);
-              try {
-                const ds = new DataService(null);
-                const usersData = await ds.getUsers();
-                const userList = usersData.length > 0 ? usersData : MOCK_USERS;
-                setAllUsers(userList);
-                setSetupComplete(true);
-                setPendingAuthUser(resolveHubUser(userList, hubUser));
-              } catch (e) {
-                setAllUsers(MOCK_USERS);
-                setSetupComplete(true);
-                setPendingAuthUser(resolveHubUser(MOCK_USERS, hubUser));
-              }
-              setLoadingUsers(false);
-            } else if (hubUser && st.setupComplete && !st.user) {
-              const userList = st.allUsers.length > 0 ? st.allUsers : MOCK_USERS;
-              setPendingAuthUser(resolveHubUser(userList, hubUser));
-            }
+            // BETA (Login-Modell A): Connect läuft im Hub LIVE und nutzt den
+            // EIGENEN E-Mail/Passwort-Login → ECHTE Daten. Der frühere Zwang
+            // setIsDemo(true) + synthetischer Hub-User (→ Mock-Daten) ist
+            // entfernt. Das Hub-Profil wird hier bewusst ignoriert; die normale
+            // Session-Prüfung/der Login-Screen von Connect übernimmt.
+            // (Nahtloses SSO = Login-Modell B, späterer Ausbau.)
+            console.debug('[Hub] Auth empfangen — Connect nutzt eigenen Live-Login (Modell A), kein Demo-Zwang.');
           }
         };
         window.addEventListener('message', handleHubAuth);
@@ -6544,6 +6947,8 @@
         // Load teams
         const teamsData = await dataService.getTeams(selectedUser.id);
         setTeams(teamsData);
+        // Archivierte Teams (#8) separat laden — für den Archiv-Bereich der Sidebar
+        dataService.getArchivedTeams(selectedUser.id).then(setArchivedTeams).catch(() => {});
         if (teamsData.length > 0) {
           const firstTeam = teamsData[0];
           setSelectedTeam(firstTeam);
@@ -7063,19 +7468,64 @@
         }
       };
 
+      // ── Team-Archivierung (#8) ──────────────────────────
+      const handleArchiveTeam = async (teamId) => {
+        const ok = await dataService.archiveTeam(teamId);
+        if (!ok) return;
+        const team = teams.find(t => t.id === teamId);
+        setTeams(prev => prev.filter(t => t.id !== teamId));
+        if (team) setArchivedTeams(prev => [{ ...team, archived_at: new Date().toISOString() }, ...prev.filter(t => t.id !== teamId)]);
+        if (selectedTeam?.id === teamId) { setSelectedTeam(null); setSelectedChannel(null); setChannels([]); }
+        setShowTeamMembers(false);
+        showToast('Team „' + (team?.name || '') + '" archiviert', 'success');
+      };
+
+      const handleRestoreTeam = async (teamId) => {
+        const ok = await dataService.restoreTeam(teamId);
+        if (!ok) return;
+        const team = archivedTeams.find(t => t.id === teamId);
+        setArchivedTeams(prev => prev.filter(t => t.id !== teamId));
+        if (team) { const { archived_at, ...active } = team; setTeams(prev => [active, ...prev]); }
+        showToast('Team „' + (team?.name || '') + '" wiederhergestellt', 'success');
+      };
+
+      const handleDeleteTeam = async (teamId) => {
+        const team = teams.find(t => t.id === teamId) || archivedTeams.find(t => t.id === teamId);
+        const name = team?.name || 'dieses Team';
+        if (!window.confirm('„' + name + '" endgültig löschen?\n\nAlle Kanäle, Beiträge und Mitgliedschaften dieses Teams werden unwiderruflich entfernt. Das kann NICHT rückgängig gemacht werden.')) return;
+        const ok = await dataService.deleteTeam(teamId);
+        if (!ok) return;
+        setTeams(prev => prev.filter(t => t.id !== teamId));
+        setArchivedTeams(prev => prev.filter(t => t.id !== teamId));
+        if (selectedTeam?.id === teamId) { setSelectedTeam(null); setSelectedChannel(null); setChannels([]); }
+        setShowTeamMembers(false);
+        showToast('Team „' + name + '" gelöscht', 'success');
+      };
+
       const handleCreateTeam = async (name, description, iconText, iconColor) => {
-        const newTeam = await dataService.createTeam(name, description, iconText, iconColor, user.id);
-        if (newTeam) {
-          setTeams(prev => [newTeam, ...prev]);
-          setSelectedTeam(newTeam);
-          setShowCreateTeam(false);
-          // Load default channel
-          const chans = await dataService.getChannels(newTeam.id);
-          setChannels(chans);
-          if (chans.length > 0) {
-            setSelectedChannel(chans[0]);
-          }
+        let newTeam;
+        try {
+          newTeam = await dataService.createTeam(name, description, iconText, iconColor, user.id);
+        } catch (err) {
+          console.error('handleCreateTeam error:', err);
+          const msg = (err && (err.message || err.hint || err.details)) || 'Unbekannter Fehler';
+          showToast('Team konnte nicht erstellt werden: ' + msg, 'error');
+          return;
         }
+        if (!newTeam) {
+          showToast('Team konnte nicht erstellt werden.', 'error');
+          return;
+        }
+        setTeams(prev => [newTeam, ...prev]);
+        setSelectedTeam(newTeam);
+        setShowCreateTeam(false);
+        // Load default channel
+        const chans = await dataService.getChannels(newTeam.id);
+        setChannels(chans);
+        if (chans.length > 0) {
+          setSelectedChannel(chans[0]);
+        }
+        showToast('Team „' + name + '" erstellt', 'success');
       };
 
       const handleLogout = async () => {
@@ -7201,6 +7651,39 @@
                       React.createElement('span', { style: { fontSize: '11px', color: 'var(--text-muted)', marginLeft: 'auto' } }, '👁 Einblenden')
                     )
                   )
+                ),
+                // Archiv-Bereich (#8) — eingeklappt, mit Wiederherstellen/Löschen (Admin)
+                archivedTeams.length > 0 && React.createElement('div', { style: { marginTop: '4px' }, 'data-testid': 'archived-teams-section' },
+                  React.createElement('button', { className: 'hidden-teams-toggle', 'data-testid': 'archived-teams-toggle', onClick: () => setShowArchivedTeams(prev => !prev) },
+                    React.createElement('span', null, showArchivedTeams ? '▾' : '▸'),
+                    React.createElement('span', null, '🗄 Archiviert (' + archivedTeams.length + ')')
+                  ),
+                  showArchivedTeams && archivedTeams.map(team =>
+                    React.createElement('div', {
+                      key: team.id,
+                      className: 'team-item',
+                      'data-testid': 'team-archived-item',
+                      style: { display: 'flex', gap: '4px', alignItems: 'center', opacity: 0.7 }
+                    },
+                      React.createElement('div', { className: 'list-item', style: { display: 'flex', gap: '8px', alignItems: 'center', flex: 1, cursor: 'default' } },
+                        React.createElement('div', { style: { width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: team.icon_color, borderRadius: 'var(--radius)', color: 'white', fontSize: '12px', fontWeight: '600' } }, team.icon_text),
+                        React.createElement('span', { className: 'list-item-text' }, team.name)
+                      ),
+                      (user?.role === 'admin') && React.createElement('button', {
+                        className: 'team-hide-btn',
+                        'data-testid': 'team-restore-btn',
+                        onClick: (e) => { e.stopPropagation(); handleRestoreTeam(team.id); },
+                        title: 'Team wiederherstellen'
+                      }, '♻'),
+                      (user?.role === 'admin') && React.createElement('button', {
+                        className: 'team-hide-btn',
+                        'data-testid': 'team-delete-archived-btn',
+                        onClick: (e) => { e.stopPropagation(); handleDeleteTeam(team.id); },
+                        title: 'Team endgültig löschen',
+                        style: { color: 'var(--danger, #c33)' }
+                      }, '🗑')
+                    )
+                  )
                 )
               );
             })()
@@ -7310,7 +7793,11 @@
           onClose: () => setShowTeamMembers(false),
           onMembersUpdated: () => {},
           currentUser: user,
-          isAdmin: userTeamRole === 'admin'
+          isAdmin: userTeamRole === 'admin' || user?.role === 'admin',
+          isGlobalAdmin: user?.role === 'admin',
+          teamName: selectedTeam.name,
+          onArchive: handleArchiveTeam,
+          onDelete: handleDeleteTeam
         }),
         // Channel erstellen Dialog
         showCreateChannel && React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', onClick: () => setShowCreateChannel(false) },
@@ -7435,6 +7922,12 @@
               savedPosts.length > 0 && React.createElement('span', { className: 'nav-badge', style: { fontSize: '9px' } }, savedPosts.length)
             )
           ),
+          // #12: Großer Beta-Feedback-Button — öffnet das Feedback-Board (für alle sichtbar)
+          React.createElement('button', {
+            className: 'beta-feedback-btn',
+            onClick: () => setShowFeedbackBoard(true),
+            title: 'Feedback geben & alle Rückmeldungen ansehen'
+          }, '📣 Feedback', React.createElement('span', { className: 'beta-tag' }, 'BETA')),
           React.createElement('div', { className: 'sidebar-bottom' },
             React.createElement('button', {
               className: 'online-indicator',
@@ -7537,7 +8030,8 @@
         // Thread overlay (nur in Teams-View)
         view === 'teams' && openThread && React.createElement(ThreadPanel, { post: openThread, replies, dataService, user, onClose: () => setOpenThread(null), onReplyCreated: (r) => setReplies(prev => prev.some(x => x.id === r.id) ? prev : [...prev, r]) }),
         // Feedback Modal
-        showFeedback && React.createElement(FeedbackModal, { user, onClose: () => setShowFeedback(false) }),
+        showFeedback && React.createElement(FeedbackModal, { user, dataService, onClose: () => setShowFeedback(false), onOpenBoard: () => setShowFeedbackBoard(true) }),
+        showFeedbackBoard && React.createElement(FeedbackBoardModal, { dataService, isAdmin: user?.role === 'admin', onClose: () => setShowFeedbackBoard(false), onNewFeedback: () => setShowFeedback(true) }),
         // Onboarding Wizard
         showOnboarding && React.createElement(OnboardingWizard, { onClose: () => {
           setShowOnboarding(false);
