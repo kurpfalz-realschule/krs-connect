@@ -1033,6 +1033,11 @@
     .hidden-teams-toggle { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 12px; width: 100%; transition: color 0.15s; }
     .hidden-teams-toggle:hover { color: var(--text-primary); }
 
+    /* Teams-Ansicht: Wrapper um Teams- + Kanäle-Spalte. Desktop: transparent
+       (display:contents) → 3-Spalten-Layout bleibt unverändert. Mobile: wird
+       zum gemeinsamen Drawer (siehe Media Query unten). */
+    .team-drawer { display: contents; }
+
     /* Responsive */
     /* Tablet Breakpoint (iPad 768-1024px) */
     @media (min-width: 769px) and (max-width: 1024px) {
@@ -1051,9 +1056,23 @@
       .sidebar { width: 100%; height: 56px; flex-direction: row; padding: 0 8px; gap: 4px; order: 2; border-top: 1px solid var(--border); border-right: none; }
       .sidebar-nav { flex-direction: row; flex: 1; justify-content: space-around; }
       .sidebar-nav button { font-size: 11px; padding: 6px 8px; }
-      .sidebar-bottom { flex-direction: row; gap: 4px; }
+      .sidebar-bottom { flex-direction: row; gap: 2px; flex: 0 0 auto; }
+      /* Bottom-Bar entrümpeln: Wichtigstes zuerst. Ausblenden, was auf dem
+         Handy nur Platz frisst (Logo, Versionstext, großer Feedback-Button,
+         Online-Zähler, Settings-Toggles). Sichtbar bleiben: die 5 Nav-Icons,
+         Feedback (📣), Profil und Abmelden. */
+      .sidebar-logo, .app-version, .beta-feedback-btn { display: none; }
+      .sidebar-nav { flex: 1; }
+      .sidebar-bottom .feedback-trigger, .sidebar-bottom .online-indicator { display: none; }
+      .sidebar-bottom .feedback-trigger[aria-label="Feedback geben"] { display: inline-flex; }
       .sidebar-content { position: fixed; top: 0; left: 0; width: 80vw; max-width: 300px; height: calc(100vh - 56px); z-index: 100; transform: translateX(-100%); transition: transform 0.25s ease; background: var(--bg-secondary); box-shadow: 2px 0 12px rgba(0,0,0,0.15); }
       .sidebar-content.mobile-open { transform: translateX(0); }
+      /* Teams + Kanäle teilen sich EINEN Drawer (sonst überlagern beide
+         fixed-Spalten einander → es waren nur die Kanäle sichtbar). */
+      .team-drawer { display: flex; flex-direction: column; position: fixed; top: 0; left: 0; width: 80vw; max-width: 300px; height: calc(100vh - 56px); z-index: 100; transform: translateX(-100%); transition: transform 0.25s ease; background: var(--bg-secondary); box-shadow: 2px 0 12px rgba(0,0,0,0.15); overflow-y: auto; }
+      .team-drawer.mobile-open { transform: translateX(0); }
+      .team-drawer .sidebar-content { position: static; width: 100%; max-width: none; height: auto; transform: none; box-shadow: none; z-index: auto; flex: 0 0 auto; }
+      .team-drawer .sidebar-content + .sidebar-content { border-top: 1px solid var(--border); }
       .mobile-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); z-index: 99; }
       .mobile-overlay.visible { display: block; }
       .content { flex: 1; order: 1; overflow-y: auto; min-height: 0; }
@@ -1276,8 +1295,24 @@
       window.__supabaseReady.catch(function (e) { console.error('[CDN] supabase init:', e && e.message); });
     })();
   </script>
+  <!-- React/ReactDOM resilient: primär unpkg, bei Ausfall parser-synchroner
+       Fallback (jsdelivr → cdnjs). Ohne Fallback führte ein unpkg-Hänger dazu,
+       dass React nie lud und die App gar nicht mountete (rote CI / weiße Seite). -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script>window.React||document.write('<script crossorigin src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"><\/script>')</script>
+  <script>window.React||document.write('<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"><\/script>')</script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script>window.ReactDOM||document.write('<script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"><\/script>')</script>
+  <script>window.ReactDOM||document.write('<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"><\/script>')</script>
+  <script>
+    // Letzte Absicherung: wenn React nach allen CDNs fehlt, klare Meldung statt
+    // ewiger "wird geladen…"-Spinner (sonst wirkt die App nur kaputt).
+    if (!window.React || !window.ReactDOM) {
+      console.error('KRITISCH: React konnte von keinem CDN geladen werden.');
+      var _el = document.getElementById('app');
+      if (_el) _el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:12px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#5A5F72;text-align:center;padding:24px"><div style="font-size:32px">📡</div><div style="font-weight:600">KRS Connect konnte nicht laden</div><div style="font-size:14px;max-width:320px">Bitte Internetverbindung prüfen und die Seite neu laden (auf dem iPad: Seite nach unten ziehen zum Aktualisieren).</div></div>';
+    }
+  </script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js"></script>
   <script>
     // DOMPurify CDN-Check mit Fallback
@@ -4052,7 +4087,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.7.2';
+    window.KRS_VERSION = '4.8.0';
     const __KRS_QS = new URLSearchParams(typeof location !== 'undefined' ? location.search : '');
     window.__KRS_FORCE_DEMO = __KRS_QS.get('forceMode') === 'demo';
     window.__KRS_FORCE_USER = __KRS_QS.get('forceUser') || null; // optional: direktes Login als kuerzel
@@ -7766,7 +7801,8 @@
       // === TEAMS VIEW ===
       const teamsView = React.createElement(React.Fragment, null,
         mobileSidebarOpen && React.createElement('div', { className: 'mobile-overlay visible', onClick: () => setMobileSidebarOpen(false) }),
-        React.createElement('div', { className: 'sidebar-content' + (mobileSidebarOpen ? ' mobile-open' : '') },
+        React.createElement('div', { className: 'team-drawer' + (mobileSidebarOpen ? ' mobile-open' : '') },
+        React.createElement('div', { className: 'sidebar-content' },
           React.createElement('div', { className: 'sidebar-header', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
             React.createElement('h2', null, 'Teams'),
             React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
@@ -7865,7 +7901,7 @@
             })()
           )
         ),
-        React.createElement('div', { className: 'sidebar-content' + (mobileSidebarOpen ? ' mobile-open' : '') },
+        React.createElement('div', { className: 'sidebar-content' },
           selectedTeam && React.createElement(React.Fragment, null,
             React.createElement('div', { className: 'sidebar-header', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
               React.createElement('h2', null, '# Kanäle'),
@@ -7892,8 +7928,14 @@
               })
             )
           )
+        )
         ),
         React.createElement('div', { className: 'content' },
+          // Mobiler Einstieg, wenn noch kein Kanal gewählt ist: ohne diesen
+          // Button käme man auf dem Handy nicht an den Teams-/Kanäle-Drawer.
+          !selectedChannel && React.createElement('div', { style: { padding: '16px' } },
+            React.createElement('button', { className: 'mobile-menu-btn', onClick: () => setMobileSidebarOpen(true), style: { display: 'none', alignItems: 'center', gap: '8px', padding: '10px 14px', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', color: 'var(--text-primary)', fontSize: '15px' } }, '☰ Team & Kanal wählen')
+          ),
           selectedChannel && React.createElement(React.Fragment, null,
             React.createElement('div', { className: 'content-header', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
               React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
