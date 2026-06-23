@@ -1061,7 +1061,7 @@
          Handy nur Platz frisst (Logo, Versionstext, großer Feedback-Button,
          Online-Zähler, Settings-Toggles). Sichtbar bleiben: die 5 Nav-Icons,
          Feedback (📣), Profil und Abmelden. */
-      .sidebar-logo, .app-version, .beta-feedback-btn { display: none; }
+      .sidebar .sidebar-logo, .sidebar .app-version, .sidebar .beta-feedback-btn { display: none; }
       .sidebar-nav { flex: 1; }
       .sidebar-bottom .feedback-trigger, .sidebar-bottom .online-indicator { display: none; }
       .sidebar-bottom .feedback-trigger[aria-label="Feedback geben"] { display: inline-flex; }
@@ -4087,7 +4087,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.8.1';
+    window.KRS_VERSION = '4.8.2';
     const __KRS_QS = new URLSearchParams(typeof location !== 'undefined' ? location.search : '');
     window.__KRS_FORCE_DEMO = __KRS_QS.get('forceMode') === 'demo';
     window.__KRS_FORCE_USER = __KRS_QS.get('forceUser') || null; // optional: direktes Login als kuerzel
