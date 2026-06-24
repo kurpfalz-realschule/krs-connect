@@ -149,6 +149,40 @@
       align-items: center;
     }
 
+    /* v4.10.0: Gespeichert & gepinnt — Abschnitt oben in der Chat-Spalte */
+    .saved-section-btn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      width: 100%;
+      padding: 10px 14px;
+      border: none;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      min-height: 44px;
+      text-align: left;
+    }
+    .saved-section-btn:hover { background: var(--bg); }
+    .saved-section-count {
+      flex: 0 0 auto;
+      min-width: 20px;
+      height: 20px;
+      padding: 0 6px;
+      border-radius: 10px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
     /* Main Content */
     .main {
       flex: 1;
@@ -1059,14 +1093,14 @@
       .sidebar-nav { flex-direction: row; flex: 1; justify-content: space-around; }
       .sidebar-nav button { font-size: 11px; padding: 6px 8px; }
       .sidebar-bottom { flex-direction: row; gap: 2px; flex: 0 0 auto; }
-      /* Bottom-Bar entrümpeln: Wichtigstes zuerst. Ausblenden, was auf dem
-         Handy nur Platz frisst (Logo, Versionstext, großer Feedback-Button,
-         Online-Zähler, Settings-Toggles). Sichtbar bleiben: die 5 Nav-Icons,
-         Feedback (📣), Profil und Abmelden. */
+      /* Bottom-Bar entrümpeln (v4.10.0): Ausblenden, was auf dem Handy nur
+         Platz frisst (Logo, Versionstext, großer Feedback-Button, Online-Zähler).
+         Sichtbar bleiben: die Nav-Icons, ⚙️ Einstellungen, 🛠️ Admin, Profil,
+         Abmelden. Suche/Online/Feedback sind in die Ansichten gewandert. */
       .sidebar .sidebar-logo, .sidebar .app-version, .sidebar .beta-feedback-btn { display: none; }
       .sidebar-nav { flex: 1; }
-      .sidebar-bottom .feedback-trigger, .sidebar-bottom .online-indicator { display: none; }
-      .sidebar-bottom .feedback-trigger[aria-label="Feedback geben"] { display: inline-flex; }
+      .sidebar-bottom .online-indicator { display: none; }
+      .sidebar-bottom .feedback-trigger { display: inline-flex; }
       .sidebar-content { position: fixed; top: 0; left: 0; width: 80vw; max-width: 300px; height: calc(100vh - 56px); z-index: 100; transform: translateX(-100%); transition: transform 0.25s ease; background: var(--bg-secondary); box-shadow: 2px 0 12px rgba(0,0,0,0.15); }
       .sidebar-content.mobile-open { transform: translateX(0); }
       /* Teams + Kanäle teilen sich EINEN Drawer (sonst überlagern beide
@@ -4089,7 +4123,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.9.0';
+    window.KRS_VERSION = '4.10.0';
     const __KRS_QS = new URLSearchParams(typeof location !== 'undefined' ? location.search : '');
     window.__KRS_FORCE_DEMO = __KRS_QS.get('forceMode') === 'demo';
     window.__KRS_FORCE_USER = __KRS_QS.get('forceUser') || null; // optional: direktes Login als kuerzel
@@ -5520,7 +5554,7 @@
     // CHAT COMPONENTS
     // ============================================================
 
-    function ConversationList({ conversations, currentUser, selectedId, onSelect, onNewChat, allUsers, onlineUsers, onGroupChat, hiddenConversations, showHiddenChats, setShowHiddenChats, onToggleHide }) {
+    function ConversationList({ conversations, currentUser, selectedId, onSelect, onNewChat, allUsers, onlineUsers, onGroupChat, hiddenConversations, showHiddenChats, setShowHiddenChats, onToggleHide, onSearch, onShowOnline }) {
       const hiddenSet = hiddenConversations || new Set();
       const [showNewChat, setShowNewChat] = useState(false);
       const [showGroupChat, setShowGroupChat] = useState(false);
@@ -5552,13 +5586,32 @@
       return React.createElement('div', { className: 'conversation-list' },
         React.createElement('div', { className: 'conversation-header' },
           React.createElement('h2', null, 'Chats'),
-          React.createElement('button', {
-            className: 'new-chat-btn',
-            onClick: () => { setShowNewChat(!showNewChat); setChatSearch(''); },
-            title: 'Neuer Chat',
-            'aria-label': showNewChat ? 'Abbrechen' : 'Neuer Chat',
-            dangerouslySetInnerHTML: { __html: showNewChat ? Icons.x : Icons.plus }
-          })
+          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
+            // v4.10.0: Suche direkt neben der Überschrift
+            onSearch && React.createElement('button', {
+              className: 'feedback-trigger',
+              onClick: onSearch,
+              title: 'Suche',
+              'aria-label': 'Suche öffnen'
+            }, '🔍'),
+            // v4.10.0: Wer ist online — auch aus dem Chat erreichbar
+            onShowOnline && React.createElement('button', {
+              className: 'feedback-trigger',
+              onClick: onShowOnline,
+              title: 'Wer ist online',
+              'aria-label': 'Wer ist online'
+            },
+              React.createElement('span', { className: 'online-dot small', style: { marginRight: '4px' } }),
+              React.createElement('span', { style: { fontSize: '12px' } }, onlineUsers?.size || '–')
+            ),
+            React.createElement('button', {
+              className: 'new-chat-btn',
+              onClick: () => { setShowNewChat(!showNewChat); setChatSearch(''); },
+              title: 'Neuer Chat',
+              'aria-label': showNewChat ? 'Abbrechen' : 'Neuer Chat',
+              dangerouslySetInnerHTML: { __html: showNewChat ? Icons.x : Icons.plus }
+            })
+          )
         ),
         showNewChat && React.createElement('div', { className: 'new-chat-picker' },
           [
@@ -6648,6 +6701,100 @@
     // ============================================================
     // PRIVACY MODAL — Datenschutzhinweis (DSGVO)
     // ============================================================
+    // ── Changelog ("Was ist neu") ────────────────────────────────────
+    // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
+    const KRS_CHANGELOG = [
+      { v: '4.10.0', date: '24.06.2026', items: ['Linke Leiste aufgeräumt: nur noch Teams, Chat, Dateiablage', 'Neues ⚙️ Einstellungen-Panel (Benachrichtigungen, Lesebestätigungen, Hilfe, „Was ist neu")', 'Suche 🔍 jetzt direkt neben der Überschrift', 'Gespeichert & gepinnt oben in der Chat-Spalte', 'Nur noch ein Feedback-Button'] },
+      { v: '4.9.0', date: '23.06.2026', items: ['Senden-Pfeil im Chat', 'Chat zeigt neueste Nachrichten oben', 'Dateien per Drag & Drop in den Chat ziehen'] },
+      { v: '4.8.1', date: '22.06.2026', items: ['Bugfix: Dateiablage öffnet wieder zuverlässig'] },
+      { v: '4.8.0', date: '22.06.2026', items: ['Optimiert für iPad & Handy', 'App lädt auch bei wackeligem Netz zuverlässiger'] },
+      { v: '4.7.0', date: '22.06.2026', items: ['Dateiablage-Hinweis (iServ; eigene Ablage folgt mit Nextcloud)'] },
+    ];
+
+    // ── Einstellungen-Panel (⚙️) — v4.10.0 ───────────────────────────
+    // Bündelt Benachrichtigungen, Lesebestätigungen, Hilfe/Datenschutz und
+    // den Changelog an einem Ort. Ersetzt die verstreuten Icons unten links.
+    function SettingsPanel({ onClose, notificationsEnabled, notificationPermission, onToggleNotifications, readReceiptsEnabled, onToggleReadReceipts, onOpenHelp, onOpenPrivacy, onOpenFeedback }) {
+      useEffect(() => {
+        const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+      }, [onClose]);
+
+      const notifOn = notificationsEnabled && notificationPermission === 'granted';
+      const sectionStyle = { padding: '16px 0', borderBottom: '1px solid var(--border)' };
+      const rowStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' };
+      const labelStyle = { fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' };
+      const hintStyle = { fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' };
+
+      const toggleBtn = (on, onClick, ariaLabel) => React.createElement('button', {
+        onClick, role: 'switch', 'aria-checked': on ? 'true' : 'false', 'aria-label': ariaLabel,
+        style: { flex: '0 0 auto', width: '52px', minWidth: '52px', height: '30px', borderRadius: '15px', border: 'none', cursor: 'pointer', background: on ? 'var(--accent)' : 'var(--border)', position: 'relative', transition: 'background 0.2s' }
+      }, React.createElement('span', { style: { position: 'absolute', top: '3px', left: on ? '25px' : '3px', width: '24px', height: '24px', borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)' } }));
+
+      return React.createElement('div', {
+        className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Einstellungen', onClick: onClose,
+        style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }
+      },
+        React.createElement('div', {
+          onClick: e => e.stopPropagation(),
+          style: { background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', maxWidth: '560px', width: '100%', maxHeight: '85vh', overflow: 'auto', padding: '24px 28px', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }
+        },
+          React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' } },
+            React.createElement('h2', { style: { margin: 0, fontSize: '20px' } }, '⚙️ Einstellungen'),
+            React.createElement('button', { onClick: onClose, 'aria-label': 'Schließen', style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '20px', color: 'var(--text-muted)', padding: '8px', minWidth: '44px', minHeight: '44px' } }, '✕')
+          ),
+          // Benachrichtigungen
+          React.createElement('div', { style: sectionStyle },
+            React.createElement('div', { style: rowStyle },
+              React.createElement('div', null,
+                React.createElement('div', { style: labelStyle }, '🔔 Benachrichtigungen'),
+                React.createElement('div', { style: hintStyle }, notificationPermission === 'denied' ? 'Im Browser blockiert — bitte in den Browser-Einstellungen erlauben.' : 'Hinweis bei neuen Nachrichten, auch wenn die App im Hintergrund ist.')
+              ),
+              toggleBtn(notifOn, onToggleNotifications, 'Benachrichtigungen umschalten')
+            )
+          ),
+          // Lesebestätigungen
+          React.createElement('div', { style: sectionStyle },
+            React.createElement('div', { style: rowStyle },
+              React.createElement('div', null,
+                React.createElement('div', { style: labelStyle }, '✓✓ Lesebestätigungen'),
+                React.createElement('div', { style: hintStyle }, 'Andere sehen, dass du eine Nachricht gelesen hast (DSGVO).')
+              ),
+              toggleBtn(readReceiptsEnabled, onToggleReadReceipts, 'Lesebestätigungen umschalten')
+            )
+          ),
+          // Hilfe, Datenschutz & Feedback
+          React.createElement('div', { style: sectionStyle },
+            React.createElement('div', { style: labelStyle }, '❓ Hilfe, Datenschutz & Feedback'),
+            React.createElement('div', { style: { display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '10px' } },
+              React.createElement('button', { onClick: () => { onClose(); onOpenHelp(); }, style: { padding: '10px 14px', minHeight: '44px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '13px' } }, '❓ Hilfe & Tipps'),
+              React.createElement('button', { onClick: () => { onClose(); onOpenPrivacy(); }, style: { padding: '10px 14px', minHeight: '44px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '13px' } }, '🔒 Datenschutz'),
+              onOpenFeedback && React.createElement('button', { onClick: () => { onClose(); onOpenFeedback(); }, style: { padding: '10px 14px', minHeight: '44px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '13px' } }, '📣 Feedback')
+            )
+          ),
+          // Was ist neu (Changelog)
+          React.createElement('div', { style: { padding: '16px 0 4px' } },
+            React.createElement('div', { style: labelStyle }, '🆕 Was ist neu'),
+            React.createElement('div', { style: { marginTop: '10px' } },
+              KRS_CHANGELOG.map((rel, i) =>
+                React.createElement('div', { key: rel.v, style: { marginBottom: '14px' } },
+                  React.createElement('div', { style: { display: 'flex', alignItems: 'baseline', gap: '8px' } },
+                    React.createElement('span', { style: { fontSize: '13px', fontWeight: '700', color: 'var(--accent)' } }, 'v' + rel.v),
+                    i === 0 && React.createElement('span', { style: { fontSize: '10px', fontWeight: '700', background: 'var(--accent)', color: '#fff', padding: '1px 6px', borderRadius: '8px' } }, 'NEU'),
+                    React.createElement('span', { style: { fontSize: '11px', color: 'var(--text-muted)' } }, rel.date)
+                  ),
+                  React.createElement('ul', { style: { margin: '4px 0 0', paddingLeft: '18px', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5' } },
+                    rel.items.map((it, j) => React.createElement('li', { key: j }, it))
+                  )
+                )
+              )
+            )
+          )
+        )
+      );
+    }
+
     function PrivacyModal({ onClose }) {
       return React.createElement('div', {
         className: 'modal-overlay',
@@ -6773,6 +6920,7 @@
       const [editingChannel, setEditingChannel] = useState(null); // channel object for rename
       const [showForwardModal, setShowForwardModal] = useState(null); // post to forward
       const [showAdmin, setShowAdmin] = useState(false); // Phase 6: Admin-Panel
+      const [showSettings, setShowSettings] = useState(false); // v4.10.0: Einstellungen-Panel (⚙️)
       const [savedPosts, setSavedPosts] = useState(() => {
         try { return JSON.parse(localStorage.getItem('krs-saved-posts') || '[]'); } catch(e) { return []; }
       });
@@ -6785,7 +6933,8 @@
         showTeamMembers, setShowTeamMembers, mobileSidebarOpen, setMobileSidebarOpen,
         showHelp, setShowHelp, showCreateChannel, setShowCreateChannel,
         channelContextMenu, setChannelContextMenu, editingChannel, setEditingChannel,
-        showForwardModal, setShowForwardModal, showAdmin, setShowAdmin, savedPosts, setSavedPosts };
+        showForwardModal, setShowForwardModal, showAdmin, setShowAdmin,
+        showSettings, setShowSettings, savedPosts, setSavedPosts };
     }
 
     function useNotifications() {
@@ -6957,7 +7106,8 @@
         showTeamMembers, setShowTeamMembers, mobileSidebarOpen, setMobileSidebarOpen,
         showHelp, setShowHelp, showCreateChannel, setShowCreateChannel,
         channelContextMenu, setChannelContextMenu, editingChannel, setEditingChannel,
-        showForwardModal, setShowForwardModal, showAdmin, setShowAdmin, savedPosts, setSavedPosts } = modals;
+        showForwardModal, setShowForwardModal, showAdmin, setShowAdmin,
+        showSettings, setShowSettings, savedPosts, setSavedPosts } = modals;
 
       const { notificationsEnabled, notificationPermission, requestNotifications,
         toggleNotifications, sendBrowserNotification } = useNotifications();
@@ -7838,6 +7988,13 @@
           React.createElement('div', { className: 'sidebar-header', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
             React.createElement('h2', null, 'Teams'),
             React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
+              // v4.10.0: Suche direkt neben der Überschrift
+              React.createElement('button', {
+                className: 'feedback-trigger',
+                onClick: () => setView('search'),
+                title: 'Suche',
+                'aria-label': 'Suche öffnen'
+              }, '🔍'),
               // Aufräumen (mehrere Teams löschen) — nur globaler Admin
               user?.role === 'admin' && React.createElement('button', {
                 className: 'feedback-trigger',
@@ -7997,6 +8154,16 @@
       const chatView = React.createElement(React.Fragment, null,
         mobileSidebarOpen && React.createElement('div', { className: 'mobile-overlay visible', onClick: () => setMobileSidebarOpen(false) }),
         React.createElement('div', { className: 'sidebar-content' + (mobileSidebarOpen ? ' mobile-open' : ''), style: { borderRight: '1px solid var(--border)' } },
+          // v4.10.0: Gespeichert & gepinnt — eigener Abschnitt oben in der Chat-Spalte
+          React.createElement('button', {
+            className: 'saved-section-btn',
+            onClick: () => setView('saved'),
+            title: 'Gespeicherte & gepinnte Nachrichten',
+            'aria-label': 'Gespeicherte Nachrichten öffnen'
+          },
+            React.createElement('span', null, '🔖 Gespeichert & gepinnt'),
+            savedPosts.length > 0 && React.createElement('span', { className: 'saved-section-count' }, savedPosts.length)
+          ),
           React.createElement(ConversationList, {
             conversations,
             currentUser: user,
@@ -8009,7 +8176,9 @@
             hiddenConversations,
             showHiddenChats,
             setShowHiddenChats,
-            onToggleHide: handleToggleConvHidden
+            onToggleHide: handleToggleConvHidden,
+            onSearch: () => setView('search'),
+            onShowOnline: () => setShowOnlinePanel(prev => !prev)
           })
         ),
         React.createElement('div', { className: 'content' },
@@ -8155,22 +8324,7 @@
               React.createElement('span', { dangerouslySetInnerHTML: { __html: Icons.chat } }),
               unreadChatCount > 0 && React.createElement('span', { className: 'nav-badge' }, unreadChatCount > 9 ? '9+' : unreadChatCount)
             ),
-            React.createElement('button', {
-              className: 'nav-item' + (view === 'search' ? ' active' : ''),
-              onClick: () => setView('search'),
-              title: 'Suche',
-              'aria-label': 'Suche',
-              dangerouslySetInnerHTML: { __html: Icons.search }
-            }),
-            React.createElement('button', {
-              className: 'nav-item' + (view === 'saved' ? ' active' : ''),
-              onClick: () => setView('saved'),
-              title: 'Gespeicherte Nachrichten',
-              'aria-label': 'Lesezeichen'
-            },
-              '🔖',
-              savedPosts.length > 0 && React.createElement('span', { className: 'nav-badge', style: { fontSize: '9px' } }, savedPosts.length)
-            ),
+            // v4.10.0: Suche & Gespeichert sind in die Ansichten gewandert (🔍 neben Überschrift, 🔖 oben in der Chat-Spalte)
             React.createElement('button', {
               className: 'nav-item' + (showFiles ? ' active' : ''),
               onClick: () => setShowFiles(true),
@@ -8196,24 +8350,10 @@
               React.createElement('span', { className: 'online-dot small' }),
               React.createElement('span', { className: 'online-count' }, onlineUsers.size || '–')
             ),
-            React.createElement('button', {
-              className: 'feedback-trigger',
-              onClick: toggleNotifications,
-              title: notificationsEnabled && notificationPermission === 'granted' ? 'Benachrichtigungen deaktivieren' : 'Benachrichtigungen aktivieren',
-              style: { opacity: notificationsEnabled && notificationPermission === 'granted' ? 1 : 0.5 }
-            }, notificationsEnabled && notificationPermission === 'granted' ? '🔔' : '🔕'),
-            React.createElement('button', {
-              className: 'feedback-trigger',
-              onClick: toggleReadReceipts,
-              title: readReceiptsEnabled ? 'Lesebestätigungen deaktivieren' : 'Lesebestätigungen aktivieren (DSGVO: Andere sehen, dass du gelesen hast)',
-              'aria-label': readReceiptsEnabled ? 'Lesebestätigungen deaktivieren' : 'Lesebestätigungen aktivieren',
-              style: { opacity: readReceiptsEnabled ? 1 : 0.5 }
-            }, readReceiptsEnabled ? '✓✓' : '✓'),
-            // Admin-Button (nur für Admins sichtbar, Phase 6)
-            user?.role === 'admin' && React.createElement('button', { className: 'feedback-trigger', onClick: () => setShowAdmin(true), title: 'Administration', 'aria-label': 'Admin-Panel öffnen' }, '⚙️'),
-            React.createElement('button', { className: 'feedback-trigger', onClick: () => setShowHelp(true), title: 'Hilfe & Tipps', 'aria-label': 'Hilfe anzeigen' }, '❓'),
-            React.createElement('button', { className: 'feedback-trigger', onClick: () => setShowFeedback(true), title: 'Feedback geben', 'aria-label': 'Feedback geben' }, '📣'),
-            React.createElement('button', { className: 'feedback-trigger', onClick: () => setShowPrivacy(true), title: 'Datenschutz', 'aria-label': 'Datenschutzhinweis' }, '🔒'),
+            // v4.10.0: Einstellungen (⚙️) bündelt Benachrichtigungen, Lesebestätigungen, Hilfe & „Was ist neu"
+            React.createElement('button', { className: 'feedback-trigger', onClick: () => setShowSettings(true), title: 'Einstellungen', 'aria-label': 'Einstellungen öffnen' }, '⚙️'),
+            // Admin-Button (nur für Admins sichtbar, Phase 6) — 🛠️ statt ⚙️, kein Konflikt mit Einstellungen
+            user?.role === 'admin' && React.createElement('button', { className: 'feedback-trigger', onClick: () => setShowAdmin(true), title: 'Administration', 'aria-label': 'Admin-Panel öffnen' }, '🛠️'),
             React.createElement('button', {
               onClick: () => setShowProfile(prev => !prev),
               title: 'Profil',
@@ -8315,6 +8455,17 @@
         showHelp && React.createElement(HelpPanel, { onClose: () => setShowHelp(false), onStartOnboarding: () => { try { localStorage.removeItem('krs_onboarding_done'); } catch(e) {} setShowOnboarding(true); } }),
         // Datenschutz Modal
         showPrivacy && React.createElement(PrivacyModal, { onClose: () => setShowPrivacy(false) }),
+        // Einstellungen-Panel (v4.10.0)
+        showSettings && React.createElement(SettingsPanel, {
+          onClose: () => setShowSettings(false),
+          notificationsEnabled, notificationPermission,
+          onToggleNotifications: toggleNotifications,
+          readReceiptsEnabled,
+          onToggleReadReceipts: toggleReadReceipts,
+          onOpenHelp: () => setShowHelp(true),
+          onOpenPrivacy: () => setShowPrivacy(true),
+          onOpenFeedback: () => setShowFeedbackBoard(true)
+        }),
         // Admin-Panel (Phase 6 — nur für Admins sichtbar)
         showAdmin && user?.role === 'admin' && React.createElement(AdminPanel, {
           dataService, currentUser: user, onClose: () => setShowAdmin(false)
