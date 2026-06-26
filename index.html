@@ -3770,6 +3770,59 @@
       return React.createElement('div', { className: 'avatar', style }, getInitials(user.display_name));
     }
 
+    // ── Paste-HTML-Simplifier: behält Basis-Formatierung, entfernt Schrott ──
+    // Sicherheitshinweis: addHook/removeHook sind synchron und single-threaded.
+    // Es gibt in dieser Datei keine anderen persistenten afterSanitizeAttributes-Hooks
+    // (grep bestätigt: nur diese Funktion nutzt addHook).
+    function simplifyPastedHtml(rawHtml) {
+      if (!window.DOMPurify) {
+        // Kein DOMPurify → kein HTML vertrauen; auf Plaintext degradieren (XSS-sicher)
+        const tmp = document.createElement('div');
+        tmp.innerHTML = rawHtml.replace(/<[^>]+>/g, ' ');
+        return tmp.textContent || '';
+      }
+
+      const ALLOWED = {
+        ALLOWED_TAGS: ['b','strong','i','em','u','s','a','ul','ol','li','p','br','span','h1','h2','h3','code','pre','blockquote'],
+        ALLOWED_ATTR: ['href','target','rel','style'],
+        FORCE_BODY: true,
+      };
+
+      // Einmaliger Hook: style-Attribute auf sichere Werte reduzieren + rel=noopener setzen
+      DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+        // rel="noopener noreferrer" erzwingen (Reverse-Tabnabbing verhindern)
+        if (node.tagName === 'A' && node.hasAttribute('target')) {
+          node.setAttribute('rel', 'noopener noreferrer');
+        }
+        // style auf erlaubte Deklarationen reduzieren + Werte auf Gefährlichkeit prüfen
+        if (node.hasAttribute && node.hasAttribute('style')) {
+          const style = node.getAttribute('style');
+          const STYLE_RE = /\b(color|font-weight|font-style|text-decoration)\s*:\s*([^;]+)/gi;
+          const allowed = [];
+          let m;
+          while ((m = STYLE_RE.exec(style)) !== null) {
+            const val = m[2].trim();
+            // Ablehnen: url(), expression(), javascript:, CSS-Injection
+            if (!/[(){}<>\\]|url\s*\(|expression\s*\(|javascript/i.test(val)) {
+              allowed.push(m[1].toLowerCase() + ': ' + val);
+            }
+          }
+          if (allowed.length) node.setAttribute('style', allowed.join('; '));
+          else node.removeAttribute('style');
+        }
+      });
+
+      let clean = DOMPurify.sanitize(rawHtml, ALLOWED);
+      DOMPurify.removeHook('afterSanitizeAttributes');
+
+      // Leere Block-Tags und überschüssige Leerzeilen entfernen
+      clean = clean
+        .replace(/<(p|div)[^>]*>\s*<\/(p|div)>/gi, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+      return clean;
+    }
+
     // ── Formatting Toolbar ──
     function FormatToolbar({ textareaRef, value, onChange }) {
       const htmlAttr = (text) => String(text).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
@@ -3884,7 +3937,7 @@
     }
 
     // ── Mention Textarea with @ Autocomplete ──
-    function MentionTextarea({ value, onChange, allUsers, placeholder, autoFocus, style, showToolbar }) {
+    function MentionTextarea({ value, onChange, allUsers, placeholder, autoFocus, style, showToolbar, onFilePaste }) {
       const [mentionQuery, setMentionQuery] = useState(null);
       const [mentionIdx, setMentionIdx] = useState(0);
       const textareaRef = useRef(null);
@@ -3992,6 +4045,41 @@
           value: value,
           onChange: handleInput,
           onKeyDown: (e) => { handleKeyDown(e); handleKeyDownFormat(e); },
+          onPaste: (e) => {
+            const cd = e.clipboardData;
+            if (!cd) return;
+            // 1. Bild in der Zwischenablage? → als File weiterreichen
+            for (const item of Array.from(cd.items || [])) {
+              if (item.type.startsWith('image/')) {
+                e.preventDefault();
+                const file = item.getAsFile();
+                if (file && onFilePaste) {
+                  const ext = (item.type.replace('image/', '') || 'png').split(';')[0];
+                  const named = new File([file], 'eingefügt-' + Date.now() + '.' + ext, { type: item.type });
+                  onFilePaste(named);
+                  showToast('Bild angehängt — zum Senden auf „Beitrag erstellen" klicken', 'info');
+                }
+                return;
+              }
+            }
+            // 2. HTML in der Zwischenablage? → Formatierung übernehmen
+            const html = cd.getData('text/html');
+            if (html && html.trim()) {
+              e.preventDefault();
+              const simplified = simplifyPastedHtml(html);
+              const ta = textareaRef.current;
+              if (!ta) return;
+              const start = ta.selectionStart;
+              const end   = ta.selectionEnd;
+              const newVal = value.substring(0, start) + simplified + value.substring(end);
+              onChange(newVal);
+              setTimeout(() => {
+                ta.focus();
+                ta.setSelectionRange(start + simplified.length, start + simplified.length);
+              }, 0);
+            }
+            // 3. Plaintext → Browser-Standard, kein Eingriff
+          },
           autoFocus: autoFocus,
           style: style || { display: 'block', width: '100%', padding: '8px 0', border: 'none', background: 'transparent', color: 'var(--text-primary)', fontSize: '14px', minHeight: '60px', fontFamily: 'inherit', resize: 'none', outline: 'none' }
         })
@@ -6070,7 +6158,24 @@
             placeholder: 'Nachricht schreiben...',
             value: input,
             onChange: e => setInput(e.target.value),
-            disabled: sending
+            disabled: sending,
+            onPaste: (e) => {
+              const cd = e.clipboardData;
+              if (!cd) return;
+              for (const item of Array.from(cd.items || [])) {
+                if (item.type.startsWith('image/')) {
+                  e.preventDefault();
+                  const file = item.getAsFile();
+                  if (file) {
+                    const ext = (item.type.replace('image/', '') || 'png').split(';')[0];
+                    const named = new File([file], 'screenshot-' + Date.now() + '.' + ext, { type: item.type });
+                    addChatFiles([named]);
+                    showToast('Bild angehängt — zum Senden ➤ drücken', 'info');
+                  }
+                  return;
+                }
+              }
+            }
           }),
           React.createElement('button', {
             type: 'button',
