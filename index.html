@@ -3775,6 +3775,9 @@
     // Sicherheitshinweis: addHook/removeHook sind synchron und single-threaded.
     // Es gibt in dieser Datei keine anderen persistenten afterSanitizeAttributes-Hooks
     // (grep bestätigt: nur diese Funktion nutzt addHook).
+    // Default-/Müll-Farben aus Word/Outlook, die wir verwerfen (= keine echte Hervorhebung)
+    const PASTE_DEFAULT_COLORS = ['black','#000','#000000','windowtext','inherit','initial','currentcolor','auto','rgb(0,0,0)','rgb(0, 0, 0)'];
+
     function simplifyPastedHtml(rawHtml) {
       if (!window.DOMPurify) {
         // Kein DOMPurify → kein HTML vertrauen; auf Plaintext degradieren (XSS-sicher)
@@ -3783,45 +3786,81 @@
         return tmp.textContent || '';
       }
 
+      // 1) Word/Outlook-Vorreinigung auf String-Ebene (vor dem Sanitizing)
+      let pre = String(rawHtml || '')
+        .replace(/<!--[\s\S]*?-->/g, '')                 // (mso-)Konditional-Kommentare
+        .replace(/<\/?(o:p|o:[^>]*|w:[^>]*|m:[^>]*|xml|meta|link|style|title|head)[^>]*>/gi, '') // Office-/Doc-Tags
+        .replace(/&nbsp;/gi, ' ');                        // NBSP → normales Leerzeichen
+
       const ALLOWED = {
         ALLOWED_TAGS: ['b','strong','i','em','u','s','a','ul','ol','li','p','br','span','h1','h2','h3','code','pre','blockquote'],
         ALLOWED_ATTR: ['href','target','rel','style'],
         FORCE_BODY: true,
       };
 
-      // Einmaliger Hook: style-Attribute auf sichere Werte reduzieren + rel=noopener setzen
+      // Hook: style auf sinnvolle, sichere Hervorhebungen reduzieren; Default-Farben/-Gewichte verwerfen
       DOMPurify.addHook('afterSanitizeAttributes', (node) => {
-        // rel="noopener noreferrer" erzwingen (Reverse-Tabnabbing verhindern)
         if (node.tagName === 'A' && node.hasAttribute('target')) {
           node.setAttribute('rel', 'noopener noreferrer');
         }
-        // style auf erlaubte Deklarationen reduzieren + Werte auf Gefährlichkeit prüfen
         if (node.hasAttribute && node.hasAttribute('style')) {
           const style = node.getAttribute('style');
-          const STYLE_RE = /\b(color|font-weight|font-style|text-decoration)\s*:\s*([^;]+)/gi;
-          const allowed = [];
-          let m;
-          while ((m = STYLE_RE.exec(style)) !== null) {
-            const val = m[2].trim();
-            // Ablehnen: url(), expression(), javascript:, CSS-Injection
-            if (!/[(){}<>\\]|url\s*\(|expression\s*\(|javascript/i.test(val)) {
-              allowed.push(m[1].toLowerCase() + ': ' + val);
-            }
+          const keep = [];
+          const grab = (re) => { const m = re.exec(style); return m ? m[1].trim() : null; };
+          // Farbe: nur behalten, wenn sicher UND keine Default-/Müllfarbe
+          const color = grab(/(?:^|;|\s)color\s*:\s*([^;]+)/i);
+          if (color && !/[(){}<>\\]|url|expression|javascript/i.test(color)
+              && !PASTE_DEFAULT_COLORS.includes(color.toLowerCase())) {
+            keep.push('color: ' + color);
           }
-          if (allowed.length) node.setAttribute('style', allowed.join('; '));
+          // Fett: nur bold / >=600 (Word liefert 400 = normal → verwerfen)
+          const fw = grab(/font-weight\s*:\s*([^;]+)/i);
+          if (fw && (/bold/i.test(fw) || parseInt(fw, 10) >= 600)) keep.push('font-weight: 700');
+          // Kursiv / Unterstrichen
+          if (/font-style\s*:\s*italic/i.test(style)) keep.push('font-style: italic');
+          if (/text-decoration\s*:[^;]*underline/i.test(style)) keep.push('text-decoration: underline');
+
+          if (keep.length) node.setAttribute('style', keep.join('; '));
           else node.removeAttribute('style');
         }
       });
 
-      let clean = DOMPurify.sanitize(rawHtml, ALLOWED);
+      const sanitized = DOMPurify.sanitize(pre, ALLOWED);
       DOMPurify.removeHook('afterSanitizeAttributes');
 
-      // Leere Block-Tags und überschüssige Leerzeilen entfernen
-      clean = clean
-        .replace(/<(p|div)[^>]*>\s*<\/(p|div)>/gi, '')
+      // 2) DOM-Nachbearbeitung: Word-Span-Suppe auflösen + leere Knoten entfernen
+      const root = document.createElement('div');
+      root.innerHTML = sanitized;
+
+      // 2a) Bedeutungslose <span> (ohne style) auflösen — bis stabil
+      let changed = true, guard = 0;
+      while (changed && guard++ < 30) {
+        changed = false;
+        root.querySelectorAll('span:not([style])').forEach(sp => {
+          while (sp.firstChild) sp.parentNode.insertBefore(sp.firstChild, sp);
+          sp.remove();
+          changed = true;
+        });
+      }
+
+      // 2b) Leere Knoten entfernen (kein Text, kein br/img, keine Liste)
+      let removed = true, guard2 = 0;
+      while (removed && guard2++ < 30) {
+        removed = false;
+        root.querySelectorAll('p,li,span,b,strong,i,em,u,s,h1,h2,h3,blockquote,code,pre').forEach(el => {
+          if (!el.textContent.trim() && !el.querySelector('br,img,ul,ol,li,a')) {
+            el.remove();
+            removed = true;
+          }
+        });
+      }
+
+      // 3) Whitespace normalisieren
+      const out = root.innerHTML
+        .replace(/[ \t]{2,}/g, ' ')
         .replace(/\n{3,}/g, '\n\n')
         .trim();
-      return clean;
+      return out;
     }
 
     // ── Formatting Toolbar ──
@@ -4253,7 +4292,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.10.2';
+    window.KRS_VERSION = '4.10.3';
     // Für E2E-Tests: Sortier-Helfer der Chat-Übersicht exponieren
     window.__krsSortConversationsByActivity = sortConversationsByActivity;
     window.__krsUpdateConversationActivity = updateConversationActivity;
@@ -6858,6 +6897,7 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.10.3', date: '26.06.2026', items: ['Einfügen aus Word/Outlook wird automatisch aufgeräumt: nur noch Fett, Kursiv, Listen, Farben & Links — kein Code-Wirrwarr mehr'] },
       { v: '4.10.2', date: '26.06.2026', items: ['Chat-Übersicht wie Teams: zuletzt aktiver Chat steht oben', 'Nachrichtenverlauf chronologisch — neueste Nachricht unten'] },
       { v: '4.10.1', date: '26.06.2026', items: ['Formatierung beim Einfügen (Fett, Kursiv, Links, Listen) bleibt erhalten', 'Bilder lassen sich direkt in den Chat einfügen'] },
       { v: '4.10.0', date: '24.06.2026', items: ['Linke Leiste aufgeräumt: nur noch Teams, Chat, Dateiablage', 'Neues ⚙️ Einstellungen-Panel (Benachrichtigungen, Lesebestätigungen, Hilfe, „Was ist neu")', 'Suche 🔍 jetzt direkt neben der Überschrift', 'Gespeichert & gepinnt oben in der Chat-Spalte', 'Nur noch ein Feedback-Button'] },

@@ -96,6 +96,52 @@ test.describe('Paste-Formatierung im Post-Editor', () => {
     expect(val).toContain('Hallo');
   });
 
+  test('Word/Outlook-Paste wird zu sauberem HTML bereinigt', async ({ page }) => {
+    await openConnect(page, { user: 'nk' });
+
+    const newPostBtn = page.locator('button[aria-label="Neuer Beitrag"], button:has-text("Neuer Beitrag"), button:has-text("Beitrag erstellen")').first();
+    if (!await newPostBtn.isVisible()) {
+      test.skip(true, 'Kein „Neuer Beitrag"-Button');
+      return;
+    }
+    await newPostBtn.click();
+
+    const textarea = page.locator('textarea').first();
+    await expect(textarea).toBeVisible({ timeout: 3000 });
+    await textarea.focus();
+
+    // Typischer Outlook-Auszug: tief verschachtelte leere Spans, font-weight:400,
+    // color:windowtext/black, color:red, verschachtelte Liste, Link.
+    const wordHtml = '<p style="font-style: normal; font-weight: 400"><span><span><span><b><span>FAQ Schulwoche 34</span></b></span></span></span></p>'
+      + '<ul style="font-style: normal; font-weight: 400">'
+      + '<li style="color: windowtext"><span><span><span style="color: black">Termin A</span></span></span></li>'
+      + '<li style="color: red"><span><span>Wichtiger Termin</span></span></li></ul>'
+      + '<ul><li><span>Wichtig:</span><ul><li><span>Bis Donnerstag</span></li></ul></li></ul>'
+      + '<p><a style="color: purple; text-decoration: underline" href="mailto:x@y.de"><span style="color: blue">x@y.de</span></a></p>';
+
+    await page.evaluate((h) => {
+      const ta = document.querySelector('textarea');
+      if (!ta) return;
+      const dt = new DataTransfer();
+      dt.setData('text/html', h);
+      dt.setData('text/plain', 'FAQ Schulwoche 34 Termin A Wichtiger Termin');
+      ta.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+    }, wordHtml);
+
+    const val = await textarea.inputValue();
+    // Word-Müll ist weg
+    expect(val).not.toMatch(/<span><\/span>/);
+    expect(val).not.toMatch(/font-weight:\s*400/i);
+    expect(val).not.toMatch(/font-style:\s*normal/i);
+    expect(val).not.toMatch(/windowtext/i);
+    expect(val).not.toMatch(/<span><span><span>/);
+    // Sinnvolle Formatierung + Struktur erhalten
+    expect(val).toMatch(/<b>FAQ Schulwoche 34<\/b>/);
+    expect(val).toMatch(/color:\s*red/i);
+    expect(val).toMatch(/<ul>[\s\S]*<ul>/i);     // verschachtelte Liste
+    expect(val).toContain('href="mailto:x@y.de"');
+  });
+
 });
 
 test.describe('Bild-Paste im Chat-Input', () => {
