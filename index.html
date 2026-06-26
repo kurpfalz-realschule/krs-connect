@@ -2917,7 +2917,8 @@
             const convObj = {
               ...conv,
               lastMessage: lastMsg?.content || '',
-              time: lastMsg ? formatDate(lastMsg.created_at) : ''
+              time: lastMsg ? formatDate(lastMsg.created_at) : '',
+              lastActivityAt: lastMsg?.created_at || conv.updated_at || conv.created_at || null
             };
             if (conv.is_group) {
               convObj.members = members.map(m => m.user_id);
@@ -4168,6 +4169,47 @@
       } catch { return dateStr; }
     }
 
+    // ── Chat-Übersicht: Sortierung nach letzter Aktivität (Teams-Style) ──
+    // Zuletzt aktiver Chat steht oben in der linken Liste.
+    function getConversationActivityMs(conv) {
+      if (!conv) return 0;
+      if (typeof conv._lastActivityTs === 'number') return conv._lastActivityTs;
+      const raw = conv.lastActivityAt || conv.last_message_at || conv.updated_at || conv.created_at;
+      const parsed = raw ? Date.parse(raw) : NaN;
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    function sortConversationsByActivity(conversations) {
+      return [...(conversations || [])].sort((a, b) => getConversationActivityMs(b) - getConversationActivityMs(a));
+    }
+
+    // Aktualisiert Vorschau/Zeit/Unread einer Konversation bei neuer Nachricht
+    // und sortiert die Liste neu (betroffener Chat wandert nach oben).
+    function updateConversationActivity(conversations, message, options = {}) {
+      const conversationId = message?.conversation_id;
+      if (conversationId == null) return sortConversationsByActivity(conversations);
+      const parsed = message?.created_at ? Date.parse(message.created_at) : NaN;
+      const fallbackTs = options.activityTs || Date.now();
+      const activityTs = Number.isFinite(parsed) ? parsed : fallbackTs;
+      const activityAt = Number.isFinite(parsed) ? message.created_at : new Date(activityTs).toISOString();
+      const preview = message?.content || (message?.image_url ? '📎 Datei' : '');
+      const time = options.timeLabel || (message?.created_at ? formatDate(message.created_at) : 'Gerade eben');
+      const unreadDelta = options.unreadDelta || 0;
+
+      return sortConversationsByActivity((conversations || []).map(conv => {
+        if (String(conv.id) !== String(conversationId)) return conv;
+        const nextUnread = Math.max(0, (conv.unread || 0) + unreadDelta);
+        return {
+          ...conv,
+          lastMessage: preview,
+          time,
+          lastActivityAt: activityAt,
+          _lastActivityTs: activityTs,
+          unread: nextUnread
+        };
+      }));
+    }
+
     // HTML-Sanitizer: DOMPurify mit Legacy-Fallback
     const SANITIZE_CONFIG = {
       ALLOWED_TAGS: ['p','br','b','strong','i','em','u','a','ul','ol','li','h1','h2','h3','h4','blockquote','pre','code','span','div','hr'],
@@ -4211,7 +4253,10 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.10.0';
+    window.KRS_VERSION = '4.10.2';
+    // Für E2E-Tests: Sortier-Helfer der Chat-Übersicht exponieren
+    window.__krsSortConversationsByActivity = sortConversationsByActivity;
+    window.__krsUpdateConversationActivity = updateConversationActivity;
     const __KRS_QS = new URLSearchParams(typeof location !== 'undefined' ? location.search : '');
     window.__KRS_FORCE_DEMO = __KRS_QS.get('forceMode') === 'demo';
     window.__KRS_FORCE_USER = __KRS_QS.get('forceUser') || null; // optional: direktes Login als kuerzel
@@ -5772,8 +5817,9 @@
         ),
         React.createElement('div', { className: 'conversation-items' },
           (() => {
-            const visibleConvs = conversations.filter(c => !hiddenSet.has(c.id));
-            const hiddenConvs = conversations.filter(c => hiddenSet.has(c.id));
+            const sortedConvs = sortConversationsByActivity(conversations);
+            const visibleConvs = sortedConvs.filter(c => !hiddenSet.has(c.id));
+            const hiddenConvs = sortedConvs.filter(c => hiddenSet.has(c.id));
             const renderItem = (conv) => React.createElement('button', {
                 key: conv.id,
                 className: 'conversation-item' + (selectedId === conv.id ? ' active' : ''),
@@ -5828,7 +5874,7 @@
       );
     }
 
-    function ChatPanel({ conversation, messages, setMessages, dataService, currentUser, onBack, onlineUsers, hasMore, onLoadMore, loadingMore }) {
+    function ChatPanel({ conversation, messages, setMessages, setConversations, dataService, currentUser, onBack, onlineUsers, hasMore, onLoadMore, loadingMore }) {
       const [input, setInput] = useState('');
       const [sending, setSending] = useState(false);
       const [chatFiles, setChatFiles] = useState([]);  // Array of { file, preview }
@@ -5839,14 +5885,14 @@
       const [reactionPickerMsgId, setReactionPickerMsgId] = useState(null);
       const [chatDragActive, setChatDragActive] = useState(false); // Drag&Drop-Overlay im Chat
       const messagesEndRef = useRef(null);
-      const messagesTopRef = useRef(null); // neueste Nachricht steht oben → dorthin scrollen
+      const messagesTopRef = useRef(null); // (ungenutzt seit v4.10.2: Feed chronologisch, Scroll ans Ende)
       const chatFileRef = useRef(null);
       const chatInputRef = useRef(null);
 
       useEffect(() => {
         // Neueste Nachricht wird oben angezeigt → bei neuer Nachricht nach oben scrollen.
-        if (messagesTopRef.current) {
-          messagesTopRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (messagesEndRef.current) {
+          messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
         }
       }, [messages]);
 
@@ -5996,6 +6042,10 @@
               return [...prev, sentMsg];
             });
           }
+          // Eigene Nachricht: Chat in der Übersicht nach oben sortieren
+          if (sentMsg && setConversations) {
+            setConversations(prev => updateConversationActivity(prev, sentMsg, { timeLabel: 'Gerade eben' }));
+          }
           setInput('');
           clearChatFiles();
         } catch (err) {
@@ -6058,8 +6108,7 @@
         ),
         React.createElement('div', { className: 'chat-messages' + (chatDragActive ? ' drag-active' : ''), onDragOver: handleChatDragOver, onDragLeave: handleChatDragLeave, onDrop: handleChatDrop },
           chatDragActive && React.createElement('div', { className: 'chat-drop-overlay' }, '📎 Datei hier ablegen zum Senden'),
-          React.createElement('div', { ref: messagesTopRef }),
-          messages.slice().reverse().map(msg => {
+          messages.map(msg => {
             const own = isOwn(msg);
             const editing = editingMsgId === msg.id;
             const isFileOnly = msg.content && (msg.content.startsWith('📎 ') || msg.content === '📷 Bild');
@@ -6809,6 +6858,8 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.10.2', date: '26.06.2026', items: ['Chat-Übersicht wie Teams: zuletzt aktiver Chat steht oben', 'Nachrichtenverlauf chronologisch — neueste Nachricht unten'] },
+      { v: '4.10.1', date: '26.06.2026', items: ['Formatierung beim Einfügen (Fett, Kursiv, Links, Listen) bleibt erhalten', 'Bilder lassen sich direkt in den Chat einfügen'] },
       { v: '4.10.0', date: '24.06.2026', items: ['Linke Leiste aufgeräumt: nur noch Teams, Chat, Dateiablage', 'Neues ⚙️ Einstellungen-Panel (Benachrichtigungen, Lesebestätigungen, Hilfe, „Was ist neu")', 'Suche 🔍 jetzt direkt neben der Überschrift', 'Gespeichert & gepinnt oben in der Chat-Spalte', 'Nur noch ein Feedback-Button'] },
       { v: '4.9.0', date: '23.06.2026', items: ['Senden-Pfeil im Chat', 'Chat zeigt neueste Nachrichten oben', 'Dateien per Drag & Drop in den Chat ziehen'] },
       { v: '4.8.1', date: '22.06.2026', items: ['Bugfix: Dateiablage öffnet wieder zuverlässig'] },
@@ -7699,11 +7750,7 @@
             // Update unread count
             setUnreadChatCount(prev => prev + 1);
             // Update conversation unread badge
-            setConversations(prev => prev.map(c =>
-              c.id === newMsg.conversation_id
-                ? { ...c, unread: (c.unread || 0) + 1, lastMessage: newMsg.content || '📎 Datei', time: 'Jetzt' }
-                : c
-            ));
+            setConversations(prev => updateConversationActivity(prev, newMsg, { unreadDelta: 1, timeLabel: 'Jetzt' }));
             // Browser-Notification
             sendBrowserNotification(
               '💬 Neue Nachricht',
@@ -7800,11 +7847,7 @@
               // Nur zählen wenn diese Conversation NICHT gerade offen ist
               if (!selectedConversation || selectedConversation.id !== msg.convId) {
                 setUnreadChatCount(prev => prev + 1);
-                setConversations(prev => prev.map(c =>
-                  c.id === msg.convId
-                    ? { ...c, unread: (c.unread || 0) + 1, lastMessage: msg.text, time: 'Jetzt' }
-                    : c
-                ));
+                setConversations(prev => updateConversationActivity(prev, { conversation_id: msg.convId, content: msg.text }, { unreadDelta: 1, timeLabel: 'Jetzt' }));
               }
             } else {
               // Nur zählen wenn dieser Channel NICHT gerade angesehen wird
@@ -8291,6 +8334,7 @@
             conversation: selectedConversation,
             messages: chatMessages,
             setMessages: setChatMessages,
+            setConversations,
             dataService,
             currentUser: user,
             onBack: null,
