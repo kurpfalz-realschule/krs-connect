@@ -14,8 +14,12 @@ test.describe('KRS Connect — Smoke: Chat & Navigation', () => {
   });
 
   test('Profil-Modal lässt sich öffnen', async ({ connectPage: page }) => {
-    // Avatar oder Profil-Button suchen
-    const profileBtn = page.getByRole('button', { name: /profil|einstellungen/i }).first();
+    // Profil-Button eindeutig über title ansteuern.
+    // Hinweis (v4.10.0): NICHT mehr /einstellungen/i über die Rolle matchen —
+    // seit dem neuen ⚙️-Einstellungen-Panel gibt es einen eigenen Button
+    // „Einstellungen öffnen", der sonst hier (DOM-Reihenfolge: vor Profil)
+    // fälschlich zuerst getroffen würde.
+    const profileBtn = page.locator('button[title="Profil"]').first();
     if (await profileBtn.count() === 0) {
       test.skip(true, 'Kein Profil-Button gefunden');
     }
