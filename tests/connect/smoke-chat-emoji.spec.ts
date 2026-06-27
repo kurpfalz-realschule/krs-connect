@@ -36,9 +36,9 @@ test.describe('#10 Emojis im Chat', () => {
     const chosen = (await firstEmoji.textContent())?.trim() || '';
     await firstEmoji.click();
 
-    // Eingabefeld enthält jetzt das Emoji
-    const input = page.locator('.chat-input-bar input[type="text"]');
-    await expect(input).toHaveValue(new RegExp(chosen.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), { timeout: 4_000 });
+    // Eingabefeld (WYSIWYG contentEditable) enthält jetzt das Emoji
+    const input = page.locator('.chat-input-bar .rich-editor').first();
+    await expect(input).toContainText(chosen, { timeout: 4_000 });
 
     // Picker wieder geschlossen
     await expect(picker).toHaveCount(0, { timeout: 4_000 });

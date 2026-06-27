@@ -65,10 +65,13 @@ test.describe('Chat-Übersicht: Sortierung nach Aktivität (Teams-Style)', () =>
     }
 
     // Eine neue Nachricht senden — sie muss als LETZTE (unten) erscheinen
-    const input = page.locator('.chat-input-bar input[type="text"]').first();
+    const input = page.locator('.chat-input-bar .rich-editor').first();
     await expect(input).toBeVisible({ timeout: 3000 });
     const marker = 'Sortiertest ' + Date.now();
+    await input.click();
     await input.fill(marker);
+    // Warten bis React den Wert übernommen hat (verhindert Stale-Closure-Race beim Senden)
+    await expect(input).toContainText(marker, { timeout: 2000 });
     await input.press('Enter');
 
     const last = page.locator('.chat-msg .chat-text').last();

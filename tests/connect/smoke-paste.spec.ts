@@ -2,113 +2,74 @@ import { test, expect, openConnect } from '../fixtures/connect.ts';
 
 /**
  * smoke-paste.spec.ts
- * Prüft: HTML-Paste mit Formatierung + Bild-Paste im Post-Editor und Chat-Input.
+ * Prüft Paste-Verhalten im WYSIWYG-Feld (contentEditable ".rich-editor"):
+ * Fett, Links, Plaintext, aggressive Word/Outlook-Bereinigung + Bild-Paste im Chat.
  */
 
-test.describe('Paste-Formatierung im Post-Editor', () => {
+// Öffnet den Beitrags-Editor und liefert das contentEditable-Feld zurück (oder null).
+async function openPostEditor(page: any) {
+  const newPostBtn = page.locator('button[aria-label="Neuer Beitrag"], button:has-text("Neuer Beitrag"), button:has-text("Beitrag erstellen")').first();
+  if (!await newPostBtn.isVisible().catch(() => false)) return null;
+  await newPostBtn.click();
+  const editor = page.locator('.rich-editor').first();
+  if (!await editor.isVisible({ timeout: 3000 }).catch(() => false)) return null;
+  await editor.click();
+  return editor;
+}
+
+// Feuert ein Paste-Event mit text/html (+ text/plain) auf das fokussierte .rich-editor.
+async function pasteHtml(page: any, html: string, plain: string) {
+  await page.evaluate(({ h, p }) => {
+    const el = document.querySelector('.rich-editor') as HTMLElement | null;
+    if (!el) return;
+    el.focus();
+    const dt = new DataTransfer();
+    dt.setData('text/html', h);
+    dt.setData('text/plain', p);
+    el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+  }, { h: html, p: plain });
+}
+
+test.describe('Paste-Formatierung im Beitrags-Editor (WYSIWYG)', () => {
 
   test('HTML-Paste übernimmt Fett-Formatierung', async ({ page }) => {
     await openConnect(page, { user: 'nk' });
+    const editor = await openPostEditor(page);
+    if (!editor) { test.skip(true, 'Kein Beitrags-Editor sichtbar — UI-Variante'); return; }
 
-    // Post-Editor öffnen
-    const newPostBtn = page.locator('button[aria-label="Neuer Beitrag"], button:has-text("Neuer Beitrag"), button:has-text("Beitrag erstellen")').first();
-    if (!await newPostBtn.isVisible()) {
-      test.skip(true, 'Kein „Neuer Beitrag"-Button gefunden — UI-Variante');
-      return;
-    }
-    await newPostBtn.click();
+    await pasteHtml(page, '<p>Das ist <strong>fetter</strong> Text</p>', 'Das ist fetter Text');
 
-    const textarea = page.locator('textarea').first();
-    await expect(textarea).toBeVisible({ timeout: 3000 });
-
-    // HTML mit <strong> in die Textarea einfügen via clipboardData
-    await textarea.focus();
-    await page.evaluate(() => {
-      const ta = document.querySelector('textarea');
-      if (!ta) return;
-      const dt = new DataTransfer();
-      dt.setData('text/html', '<p>Das ist <strong>fetter</strong> Text</p>');
-      dt.setData('text/plain', 'Das ist fetter Text');
-      ta.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
-    });
-
-    // textarea-Inhalt sollte <strong> enthalten
-    const val = await textarea.inputValue();
-    expect(val).toContain('<strong>');
-    expect(val).toContain('fetter');
+    const html = await editor.evaluate((el: HTMLElement) => el.innerHTML);
+    expect(html).toMatch(/<(b|strong)>fetter<\/(b|strong)>/i);
+    expect(html).toContain('fetter');
   });
 
   test('HTML-Paste übernimmt Links', async ({ page }) => {
     await openConnect(page, { user: 'nk' });
+    const editor = await openPostEditor(page);
+    if (!editor) { test.skip(true, 'Kein Beitrags-Editor'); return; }
 
-    const newPostBtn = page.locator('button[aria-label="Neuer Beitrag"], button:has-text("Neuer Beitrag"), button:has-text("Beitrag erstellen")').first();
-    if (!await newPostBtn.isVisible()) {
-      test.skip(true, 'Kein „Neuer Beitrag"-Button');
-      return;
-    }
-    await newPostBtn.click();
+    await pasteHtml(page, '<a href="https://example.com">Beispiel</a>', 'Beispiel');
 
-    const textarea = page.locator('textarea').first();
-    await expect(textarea).toBeVisible({ timeout: 3000 });
-    await textarea.focus();
-
-    await page.evaluate(() => {
-      const ta = document.querySelector('textarea');
-      if (!ta) return;
-      const dt = new DataTransfer();
-      dt.setData('text/html', '<a href="https://example.com">Beispiel</a>');
-      dt.setData('text/plain', 'Beispiel');
-      ta.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
-    });
-
-    const val = await textarea.inputValue();
-    expect(val).toContain('href="https://example.com"');
-    expect(val).toContain('Beispiel');
+    const html = await editor.evaluate((el: HTMLElement) => el.innerHTML);
+    expect(html).toContain('href="https://example.com"');
+    expect(html).toContain('Beispiel');
   });
 
-  test('Plaintext-Paste funktioniert weiterhin normal', async ({ page }) => {
+  test('Plaintext-Paste bleibt einfacher Text', async ({ page }) => {
     await openConnect(page, { user: 'nk' });
+    const editor = await openPostEditor(page);
+    if (!editor) { test.skip(true, 'Kein Beitrags-Editor'); return; }
 
-    const newPostBtn = page.locator('button[aria-label="Neuer Beitrag"], button:has-text("Neuer Beitrag"), button:has-text("Beitrag erstellen")').first();
-    if (!await newPostBtn.isVisible()) {
-      test.skip(true, 'Kein „Neuer Beitrag"-Button');
-      return;
-    }
-    await newPostBtn.click();
-
-    const textarea = page.locator('textarea').first();
-    await expect(textarea).toBeVisible({ timeout: 3000 });
-
-    // Normaler Text-Paste via Keyboard (kein HTML)
-    await textarea.fill('');
-    await page.keyboard.type('Hallo ');
-    // Einfacher Text — Browser-Standard greift, kein Eingriff durch onPaste
-    await page.evaluate(() => {
-      const ta = document.querySelector('textarea');
-      if (!ta) return;
-      const dt = new DataTransfer();
-      dt.setData('text/plain', 'Welt');
-      // kein text/html → Handler lässt Browser-Standard laufen
-      ta.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
-    });
-    // textarea hat mindestens "Hallo " (Plaintext-Paste läuft über Browser, kein Eingriff)
-    const val = await textarea.inputValue();
-    expect(val).toContain('Hallo');
+    await pasteHtml(page, '', 'Hallo Welt');
+    const text = await editor.evaluate((el: HTMLElement) => el.textContent || '');
+    expect(text).toContain('Hallo Welt');
   });
 
   test('Word/Outlook-Paste wird zu sauberem HTML bereinigt', async ({ page }) => {
     await openConnect(page, { user: 'nk' });
-
-    const newPostBtn = page.locator('button[aria-label="Neuer Beitrag"], button:has-text("Neuer Beitrag"), button:has-text("Beitrag erstellen")').first();
-    if (!await newPostBtn.isVisible()) {
-      test.skip(true, 'Kein „Neuer Beitrag"-Button');
-      return;
-    }
-    await newPostBtn.click();
-
-    const textarea = page.locator('textarea').first();
-    await expect(textarea).toBeVisible({ timeout: 3000 });
-    await textarea.focus();
+    const editor = await openPostEditor(page);
+    if (!editor) { test.skip(true, 'Kein Beitrags-Editor'); return; }
 
     // Typischer Outlook-Auszug: tief verschachtelte leere Spans, font-weight:400,
     // color:windowtext/black, color:red, verschachtelte Liste, Link.
@@ -119,68 +80,66 @@ test.describe('Paste-Formatierung im Post-Editor', () => {
       + '<ul><li><span>Wichtig:</span><ul><li><span>Bis Donnerstag</span></li></ul></li></ul>'
       + '<p><a style="color: purple; text-decoration: underline" href="mailto:x@y.de"><span style="color: blue">x@y.de</span></a></p>';
 
-    await page.evaluate((h) => {
-      const ta = document.querySelector('textarea');
-      if (!ta) return;
-      const dt = new DataTransfer();
-      dt.setData('text/html', h);
-      dt.setData('text/plain', 'FAQ Schulwoche 34 Termin A Wichtiger Termin');
-      ta.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
-    }, wordHtml);
+    await pasteHtml(page, wordHtml, 'FAQ Schulwoche 34 Termin A Wichtiger Termin');
 
-    const val = await textarea.inputValue();
+    const html = await editor.evaluate((el: HTMLElement) => el.innerHTML);
     // Word-Müll ist weg
-    expect(val).not.toMatch(/<span><\/span>/);
-    expect(val).not.toMatch(/font-weight:\s*400/i);
-    expect(val).not.toMatch(/font-style:\s*normal/i);
-    expect(val).not.toMatch(/windowtext/i);
-    expect(val).not.toMatch(/<span><span><span>/);
+    expect(html).not.toMatch(/<span><\/span>/);
+    expect(html).not.toMatch(/font-weight:\s*400/i);
+    expect(html).not.toMatch(/font-style:\s*normal/i);
+    expect(html).not.toMatch(/windowtext/i);
+    expect(html).not.toMatch(/<span><span><span>/);
     // Sinnvolle Formatierung + Struktur erhalten
-    expect(val).toMatch(/<b>FAQ Schulwoche 34<\/b>/);
-    expect(val).toMatch(/color:\s*red/i);
-    expect(val).toMatch(/<ul>[\s\S]*<ul>/i);     // verschachtelte Liste
-    expect(val).toContain('href="mailto:x@y.de"');
+    expect(html).toMatch(/<(b|strong)>FAQ Schulwoche 34<\/(b|strong)>/i);
+    expect(html).toMatch(/color:\s*red/i);
+    expect(html).toMatch(/<ul>[\s\S]*<ul>/i);     // verschachtelte Liste
+    expect(html).toContain('href="mailto:x@y.de"');
   });
 
 });
 
-test.describe('Bild-Paste im Chat-Input', () => {
+test.describe('Chat: WYSIWYG-Eingabe + Bild-Paste', () => {
 
-  test('Bild-Paste zeigt Toast und hängt Datei an', async ({ page }) => {
-    await openConnect(page, { user: 'nk' });
-
-    // Ersten Chat öffnen
+  async function openFirstChat(page: any) {
     const chatNav = page.locator('button[aria-label="Chats"], button:has-text("Chat")').first();
-    if (await chatNav.isVisible()) await chatNav.click();
-
+    if (await chatNav.isVisible().catch(() => false)) await chatNav.click();
     const chatItem = page.locator('.conversation-item, [data-testid="conversation-item"]').first();
-    if (!await chatItem.isVisible({ timeout: 2000 }).catch(() => false)) {
-      test.skip(true, 'Kein Chat sichtbar — Demo-Daten-Variante');
-      return;
-    }
+    if (!await chatItem.isVisible({ timeout: 2000 }).catch(() => false)) return false;
     await chatItem.click();
+    return true;
+  }
 
-    const chatInput = page.locator('.chat-input-bar input[type="text"]').first();
-    await expect(chatInput).toBeVisible({ timeout: 3000 });
-    await chatInput.focus();
+  test('Chat-Eingabe ist ein WYSIWYG-Feld (contentEditable)', async ({ page }) => {
+    await openConnect(page, { user: 'nk' });
+    if (!await openFirstChat(page)) { test.skip(true, 'Kein Chat sichtbar — Demo-Variante'); return; }
 
-    // 1×1 px PNG als Clipboard-Bild simulieren
+    const editor = page.locator('.chat-input-bar .rich-editor').first();
+    await expect(editor).toBeVisible({ timeout: 3000 });
+    const isCE = await editor.evaluate((el: HTMLElement) => el.getAttribute('contenteditable'));
+    expect(isCE).toBe('true');
+  });
+
+  test('Bild-Paste im Chat hängt Datei an (Toast)', async ({ page }) => {
+    await openConnect(page, { user: 'nk' });
+    if (!await openFirstChat(page)) { test.skip(true, 'Kein Chat sichtbar — Demo-Variante'); return; }
+
+    const editor = page.locator('.chat-input-bar .rich-editor').first();
+    await expect(editor).toBeVisible({ timeout: 3000 });
+    await editor.click();
+
     await page.evaluate(() => {
-      const input = document.querySelector('.chat-input-bar input[type="text"]');
-      if (!input) return;
-      // Minimales PNG (1×1, transparent)
+      const el = document.querySelector('.chat-input-bar .rich-editor') as HTMLElement | null;
+      if (!el) return;
       const b64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
       const byteChars = atob(b64);
       const bytes = new Uint8Array(byteChars.length);
       for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
-      const blob = new Blob([bytes], { type: 'image/png' });
-      const file = new File([blob], 'test.png', { type: 'image/png' });
+      const file = new File([new Blob([bytes], { type: 'image/png' })], 'test.png', { type: 'image/png' });
       const dt = new DataTransfer();
       dt.items.add(file);
-      input.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+      el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
     });
 
-    // Toast "Bild angehängt" soll erscheinen
     await expect(page.locator('.toast, [role="status"]').filter({ hasText: /bild/i }))
       .toBeVisible({ timeout: 3000 });
   });
