@@ -73,4 +73,28 @@ test.describe('Paste/Render: Farben & Bilder bleiben erhalten', () => {
     expect(out).not.toMatch(/text\/html/i);
   });
 
+  test('Längen-Prüfung zählt nur sichtbaren Text, nicht eingebettete Bilder', async ({ page }) => {
+    const result = await page.evaluate(() => {
+      const htmlToText = (window as any).__krsHtmlToText;
+      const cfg = (window as any).__krsConfig;
+      // Kurzer Text + riesiges eingebettetes Bild (Base64)
+      const bigImg = '<img src="data:image/png;base64,' + 'A'.repeat(60000) + '">';
+      const content = '<p>Kurzer Hinweis an alle</p>' + bigImg;
+      return {
+        rawLen: content.length,
+        textLen: htmlToText(content).length,
+        maxText: cfg.MAX_POST_LENGTH,
+        maxHtml: cfg.MAX_POST_HTML_LENGTH
+      };
+    });
+    // Roh-HTML wäre über dem alten 10000-Limit gelegen …
+    expect(result.rawLen).toBeGreaterThan(10000);
+    // … der sichtbare Text aber ist kurz und unter dem Text-Limit
+    expect(result.textLen).toBeLessThan(result.maxText);
+    expect(result.textLen).toBeLessThan(200);
+    // Limits sind angehoben
+    expect(result.maxText).toBeGreaterThanOrEqual(20000);
+    expect(result.maxHtml).toBeGreaterThanOrEqual(1000000);
+  });
+
 });

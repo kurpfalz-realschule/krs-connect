@@ -30,6 +30,28 @@ test.describe('v4.10.0 Einstellungen-Panel (Demo)', () => {
     await expect(dialog).toContainText('v4.10.0');
   });
 
+  test('Zurück-Navigation: Einstellungen → Hilfe → „← Zurück" landet wieder in Einstellungen', async ({ connectPage: page }) => {
+    const btn = page.locator('button[aria-label="Einstellungen öffnen"]').first();
+    if (await btn.count() === 0) {
+      test.skip(true, 'Einstellungen-Button nicht gefunden — UI-Variante');
+    }
+    await btn.click();
+    const settings = page.locator('.modal-overlay[aria-label="Einstellungen"]').first();
+    await expect(settings).toBeVisible({ timeout: 5_000 });
+
+    // Hilfe öffnen (push auf den Modal-Stack)
+    await page.getByRole('button', { name: '❓ Hilfe & Tipps' }).first().click();
+    await expect(page.getByRole('heading', { name: /Hilfe & Tipps/ }).first()).toBeVisible({ timeout: 5_000 });
+    // Nur oberstes Modal sichtbar → Einstellungen ist verdeckt/entfernt
+    await expect(page.locator('.modal-overlay[aria-label="Einstellungen"]')).toHaveCount(0);
+
+    // „← Zurück" führt eine Ebene hoch — zurück zu den Einstellungen
+    const back = page.getByRole('button', { name: 'Zurück' }).first();
+    await expect(back).toBeVisible({ timeout: 5_000 });
+    await back.click();
+    await expect(page.locator('.modal-overlay[aria-label="Einstellungen"]').first()).toBeVisible({ timeout: 5_000 });
+  });
+
   test('Was-ist-neu zeigt die volle Chronik bis zurück zum Start (März 2026)', async ({ connectPage: page }) => {
     const btn = page.locator('button[aria-label="Einstellungen öffnen"]').first();
     if (await btn.count() === 0) {

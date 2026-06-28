@@ -1728,7 +1728,8 @@
 
       // Input-Validierung
       MAX_CHANNEL_NAME: 50,
-      MAX_POST_LENGTH: 10000,
+      MAX_POST_LENGTH: 20000,        // sichtbarer Text (ohne eingebettete Bilddaten)
+      MAX_POST_HTML_LENGTH: 4000000, // Gesamt inkl. eingebetteter Bilder (~4 MB)
       MAX_POLL_QUESTION: 200,
       MAX_POLL_OPTION: 100,
 
@@ -4442,7 +4443,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.11.0';
+    window.KRS_VERSION = '4.11.2';
     // Für E2E-Tests: Sortier-Helfer der Chat-Übersicht exponieren
     window.__krsSortConversationsByActivity = sortConversationsByActivity;
     window.__krsUpdateConversationActivity = updateConversationActivity;
@@ -4452,6 +4453,8 @@
     window.DataService = DataService; // Test-Hook: Upload-Validierung prüft die Klasse direkt (smoke-upload-validation)
     window.__krsSanitizeHtml = sanitizeHtml;             // Test-Hook: Render-Sanitizer (Farben/Bilder)
     window.__krsSimplifyPastedHtml = simplifyPastedHtml; // Test-Hook: Paste-Bereinigung (Farben/Bilder)
+    window.__krsHtmlToText = htmlToText;                 // Test-Hook: sichtbarer Text (Längen-Prüfung)
+    window.__krsConfig = CONFIG;                         // Test-Hook: Limits (MAX_POST_LENGTH …)
 
     // ============================================================
     // UPLOAD-KONFIG: zentrale Konstanten für DataService.uploadFile
@@ -5226,7 +5229,10 @@
       const handleCreatePost = async (e) => {
         e.preventDefault();
         if (!newPostContent.trim() && selectedFiles.length === 0) return;
-        if (newPostContent.length > CONFIG.MAX_POST_LENGTH) { setPostError('Beitrag zu lang (max. ' + CONFIG.MAX_POST_LENGTH + ' Zeichen)'); return; }
+        // Nur den sichtbaren Text begrenzen — eingebettete Bilder (Base64) zählen nicht als "Zeichen"
+        if (htmlToText(newPostContent).length > CONFIG.MAX_POST_LENGTH) { setPostError('Beitrag zu lang (max. ' + CONFIG.MAX_POST_LENGTH + ' Zeichen Text)'); return; }
+        // Gesamtgröße inkl. eingebetteter Bilder begrenzen (Performance/Realtime)
+        if (newPostContent.length > CONFIG.MAX_POST_HTML_LENGTH) { setPostError('Beitrag inkl. eingebetteter Bilder zu groß. Tipp: große Bilder lieber als Datei anhängen (📎) statt direkt einfügen.'); return; }
         setSaving(true);
         setPostError('');
         try {
@@ -6639,7 +6645,7 @@
       );
     }
 
-    function FeedbackModal({ user, dataService, onClose, onOpenBoard }) {
+    function FeedbackModal({ user, dataService, onClose, onOpenBoard, canGoBack }) {
       const [category, setCategory] = useState('');
       const [rating, setRating] = useState(0);
       const [message, setMessage] = useState('');
@@ -6748,11 +6754,11 @@
           !canSend && React.createElement('div', { style: { fontSize: '12px', color: 'var(--text-muted)', marginTop: '8px' } },
             !category ? 'Bitte zuerst ein Thema wählen.' : 'Bitte noch eine Nachricht schreiben.'),
           onOpenBoard && React.createElement('button', {
-            onClick: () => { onClose(); onOpenBoard(); },
+            onClick: () => onOpenBoard(),
             style: { background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '13px', padding: '8px 0', textDecoration: 'underline' }
           }, '📋 Alle Feedbacks ansehen'),
           React.createElement('div', { className: 'feedback-actions' },
-            React.createElement('button', { className: 'feedback-btn feedback-btn-cancel', onClick: onClose }, 'Abbrechen'),
+            React.createElement('button', { className: 'feedback-btn feedback-btn-cancel', onClick: onClose }, canGoBack ? '← Zurück' : 'Abbrechen'),
             React.createElement('button', {
               className: 'feedback-btn feedback-btn-send',
               onClick: handleSubmit,
@@ -6767,10 +6773,15 @@
     // ============================================================
     // FEEDBACK-BOARD (#12) — Liste aller Feedbacks mit Status-Workflow
     // ============================================================
-    function FeedbackBoardModal({ dataService, isAdmin, onClose, onNewFeedback }) {
+    function FeedbackBoardModal({ dataService, isAdmin, onClose, onNewFeedback, canGoBack }) {
       const [items, setItems] = useState(null); // null = lädt
       const [filter, setFilter] = useState('alle');
       const [savingId, setSavingId] = useState(null);
+      useEffect(() => {
+        const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+      }, [onClose]);
 
       const CAT = { bug: '🐛 Bug', verbesserung: '💡 Verbesserung', lob: '👍 Lob', frage: '❓ Frage', sonstiges: '📝 Sonstiges' };
       const STATUS_LABEL = { offen: 'Offen', in_arbeit: 'In Arbeit', erledigt: 'Erledigt' };
@@ -6801,7 +6812,7 @@
         React.createElement('div', { className: 'feedback-modal fb-board-modal' },
           React.createElement('div', { className: 'feedback-title', style: { justifyContent: 'space-between' } },
             React.createElement('span', null, '📋 Feedback-Board ', React.createElement('span', { style: { fontSize: '11px', fontWeight: 800, background: 'var(--accent-orange,#f59e0b)', color: '#fff', padding: '2px 7px', borderRadius: '10px', verticalAlign: 'middle' } }, 'BETA')),
-            React.createElement('button', { onClick: onClose, 'aria-label': 'Schließen', style: { background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'var(--text-muted)' } }, '✕')
+            React.createElement('button', { onClick: onClose, 'aria-label': canGoBack ? 'Zurück' : 'Schließen', title: canGoBack ? 'Zurück' : 'Schließen', style: { background: 'none', border: 'none', fontSize: canGoBack ? '14px' : '20px', fontWeight: canGoBack ? 600 : 400, cursor: 'pointer', color: canGoBack ? 'var(--accent)' : 'var(--text-muted)', whiteSpace: 'nowrap' } }, canGoBack ? '← Zurück' : '✕')
           ),
           React.createElement('div', { className: 'fb-board-toolbar' },
             ['alle', 'offen', 'in_arbeit', 'erledigt'].map(f =>
@@ -6812,7 +6823,7 @@
               }, (f === 'alle' ? 'Alle' : STATUS_LABEL[f]) + (f === 'alle' ? ' (' + (items ? items.length : 0) + ')' : ' (' + countBy(f) + ')'))
             ),
             onNewFeedback && React.createElement('button', {
-              onClick: () => { onClose(); onNewFeedback(); },
+              onClick: () => onNewFeedback(),
               style: { marginLeft: 'auto', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--radius)', padding: '6px 12px', minHeight: '36px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }
             }, '＋ Feedback schreiben')
           ),
@@ -6955,7 +6966,12 @@
     // ============================================================
     // HELP PANEL — Aufklappbare Hilfe-Übersicht
     // ============================================================
-    function HelpPanel({ onClose, onStartOnboarding }) {
+    function HelpPanel({ onClose, onStartOnboarding, canGoBack }) {
+      useEffect(() => {
+        const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+      }, [onClose]);
       return React.createElement('div', {
         className: 'modal-overlay',
         role: 'dialog', 'aria-modal': 'true',
@@ -6968,7 +6984,7 @@
         },
           React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' } },
             React.createElement('h2', { style: { margin: 0, fontSize: '20px' } }, '❓ Hilfe & Tipps'),
-            React.createElement('button', { onClick: onClose, 'aria-label': 'Schließen', style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '20px', color: 'var(--text-muted)', padding: '8px' } }, '✕')
+            React.createElement('button', { onClick: onClose, 'aria-label': canGoBack ? 'Zurück' : 'Schließen', title: canGoBack ? 'Zurück' : 'Schließen', style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: canGoBack ? '14px' : '20px', fontWeight: canGoBack ? 600 : 400, color: canGoBack ? 'var(--accent)' : 'var(--text-muted)', padding: '8px', whiteSpace: 'nowrap' } }, canGoBack ? '← Zurück' : '✕')
           ),
           React.createElement('div', { style: { fontSize: '14px', lineHeight: '1.6', color: 'var(--text-secondary)' } },
             React.createElement(Accordion, { title: 'Wie funktionieren Teams & Kanäle?', icon: '📢', defaultOpen: true },
@@ -7048,6 +7064,9 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.11.2', date: '28.06.2026', items: ['Zurück-Button: aus Hilfe, Datenschutz oder Feedback kommst du mit „← Zurück" wieder zu den Einstellungen — eine Ebene zurück statt alles zu schließen'] },
+      { v: '4.11.1', date: '28.06.2026', items: ['Sehr lange Beiträge mit eingebetteten Bildern sind jetzt möglich', 'Die Längen-Begrenzung zählt nur den sichtbaren Text, nicht die Bilddaten'] },
+      { v: '4.11.0', date: '28.06.2026', items: ['Farben und eingefügte Bilder bleiben jetzt auch im angezeigten Beitrag erhalten', 'Neuer Farb-Button in der Formatierleiste'] },
       { v: '4.10.5', date: '27.06.2026', items: ['Hier unter „Was ist neu" siehst du jetzt die komplette Entwicklungs-Chronik seit März 2026'] },
       { v: '4.10.4', date: '27.06.2026', items: ['Formatiertes Schreiben & Einfügen jetzt überall: Chat, Antworten und Bearbeiten zeigen Formatierung direkt an (wie bei Teams) — keine HTML-Tags mehr sichtbar', 'Enter sendet, Umschalt+Enter macht einen Zeilenumbruch'] },
       { v: '4.10.3', date: '26.06.2026', items: ['Einfügen aus Word/Outlook wird automatisch aufgeräumt: nur noch Fett, Kursiv, Listen, Farben & Links — kein Code-Wirrwarr mehr'] },
@@ -7072,7 +7091,7 @@
     // ── Einstellungen-Panel (⚙️) — v4.10.0 ───────────────────────────
     // Bündelt Benachrichtigungen, Lesebestätigungen, Hilfe/Datenschutz und
     // den Changelog an einem Ort. Ersetzt die verstreuten Icons unten links.
-    function SettingsPanel({ onClose, notificationsEnabled, notificationPermission, onToggleNotifications, readReceiptsEnabled, onToggleReadReceipts, onOpenHelp, onOpenPrivacy, onOpenFeedback }) {
+    function SettingsPanel({ onClose, canGoBack, notificationsEnabled, notificationPermission, onToggleNotifications, readReceiptsEnabled, onToggleReadReceipts, onOpenHelp, onOpenPrivacy, onOpenFeedback }) {
       useEffect(() => {
         const onKey = (e) => { if (e.key === 'Escape') onClose(); };
         document.addEventListener('keydown', onKey);
@@ -7100,7 +7119,7 @@
         },
           React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' } },
             React.createElement('h2', { style: { margin: 0, fontSize: '20px' } }, '⚙️ Einstellungen'),
-            React.createElement('button', { onClick: onClose, 'aria-label': 'Schließen', style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '20px', color: 'var(--text-muted)', padding: '8px', minWidth: '44px', minHeight: '44px' } }, '✕')
+            React.createElement('button', { onClick: onClose, 'aria-label': canGoBack ? 'Zurück' : 'Schließen', title: canGoBack ? 'Zurück' : 'Schließen', style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: canGoBack ? '14px' : '20px', fontWeight: canGoBack ? 600 : 400, color: canGoBack ? 'var(--accent)' : 'var(--text-muted)', padding: '8px', minWidth: '44px', minHeight: '44px', whiteSpace: 'nowrap' } }, canGoBack ? '← Zurück' : '✕')
           ),
           // Benachrichtigungen
           React.createElement('div', { style: sectionStyle },
@@ -7126,9 +7145,9 @@
           React.createElement('div', { style: sectionStyle },
             React.createElement('div', { style: labelStyle }, '❓ Hilfe, Datenschutz & Feedback'),
             React.createElement('div', { style: { display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '10px' } },
-              React.createElement('button', { onClick: () => { onClose(); onOpenHelp(); }, style: { padding: '10px 14px', minHeight: '44px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '13px' } }, '❓ Hilfe & Tipps'),
-              React.createElement('button', { onClick: () => { onClose(); onOpenPrivacy(); }, style: { padding: '10px 14px', minHeight: '44px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '13px' } }, '🔒 Datenschutz'),
-              onOpenFeedback && React.createElement('button', { onClick: () => { onClose(); onOpenFeedback(); }, style: { padding: '10px 14px', minHeight: '44px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '13px' } }, '📣 Feedback')
+              React.createElement('button', { onClick: () => onOpenHelp(), style: { padding: '10px 14px', minHeight: '44px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '13px' } }, '❓ Hilfe & Tipps'),
+              React.createElement('button', { onClick: () => onOpenPrivacy(), style: { padding: '10px 14px', minHeight: '44px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '13px' } }, '🔒 Datenschutz'),
+              onOpenFeedback && React.createElement('button', { onClick: () => onOpenFeedback(), style: { padding: '10px 14px', minHeight: '44px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '13px' } }, '📣 Feedback')
             )
           ),
           // Was ist neu (Changelog)
@@ -7154,7 +7173,12 @@
       );
     }
 
-    function PrivacyModal({ onClose }) {
+    function PrivacyModal({ onClose, canGoBack }) {
+      useEffect(() => {
+        const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+      }, [onClose]);
       return React.createElement('div', {
         className: 'modal-overlay',
         role: 'dialog', 'aria-modal': 'true',
@@ -7167,7 +7191,7 @@
         },
           React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' } },
             React.createElement('h2', { style: { margin: 0, fontSize: '20px' } }, '🔒 Datenschutzhinweis'),
-            React.createElement('button', { onClick: onClose, 'aria-label': 'Schließen', style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '20px', color: 'var(--text-muted)', padding: '8px' } }, '✕')
+            React.createElement('button', { onClick: onClose, 'aria-label': canGoBack ? 'Zurück' : 'Schließen', title: canGoBack ? 'Zurück' : 'Schließen', style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: canGoBack ? '14px' : '20px', fontWeight: canGoBack ? 600 : 400, color: canGoBack ? 'var(--accent)' : 'var(--text-muted)', padding: '8px', whiteSpace: 'nowrap' } }, canGoBack ? '← Zurück' : '✕')
           ),
           React.createElement('div', { style: { fontSize: '14px', lineHeight: '1.6', color: 'var(--text-secondary)' } },
             React.createElement(Accordion, { title: 'Verantwortlicher', icon: '🏫', defaultOpen: true },
@@ -7280,10 +7304,16 @@
       const [showForwardModal, setShowForwardModal] = useState(null); // post to forward
       const [showAdmin, setShowAdmin] = useState(false); // Phase 6: Admin-Panel
       const [showSettings, setShowSettings] = useState(false); // v4.10.0: Einstellungen-Panel (⚙️)
+      // v4.10.6: Globaler Modal-Zurück-Stack (Einstellungen-Familie). „Zurück" = eine Ebene hoch.
+      const [modalStack, setModalStack] = useState([]);
+      const openModal = useCallback((name) => setModalStack(s => (s[s.length - 1] === name ? s : [...s, name])), []);
+      const backModal = useCallback(() => setModalStack(s => s.slice(0, -1)), []);
+      const closeModals = useCallback(() => setModalStack([]), []);
       const [savedPosts, setSavedPosts] = useState(() => {
         try { return JSON.parse(localStorage.getItem('krs-saved-posts') || '[]'); } catch(e) { return []; }
       });
-      return { showOnlinePanel, setShowOnlinePanel, showFeedback, setShowFeedback,
+      return { modalStack, openModal, backModal, closeModals,
+        showOnlinePanel, setShowOnlinePanel, showFeedback, setShowFeedback,
         showFeedbackBoard, setShowFeedbackBoard,
         showFiles, setShowFiles,
         showBulkTeams, setShowBulkTeams,
@@ -7456,7 +7486,8 @@
         channelTeamMap, setChannelTeamMap } = unreadState;
 
       const modals = useModals();
-      const { showOnlinePanel, setShowOnlinePanel, showFeedback, setShowFeedback,
+      const { modalStack, openModal, backModal, closeModals,
+        showOnlinePanel, setShowOnlinePanel, showFeedback, setShowFeedback,
         showFeedbackBoard, setShowFeedbackBoard,
         showFiles, setShowFiles,
         showBulkTeams, setShowBulkTeams,
@@ -7467,6 +7498,8 @@
         channelContextMenu, setChannelContextMenu, editingChannel, setEditingChannel,
         showForwardModal, setShowForwardModal, showAdmin, setShowAdmin,
         showSettings, setShowSettings, savedPosts, setSavedPosts } = modals;
+      const topModal = modalStack[modalStack.length - 1] || null;
+      const canGoBack = modalStack.length > 1;
 
       const { notificationsEnabled, notificationPermission, requestNotifications,
         toggleNotifications, sendBrowserNotification } = useNotifications();
@@ -8689,7 +8722,7 @@
           // #12: Großer Beta-Feedback-Button — öffnet das Feedback-Board (für alle sichtbar)
           React.createElement('button', {
             className: 'beta-feedback-btn',
-            onClick: () => setShowFeedbackBoard(true),
+            onClick: () => openModal('feedbackBoard'),
             title: 'Feedback geben & alle Rückmeldungen ansehen'
           }, '📣 Feedback', React.createElement('span', { className: 'beta-tag' }, 'BETA')),
           React.createElement('div', { className: 'app-version' }, 'KRS Connect v' + window.KRS_VERSION + ' · Beta'),
@@ -8703,7 +8736,7 @@
               React.createElement('span', { className: 'online-count' }, onlineUsers.size || '–')
             ),
             // v4.10.0: Einstellungen (⚙️) bündelt Benachrichtigungen, Lesebestätigungen, Hilfe & „Was ist neu"
-            React.createElement('button', { className: 'feedback-trigger', onClick: () => setShowSettings(true), title: 'Einstellungen', 'aria-label': 'Einstellungen öffnen' }, '⚙️'),
+            React.createElement('button', { className: 'feedback-trigger', onClick: () => openModal('settings'), title: 'Einstellungen', 'aria-label': 'Einstellungen öffnen' }, '⚙️'),
             // Admin-Button (nur für Admins sichtbar, Phase 6) — 🛠️ statt ⚙️, kein Konflikt mit Einstellungen
             user?.role === 'admin' && React.createElement('button', { className: 'feedback-trigger', onClick: () => setShowAdmin(true), title: 'Administration', 'aria-label': 'Admin-Panel öffnen' }, '🛠️'),
             React.createElement('button', {
@@ -8782,8 +8815,8 @@
         view === 'teams' && openThread && React.createElement(ThreadPanel, { post: openThread, replies, dataService, user, onClose: () => setOpenThread(null), onReplyCreated: (r) => setReplies(prev => prev.some(x => x.id === r.id) ? prev : [...prev, r]) }),
         // Feedback Modal
         React.createElement(UpdateBanner, null),
-        showFeedback && React.createElement(FeedbackModal, { user, dataService, onClose: () => setShowFeedback(false), onOpenBoard: () => setShowFeedbackBoard(true) }),
-        showFeedbackBoard && React.createElement(FeedbackBoardModal, { dataService, isAdmin: user?.role === 'admin', onClose: () => setShowFeedbackBoard(false), onNewFeedback: () => setShowFeedback(true) }),
+        topModal === 'feedback' && React.createElement(FeedbackModal, { user, dataService, onClose: backModal, canGoBack, onOpenBoard: () => openModal('feedbackBoard') }),
+        topModal === 'feedbackBoard' && React.createElement(FeedbackBoardModal, { dataService, isAdmin: user?.role === 'admin', onClose: backModal, canGoBack, onNewFeedback: () => openModal('feedback') }),
         showFiles && React.createElement(FilesPlaceholderModal, { onClose: () => setShowFiles(false) }),
         showBulkTeams && React.createElement(BulkDeleteTeamsModal, {
           teams, archivedTeams, dataService,
@@ -8804,19 +8837,20 @@
           }
         } }),
         // Hilfe-Panel mit Accordions
-        showHelp && React.createElement(HelpPanel, { onClose: () => setShowHelp(false), onStartOnboarding: () => { try { localStorage.removeItem('krs_onboarding_done'); } catch(e) {} setShowOnboarding(true); } }),
+        topModal === 'help' && React.createElement(HelpPanel, { onClose: backModal, canGoBack, onStartOnboarding: () => { try { localStorage.removeItem('krs_onboarding_done'); } catch(e) {} closeModals(); setShowOnboarding(true); } }),
         // Datenschutz Modal
-        showPrivacy && React.createElement(PrivacyModal, { onClose: () => setShowPrivacy(false) }),
+        topModal === 'privacy' && React.createElement(PrivacyModal, { onClose: backModal, canGoBack }),
         // Einstellungen-Panel (v4.10.0)
-        showSettings && React.createElement(SettingsPanel, {
-          onClose: () => setShowSettings(false),
+        topModal === 'settings' && React.createElement(SettingsPanel, {
+          onClose: backModal,
+          canGoBack,
           notificationsEnabled, notificationPermission,
           onToggleNotifications: toggleNotifications,
           readReceiptsEnabled,
           onToggleReadReceipts: toggleReadReceipts,
-          onOpenHelp: () => setShowHelp(true),
-          onOpenPrivacy: () => setShowPrivacy(true),
-          onOpenFeedback: () => setShowFeedbackBoard(true)
+          onOpenHelp: () => openModal('help'),
+          onOpenPrivacy: () => openModal('privacy'),
+          onOpenFeedback: () => openModal('feedbackBoard')
         }),
         // Admin-Panel (Phase 6 — nur für Admins sichtbar)
         showAdmin && user?.role === 'admin' && React.createElement(AdminPanel, {
