@@ -30,6 +30,21 @@ test.describe('v4.10.0 Einstellungen-Panel (Demo)', () => {
     await expect(dialog).toContainText('v4.10.0');
   });
 
+  test('Was-ist-neu zeigt die volle Chronik bis zurück zum Start (März 2026)', async ({ connectPage: page }) => {
+    const btn = page.locator('button[aria-label="Einstellungen öffnen"]').first();
+    if (await btn.count() === 0) {
+      test.skip(true, 'Einstellungen-Button nicht gefunden — UI-Variante');
+    }
+    await btn.click();
+    const dialog = page.locator('.modal-overlay[aria-label="Einstellungen"]').first();
+    await expect(dialog).toBeVisible({ timeout: 5_000 });
+    // Aktuellste Version oben …
+    await expect(dialog).toContainText('v4.10.5');
+    // … und die historischen Meilensteine bis zum Projektstart
+    await expect(dialog).toContainText('v4.0.0');
+    await expect(dialog).toContainText('März 2026 — Start');
+  });
+
   test('Panel schließt per Schließen-Button und per ESC', async ({ connectPage: page }) => {
     const btn = page.locator('button[aria-label="Einstellungen öffnen"]').first();
     if (await btn.count() === 0) {

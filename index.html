@@ -3806,6 +3806,42 @@
     // Default-/Müll-Farben aus Word/Outlook, die wir verwerfen (= keine echte Hervorhebung)
     const PASTE_DEFAULT_COLORS = ['black','#000','#000000','windowtext','inherit','initial','currentcolor','auto','rgb(0,0,0)','rgb(0, 0, 0)'];
 
+    // ── Gemeinsame Helfer für sichere Inline-Styles & Bilder ──
+    // Erlaubt nur unbedenkliche Farbwerte (Hex, Namen, rgb/rgba/hsl). Blockt url(), expression, javascript:.
+    function safeColorVal(v) {
+      v = String(v || '').trim();
+      if (!v || /url|expression|javascript|[<>{}\\]/i.test(v)) return false;
+      if (/^#[0-9a-f]{3,8}$/i.test(v)) return true;                       // Hex
+      if (/^[a-z]+$/i.test(v)) return true;                               // benannte Farbe (red, gold …)
+      if (/^(rgb|rgba|hsl|hsla)\(\s*[\d.,\s%]+\)$/i.test(v)) return true; // rgb()/rgba()/hsl()
+      return false;
+    }
+
+    // Reduziert das style-Attribut eines Knotens auf eine sichere Whitelist
+    // (Textfarbe, Hintergrundfarbe, Fett, Kursiv, Unterstrichen). Alles andere fliegt raus.
+    function filterSafeStyle(node) {
+      if (!node || !node.hasAttribute || !node.hasAttribute('style')) return;
+      const style = node.getAttribute('style');
+      const keep = [];
+      const grab = (re) => { const m = re.exec(style); return m ? m[1].trim() : null; };
+      const color = grab(/(?:^|;|\s)color\s*:\s*([^;]+)/i);
+      if (color && safeColorVal(color) && !PASTE_DEFAULT_COLORS.includes(color.toLowerCase())) keep.push('color: ' + color);
+      const bg = grab(/(?:^|;|\s)background-color\s*:\s*([^;]+)/i);
+      if (bg && safeColorVal(bg) && !PASTE_DEFAULT_COLORS.includes(bg.toLowerCase())) keep.push('background-color: ' + bg);
+      const fw = grab(/font-weight\s*:\s*([^;]+)/i);
+      if (fw && (/bold/i.test(fw) || parseInt(fw, 10) >= 600)) keep.push('font-weight: 700');
+      if (/font-style\s*:\s*italic/i.test(style)) keep.push('font-style: italic');
+      if (/text-decoration\s*:[^;]*underline/i.test(style)) keep.push('text-decoration: underline');
+      if (keep.length) node.setAttribute('style', keep.join('; '));
+      else node.removeAttribute('style');
+    }
+
+    // Nur http(s)- und data:image-Quellen sind als Bild erlaubt (kein javascript:, kein data:text/html).
+    function isSafeImageSrc(src) {
+      src = String(src || '').trim();
+      return /^https?:\/\//i.test(src) || /^data:image\/(png|jpe?g|gif|webp|bmp|svg\+xml);/i.test(src);
+    }
+
     function simplifyPastedHtml(rawHtml) {
       if (!window.DOMPurify) {
         // Kein DOMPurify → kein HTML vertrauen; auf Plaintext degradieren (XSS-sicher)
@@ -3821,36 +3857,19 @@
         .replace(/&nbsp;/gi, ' ');                        // NBSP → normales Leerzeichen
 
       const ALLOWED = {
-        ALLOWED_TAGS: ['b','strong','i','em','u','s','a','ul','ol','li','p','br','span','h1','h2','h3','code','pre','blockquote'],
-        ALLOWED_ATTR: ['href','target','rel','style'],
+        ALLOWED_TAGS: ['b','strong','i','em','u','s','a','ul','ol','li','p','br','span','h1','h2','h3','code','pre','blockquote','img'],
+        ALLOWED_ATTR: ['href','target','rel','style','src','alt','width','height'],
+        ADD_DATA_URI_TAGS: ['img'], // data:image/... in <img src> zulassen
         FORCE_BODY: true,
       };
 
-      // Hook: style auf sinnvolle, sichere Hervorhebungen reduzieren; Default-Farben/-Gewichte verwerfen
+      // Hook: style auf sichere Hervorhebungen reduzieren (Farbe/Hintergrund/Fett/Kursiv/Unterstrichen),
+      // a[target] absichern. Bild-Quellen werden nach dem Sanitizing geprüft (siehe unten).
       DOMPurify.addHook('afterSanitizeAttributes', (node) => {
         if (node.tagName === 'A' && node.hasAttribute('target')) {
           node.setAttribute('rel', 'noopener noreferrer');
         }
-        if (node.hasAttribute && node.hasAttribute('style')) {
-          const style = node.getAttribute('style');
-          const keep = [];
-          const grab = (re) => { const m = re.exec(style); return m ? m[1].trim() : null; };
-          // Farbe: nur behalten, wenn sicher UND keine Default-/Müllfarbe
-          const color = grab(/(?:^|;|\s)color\s*:\s*([^;]+)/i);
-          if (color && !/[(){}<>\\]|url|expression|javascript/i.test(color)
-              && !PASTE_DEFAULT_COLORS.includes(color.toLowerCase())) {
-            keep.push('color: ' + color);
-          }
-          // Fett: nur bold / >=600 (Word liefert 400 = normal → verwerfen)
-          const fw = grab(/font-weight\s*:\s*([^;]+)/i);
-          if (fw && (/bold/i.test(fw) || parseInt(fw, 10) >= 600)) keep.push('font-weight: 700');
-          // Kursiv / Unterstrichen
-          if (/font-style\s*:\s*italic/i.test(style)) keep.push('font-style: italic');
-          if (/text-decoration\s*:[^;]*underline/i.test(style)) keep.push('text-decoration: underline');
-
-          if (keep.length) node.setAttribute('style', keep.join('; '));
-          else node.removeAttribute('style');
-        }
+        filterSafeStyle(node);
       });
 
       const sanitized = DOMPurify.sanitize(pre, ALLOWED);
@@ -3859,6 +3878,15 @@
       // 2) DOM-Nachbearbeitung: Word-Span-Suppe auflösen + leere Knoten entfernen
       const root = document.createElement('div');
       root.innerHTML = sanitized;
+
+      // 2.0) Bilder: unsichere Quellen entfernen, sichere Bilder DSGVO-schonend laden
+      root.querySelectorAll('img').forEach(img => {
+        const src = img.getAttribute('src') || '';
+        if (!isSafeImageSrc(src)) { img.remove(); return; }
+        img.removeAttribute('style');            // keine Layout-Styles aus Fremdquellen
+        img.setAttribute('loading', 'lazy');
+        img.setAttribute('referrerpolicy', 'no-referrer');
+      });
 
       // 2a) Bedeutungslose <span> (ohne style) auflösen — bis stabil
       let changed = true, guard = 0;
@@ -4344,8 +4372,9 @@
 
     // HTML-Sanitizer: DOMPurify mit Legacy-Fallback
     const SANITIZE_CONFIG = {
-      ALLOWED_TAGS: ['p','br','b','strong','i','em','u','a','ul','ol','li','h1','h2','h3','h4','blockquote','pre','code','span','div','hr'],
-      ALLOWED_ATTR: ['href','target','rel','class'],
+      ALLOWED_TAGS: ['p','br','b','strong','i','em','u','a','ul','ol','li','h1','h2','h3','h4','blockquote','pre','code','span','div','hr','img'],
+      ALLOWED_ATTR: ['href','target','rel','class','style','src','alt','width','height'],
+      ADD_DATA_URI_TAGS: ['img'], // data:image/... in <img src> zulassen
       ALLOW_DATA_ATTR: false
     };
 
@@ -4385,7 +4414,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.10.4';
+    window.KRS_VERSION = '4.10.5';
     // Für E2E-Tests: Sortier-Helfer der Chat-Übersicht exponieren
     window.__krsSortConversationsByActivity = sortConversationsByActivity;
     window.__krsUpdateConversationActivity = updateConversationActivity;
@@ -6979,6 +7008,7 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.10.5', date: '27.06.2026', items: ['Hier unter „Was ist neu" siehst du jetzt die komplette Entwicklungs-Chronik seit März 2026'] },
       { v: '4.10.4', date: '27.06.2026', items: ['Formatiertes Schreiben & Einfügen jetzt überall: Chat, Antworten und Bearbeiten zeigen Formatierung direkt an (wie bei Teams) — keine HTML-Tags mehr sichtbar', 'Enter sendet, Umschalt+Enter macht einen Zeilenumbruch'] },
       { v: '4.10.3', date: '26.06.2026', items: ['Einfügen aus Word/Outlook wird automatisch aufgeräumt: nur noch Fett, Kursiv, Listen, Farben & Links — kein Code-Wirrwarr mehr'] },
       { v: '4.10.2', date: '26.06.2026', items: ['Chat-Übersicht wie Teams: zuletzt aktiver Chat steht oben', 'Nachrichtenverlauf chronologisch — neueste Nachricht unten'] },
@@ -6988,6 +7018,15 @@
       { v: '4.8.1', date: '22.06.2026', items: ['Bugfix: Dateiablage öffnet wieder zuverlässig'] },
       { v: '4.8.0', date: '22.06.2026', items: ['Optimiert für iPad & Handy', 'App lädt auch bei wackeligem Netz zuverlässiger'] },
       { v: '4.7.0', date: '22.06.2026', items: ['Dateiablage-Hinweis (iServ; eigene Ablage folgt mit Nextcloud)'] },
+      { v: '4.6.0', date: '22.06.2026', items: ['„Mehrere Teams löschen" (Admin-Aufräum-Dialog)', 'Versionsanzeige + Hinweis auf neue Version'] },
+      { v: '4.5.0', date: '22.06.2026', items: ['Team anlegen für alle', 'Emojis in Beiträgen & Antworten', 'Feedback-Board mit Status-Filter'] },
+      { v: '4.2.0', date: '20.06.2026', items: ['Reaktionen auf Chat-Nachrichten', 'Teams archivieren & löschen', 'Logout im Profil; robusteres Laden bei wackeligem Netz'] },
+      { v: '4.1.0', date: '17.06.2026', items: ['Foren & Chats ausblendbar (ohne Austritt)', 'Direktnachrichten bearbeiten & löschen', 'Anhänge in Antworten'] },
+      { v: '4.0.0', date: '12.06.2026', items: ['Großer Meilenstein: Connect erstmals produktiv unter der Schul-Organisation live', 'Sicherheit gehärtet (Zugriffsregeln auf allen Daten)'] },
+      { label: 'Juni 2026 — Plattform-Sprints', date: '10.–18.06.2026', items: ['Umzug aller Module in die Schul-Organisation', 'Einheitlicher Login am Hub', 'Neue iPad-Buchung mit Barcodes (16 Koffer)', 'Hub-Admin-Panel (Lehrkräfte, Koffer, Rollen)', 'Anmeldung per E-Mail + Passwort, 40 Lehrkräfte importiert', 'Beta mit dem Schulleitungsteam'] },
+      { label: 'Mai 2026 — Tests & Backend', date: '01.–13.05.2026', items: ['Automatische Tests + Sicherheitsnetz vor jedem Deploy', 'Datei-Upload überarbeitet', 'Backend für das Hub-Dashboard'] },
+      { label: 'April 2026 — Ausbau', date: '07.–21.04.2026', items: ['Rich-Text, Umfragen, Weiterleiten, Lesezeichen, angeheftete Beiträge', 'Admin-Panel, Fehlerabfang, Offline-Erkennung'] },
+      { label: 'März 2026 — Start', date: '20.–30.03.2026', items: ['Erster Prototyp: Teams, Kanäle, Threads, Emojis', 'Login & Sicherheits-Regeln', 'Ungelesen-Zähler', 'KRS Hub als gemeinsames Dach', 'Klassenarbeitsplan live'] },
     ];
 
     // ── Einstellungen-Panel (⚙️) — v4.10.0 ───────────────────────────
@@ -7055,11 +7094,12 @@
           // Was ist neu (Changelog)
           React.createElement('div', { style: { padding: '16px 0 4px' } },
             React.createElement('div', { style: labelStyle }, '🆕 Was ist neu'),
-            React.createElement('div', { style: { marginTop: '10px' } },
+            React.createElement('div', { style: { fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' } }, 'Die ganze Entwicklungs-Chronik — seit März 2026'),
+            React.createElement('div', { style: { marginTop: '10px', maxHeight: '420px', overflowY: 'auto', paddingRight: '6px' } },
               KRS_CHANGELOG.map((rel, i) =>
-                React.createElement('div', { key: rel.v, style: { marginBottom: '14px' } },
-                  React.createElement('div', { style: { display: 'flex', alignItems: 'baseline', gap: '8px' } },
-                    React.createElement('span', { style: { fontSize: '13px', fontWeight: '700', color: 'var(--accent)' } }, 'v' + rel.v),
+                React.createElement('div', { key: i, style: { marginBottom: '14px' } },
+                  React.createElement('div', { style: { display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' } },
+                    React.createElement('span', { style: { fontSize: '13px', fontWeight: '700', color: 'var(--accent)' } }, rel.v ? ('v' + rel.v) : rel.label),
                     i === 0 && React.createElement('span', { style: { fontSize: '10px', fontWeight: '700', background: 'var(--accent)', color: '#fff', padding: '1px 6px', borderRadius: '8px' } }, 'NEU'),
                     React.createElement('span', { style: { fontSize: '11px', color: 'var(--text-muted)' } }, rel.date)
                   ),
