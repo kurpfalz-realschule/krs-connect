@@ -4043,6 +4043,7 @@
     function MentionTextarea({ value, onChange, allUsers, placeholder, autoFocus, style, showToolbar, onFilePaste, onEnter, editorRef: editorRefProp }) {
       const [mentionQuery, setMentionQuery] = useState(null);
       const [mentionIdx, setMentionIdx] = useState(0);
+      const [showColors, setShowColors] = useState(false);
       const _localEditorRef = useRef(null);
       const editorRef = editorRefProp || _localEditorRef;
 
@@ -4160,10 +4161,37 @@
         }
       };
 
-      const toolbar = showToolbar === false ? null : React.createElement('div', { className: 'rich-toolbar', role: 'toolbar', 'aria-label': 'Formatierung' },
+      // Textfarbe setzen — styleWithCSS sorgt für <span style="color:…"> (statt <font>),
+      // damit die Farbe den Render-Sanitizer übersteht.
+      const TEXT_COLORS = [
+        ['KRS-Akzent', '#D4762C'], ['Rot', '#C0392B'], ['Grün', '#1E8449'],
+        ['Blau', '#2D6CDF'], ['Lila', '#8E44AD'], ['Standard', '#1F2937']
+      ];
+      const applyColor = (color) => {
+        const el = editorRef.current;
+        if (el) el.focus();
+        try { document.execCommand('styleWithCSS', false, true); } catch (_) {}
+        try { document.execCommand('foreColor', false, color); } catch (_) {}
+        try { document.execCommand('styleWithCSS', false, false); } catch (_) {}
+        setShowColors(false);
+        emitChange();
+      };
+
+      const toolbar = showToolbar === false ? null : React.createElement('div', { className: 'rich-toolbar', role: 'toolbar', 'aria-label': 'Formatierung', style: { position: 'relative' } },
         React.createElement('button', { type: 'button', title: 'Fett (Strg+B)', 'aria-label': 'Fett', onMouseDown: (e) => { e.preventDefault(); exec('bold'); }, style: { fontWeight: 700 } }, 'B'),
         React.createElement('button', { type: 'button', title: 'Kursiv (Strg+I)', 'aria-label': 'Kursiv', onMouseDown: (e) => { e.preventDefault(); exec('italic'); }, style: { fontStyle: 'italic' } }, 'I'),
         React.createElement('button', { type: 'button', title: 'Unterstrichen (Strg+U)', 'aria-label': 'Unterstrichen', onMouseDown: (e) => { e.preventDefault(); exec('underline'); }, style: { textDecoration: 'underline' } }, 'U'),
+        React.createElement('button', { type: 'button', title: 'Textfarbe', 'aria-label': 'Textfarbe', 'aria-haspopup': 'true', 'aria-expanded': showColors, onMouseDown: (e) => { e.preventDefault(); setShowColors(v => !v); } }, '🎨'),
+        showColors && React.createElement('div', { className: 'rich-color-pop', role: 'menu', 'aria-label': 'Farbe wählen' },
+          TEXT_COLORS.map(([name, c]) =>
+            React.createElement('button', {
+              key: c, type: 'button', title: name, 'aria-label': name, role: 'menuitem',
+              className: 'rich-color-swatch',
+              style: { background: c },
+              onMouseDown: (e) => { e.preventDefault(); applyColor(c); }
+            })
+          )
+        ),
         React.createElement('button', { type: 'button', title: 'Aufzählung', 'aria-label': 'Aufzählung', onMouseDown: (e) => { e.preventDefault(); exec('insertUnorderedList'); } }, '• Liste'),
         React.createElement('button', { type: 'button', title: 'Nummerierte Liste', 'aria-label': 'Nummerierte Liste', onMouseDown: (e) => { e.preventDefault(); exec('insertOrderedList'); } }, '1. Liste'),
         React.createElement('button', { type: 'button', title: 'Link einfügen', 'aria-label': 'Link', onMouseDown: (e) => { e.preventDefault(); addLink(); } }, '🔗')
@@ -4414,7 +4442,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.10.5';
+    window.KRS_VERSION = '4.11.0';
     // Für E2E-Tests: Sortier-Helfer der Chat-Übersicht exponieren
     window.__krsSortConversationsByActivity = sortConversationsByActivity;
     window.__krsUpdateConversationActivity = updateConversationActivity;
@@ -4422,6 +4450,8 @@
     window.__KRS_FORCE_DEMO = __KRS_QS.get('forceMode') === 'demo';
     window.__KRS_FORCE_USER = __KRS_QS.get('forceUser') || null; // optional: direktes Login als kuerzel
     window.DataService = DataService; // Test-Hook: Upload-Validierung prüft die Klasse direkt (smoke-upload-validation)
+    window.__krsSanitizeHtml = sanitizeHtml;             // Test-Hook: Render-Sanitizer (Farben/Bilder)
+    window.__krsSimplifyPastedHtml = simplifyPastedHtml; // Test-Hook: Paste-Bereinigung (Farben/Bilder)
 
     // ============================================================
     // UPLOAD-KONFIG: zentrale Konstanten für DataService.uploadFile
@@ -4456,6 +4486,16 @@
       if (window.DOMPurify && window.DOMPurify.sanitize) {
         // SICHER: DOMPurify verfügbar
         tmp.innerHTML = DOMPurify.sanitize(html, SANITIZE_CONFIG);
+        // Inline-Styles auf sichere Whitelist reduzieren (Farben bleiben erhalten)
+        tmp.querySelectorAll('[style]').forEach(filterSafeStyle);
+        // Bilder: unsichere Quellen entfernen, sichere Bilder DSGVO-schonend laden
+        tmp.querySelectorAll('img').forEach(img => {
+          const src = img.getAttribute('src') || '';
+          if (!isSafeImageSrc(src)) { img.remove(); return; }
+          img.removeAttribute('style');
+          img.setAttribute('loading', 'lazy');
+          img.setAttribute('referrerpolicy', 'no-referrer');
+        });
         tmp.querySelectorAll('a').forEach(a => {
           a.setAttribute('target', '_blank');
           a.setAttribute('rel', 'noopener noreferrer');
