@@ -276,6 +276,28 @@
     }
 
     .content-header h1 { margin: 0; font-size: 18px; }
+    /* v4.12.0: Tab-Leiste pro Team (Beiträge | Dateiablage | Termine) */
+    .team-tabs {
+      display: flex;
+      gap: 4px;
+      padding: 6px 16px 0;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-primary);
+      flex: 0 0 auto;
+    }
+    .team-tab {
+      border: none;
+      background: none;
+      cursor: pointer;
+      padding: 8px 14px;
+      min-height: 44px; /* Touch-Target (iPad-Kollegium) */
+      font-size: 14px;
+      color: var(--text-secondary);
+      border-bottom: 2px solid transparent;
+      border-radius: var(--radius) var(--radius) 0 0;
+    }
+    .team-tab:hover { background: var(--bg-tertiary); }
+    .team-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
 
     .header-actions {
       display: flex;
@@ -1818,6 +1840,54 @@
       { id: 'fb3', user_id: null, name: 'Anonym', category: 'lob', rating: 5, message: 'Viel besser als Teams – danke!', page: '', status: 'offen', created_at: '2026-06-22T07:45:00.000Z' }
     ];
 
+    // ── Helfer: lokales Datum als 'YYYY-MM-DD' (v4.12.0) ──────────────
+    // Bewusst LOKAL (nicht toISOString/UTC), damit die Auf-/Abtrennung
+    // „kommend vs. vergangen" bei Terminen mit der Nutzer-Zeitzone übereinstimmt.
+    function krsLocalDateStr(d) {
+      const p = (n) => String(n).padStart(2, '0');
+      return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+    }
+    // Demo-Datum relativ zu heute (hält Mock-Termine & E2E-Tests dauerhaft stabil)
+    function __demoDatum(offsetTage) {
+      const d = new Date();
+      d.setDate(d.getDate() + offsetTage);
+      return krsLocalDateStr(d);
+    }
+
+    // ── URL-Validierung für Dateiablage-Links (v4.12.0) ───────────────
+    // Nur http/https — javascript:, data:, ftp: usw. werden abgelehnt.
+    function isSafeHttpUrl(value) {
+      if (!value || typeof value !== 'string') return false;
+      try {
+        const u = new URL(value.trim());
+        return u.protocol === 'http:' || u.protocol === 'https:';
+      } catch (e) { return false; }
+    }
+
+    // Demo-Store für Team-Dateiablage-Links (v4.12.0): { [teamId]: [link, ...] }
+    let MOCK_TEAM_LINKS = {
+      1: [
+        { id: 'tl1', team_id: 1, titel: 'iServ-Ordner Kollegium', url: 'https://krs.sh-schulen.de/iserv/file/-/Groups/Kollegium', beschreibung: 'Gemeinsame Dateien des Kollegiums', icon: '📁', created_by: 1, created_at: '2026-06-25T08:00:00.000Z', sort_order: 0 },
+        { id: 'tl2', team_id: 1, titel: 'Nextcloud Schulordner', url: 'https://cloud.krs-beispiel.de/s/kollegium', beschreibung: 'Pilot der eigenen Dateiablage', icon: '☁️', created_by: 2, created_at: '2026-06-26T10:15:00.000Z', sort_order: 1 }
+      ],
+      2: [
+        { id: 'tl3', team_id: 2, titel: 'Noten & Arrangements (iServ)', url: 'https://krs.sh-schulen.de/iserv/file/-/Groups/Musik', beschreibung: 'Ablage der Fachschaft Musik', icon: '🎵', created_by: 1, created_at: '2026-06-27T12:00:00.000Z', sort_order: 0 }
+      ]
+    };
+
+    // Demo-Store für Team-Termine (v4.12.0): { [teamId]: [termin, ...] }
+    // Daten relativ zu heute, damit „kommend/vergangen" im Demo-Modus immer stimmt.
+    let MOCK_TEAM_TERMINE = {
+      1: [
+        { id: 'tt1', team_id: 1, titel: 'Gesamtlehrerkonferenz', datum: __demoDatum(13), uhrzeit: '14:00', ort: 'Musiksaal', beschreibung: 'Themen: Zeugnisse, Schuljahresplanung', created_by: 2, created_at: '2026-06-20T09:00:00.000Z' },
+        { id: 'tt2', team_id: 1, titel: 'Schulfest-Aufbau', datum: __demoDatum(18), uhrzeit: '13:00', ort: 'Schulhof', beschreibung: '', created_by: 1, created_at: '2026-06-21T11:30:00.000Z' },
+        { id: 'tt3', team_id: 1, titel: 'Pädagogischer Tag', datum: __demoDatum(-30), uhrzeit: '', ort: 'Aula', beschreibung: 'Bereits vorbei — steht unter „Vergangene Termine".', created_by: 3, created_at: '2026-03-20T08:00:00.000Z' }
+      ],
+      2: [
+        { id: 'tt4', team_id: 2, titel: 'Schulband-Generalprobe', datum: __demoDatum(8), uhrzeit: '15:30', ort: 'Musiksaal', beschreibung: 'Generalprobe fürs Sommerkonzert', created_by: 1, created_at: '2026-06-22T10:00:00.000Z' }
+      ]
+    };
+
     const MOCK_CHANNELS = {
       1: [
         { id: 1, name: 'Allgemein', is_default: true, unread: 0 },
@@ -2602,6 +2672,271 @@
           if (error) throw error;
           return data;
         } catch (err) { console.error('updateFeedbackStatus error:', err); showToast('Status konnte nicht geändert werden.', 'error'); return null; }
+      }
+
+      // ── Team-Dateiablage-Links (v4.12.0) ───────────────────
+      // WICHTIG (Normalizer-Drift-Falle): _normalizeTeamLink ist das EINZIGE
+      // Mapping DB/Mock → UI. Neue Spalten hier ergänzen, sonst verschwinden
+      // sie nach dem Neuladen still aus dem UI.
+      _normalizeTeamLink(row) {
+        if (!row) return null;
+        return {
+          id: row.id,
+          team_id: row.team_id,
+          titel: row.titel || '',
+          url: row.url || '',
+          beschreibung: row.beschreibung || '',
+          icon: row.icon || '',
+          created_by: row.created_by ?? null,
+          created_at: row.created_at || null,
+          sort_order: row.sort_order ?? 0
+        };
+      }
+
+      async getTeamLinks(teamId) {
+        if (this.isDemo) {
+          const list = MOCK_TEAM_LINKS[teamId] || [];
+          return list.map(l => this._normalizeTeamLink(l))
+            .sort((a, b) => (a.sort_order - b.sort_order) || String(a.created_at || '').localeCompare(String(b.created_at || '')));
+        }
+        try {
+          const { data, error } = await this.sb.from('team_links').select('*')
+            .eq('team_id', teamId)
+            .order('sort_order', { ascending: true })
+            .order('created_at', { ascending: true });
+          if (error) throw error;
+          return (data || []).map(l => this._normalizeTeamLink(l));
+        } catch (err) { console.error('getTeamLinks error:', err); return []; }
+      }
+
+      async createTeamLink(teamId, { titel, url, beschreibung = '', icon = '' } = {}, userId = null) {
+        const cleanTitel = String(titel || '').trim().substring(0, 120);
+        const cleanUrl = String(url || '').trim().substring(0, 500);
+        if (!cleanTitel) { showToast('Bitte gib dem Link einen Titel.', 'error'); return null; }
+        if (!isSafeHttpUrl(cleanUrl)) { showToast('Nur Links mit http:// oder https:// sind erlaubt.', 'error'); return null; }
+        const clean = {
+          team_id: teamId,
+          titel: cleanTitel,
+          url: cleanUrl,
+          beschreibung: String(beschreibung || '').trim().substring(0, 300),
+          icon: String(icon || '').trim().substring(0, 8)
+        };
+        if (this.isDemo) {
+          const list = MOCK_TEAM_LINKS[teamId] || (MOCK_TEAM_LINKS[teamId] = []);
+          const link = this._normalizeTeamLink({ id: 'tl' + Date.now(), ...clean, created_by: userId ?? null, created_at: new Date().toISOString(), sort_order: list.length });
+          list.push(link);
+          return link;
+        }
+        try {
+          const insertObj = { ...clean, sort_order: 0 };
+          if (userId) insertObj.created_by = userId;
+          const { data, error } = await this.sb.from('team_links').insert(insertObj).select('*').single();
+          if (error) throw error;
+          return this._normalizeTeamLink(data);
+        } catch (err) {
+          console.error('createTeamLink error:', err);
+          showToast(/row-level security|policy|permission|denied/i.test(err && err.message || '')
+            ? 'Keine Berechtigung: Nur Team-Mitglieder können Links anlegen.'
+            : 'Link konnte nicht gespeichert werden. Bitte versuche es erneut.', 'error');
+          return null;
+        }
+      }
+
+      async updateTeamLink(linkId, updates = {}) {
+        const patch = {};
+        if (updates.titel !== undefined) {
+          const t = String(updates.titel || '').trim().substring(0, 120);
+          if (!t) { showToast('Bitte gib dem Link einen Titel.', 'error'); return null; }
+          patch.titel = t;
+        }
+        if (updates.url !== undefined) {
+          const u = String(updates.url || '').trim().substring(0, 500);
+          if (!isSafeHttpUrl(u)) { showToast('Nur Links mit http:// oder https:// sind erlaubt.', 'error'); return null; }
+          patch.url = u;
+        }
+        if (updates.beschreibung !== undefined) patch.beschreibung = String(updates.beschreibung || '').trim().substring(0, 300);
+        if (updates.icon !== undefined) patch.icon = String(updates.icon || '').trim().substring(0, 8);
+        if (updates.sort_order !== undefined) patch.sort_order = parseInt(updates.sort_order, 10) || 0;
+        if (this.isDemo) {
+          for (const list of Object.values(MOCK_TEAM_LINKS)) {
+            const l = list.find(x => String(x.id) === String(linkId));
+            if (l) { Object.assign(l, patch, { updated_at: new Date().toISOString() }); return this._normalizeTeamLink(l); }
+          }
+          return null;
+        }
+        try {
+          const { data, error } = await this.sb.from('team_links').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', linkId).select('*').single();
+          if (error) throw error;
+          return this._normalizeTeamLink(data);
+        } catch (err) {
+          console.error('updateTeamLink error:', err);
+          showToast(/row-level security|policy|permission|denied/i.test(err && err.message || '')
+            ? 'Keine Berechtigung: Nur Ersteller:in oder Team-Admins können diesen Link bearbeiten.'
+            : 'Link konnte nicht geändert werden. Bitte versuche es erneut.', 'error');
+          return null;
+        }
+      }
+
+      async deleteTeamLink(linkId) {
+        if (this.isDemo) {
+          for (const list of Object.values(MOCK_TEAM_LINKS)) {
+            const idx = list.findIndex(x => String(x.id) === String(linkId));
+            if (idx !== -1) { list.splice(idx, 1); return true; }
+          }
+          return false;
+        }
+        try {
+          const { error } = await this.sb.from('team_links').delete().eq('id', linkId);
+          if (error) throw error;
+          return true;
+        } catch (err) {
+          console.error('deleteTeamLink error:', err);
+          showToast(/row-level security|policy|permission|denied/i.test(err && err.message || '')
+            ? 'Keine Berechtigung: Nur Ersteller:in oder Team-Admins können diesen Link löschen.'
+            : 'Link konnte nicht gelöscht werden. Bitte versuche es erneut.', 'error');
+          return false;
+        }
+      }
+
+      // ── Team-Termine (v4.12.0) ─────────────────────────────
+      // Bewusst KEIN Vollkalender: keine Wiederholungen, keine Erinnerungen.
+      // Gleiche Normalizer-Regel wie bei den Team-Links (s. o.).
+      _normalizeTermin(row) {
+        if (!row) return null;
+        return {
+          id: row.id,
+          team_id: row.team_id,
+          titel: row.titel || '',
+          datum: row.datum ? String(row.datum).substring(0, 10) : '',
+          uhrzeit: row.uhrzeit ? String(row.uhrzeit).substring(0, 5) : '',
+          ort: row.ort || '',
+          beschreibung: row.beschreibung || '',
+          created_by: row.created_by ?? null,
+          created_at: row.created_at || null
+        };
+      }
+
+      _sortTermineAufsteigend(list) {
+        return [...list].sort((a, b) =>
+          (a.datum + 'T' + (a.uhrzeit || '00:00')).localeCompare(b.datum + 'T' + (b.uhrzeit || '00:00')));
+      }
+
+      _cleanTerminFelder({ titel, datum, uhrzeit = '', ort = '', beschreibung = '' } = {}) {
+        const cleanTitel = String(titel || '').trim().substring(0, 120);
+        const cleanDatum = String(datum || '').trim();
+        const cleanUhrzeit = String(uhrzeit || '').trim().substring(0, 5);
+        if (!cleanTitel) { showToast('Bitte gib dem Termin einen Titel.', 'error'); return null; }
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(cleanDatum)) { showToast('Bitte wähle ein gültiges Datum.', 'error'); return null; }
+        if (cleanUhrzeit && !/^\d{2}:\d{2}$/.test(cleanUhrzeit)) { showToast('Bitte gib die Uhrzeit als HH:MM an (oder lasse sie leer).', 'error'); return null; }
+        return {
+          titel: cleanTitel,
+          datum: cleanDatum,
+          uhrzeit: cleanUhrzeit,
+          ort: String(ort || '').trim().substring(0, 120),
+          beschreibung: String(beschreibung || '').trim().substring(0, 500)
+        };
+      }
+
+      async getTeamTermine(teamId) {
+        if (this.isDemo) {
+          const list = MOCK_TEAM_TERMINE[teamId] || [];
+          return this._sortTermineAufsteigend(list.map(t => this._normalizeTermin(t)));
+        }
+        try {
+          const { data, error } = await this.sb.from('team_termine').select('*')
+            .eq('team_id', teamId)
+            .order('datum', { ascending: true })
+            .order('uhrzeit', { ascending: true, nullsFirst: true });
+          if (error) throw error;
+          return (data || []).map(t => this._normalizeTermin(t));
+        } catch (err) { console.error('getTeamTermine error:', err); return []; }
+      }
+
+      async createTeamTermin(teamId, felder = {}, userId = null) {
+        const clean = this._cleanTerminFelder(felder);
+        if (!clean) return null;
+        if (this.isDemo) {
+          const list = MOCK_TEAM_TERMINE[teamId] || (MOCK_TEAM_TERMINE[teamId] = []);
+          const termin = this._normalizeTermin({ id: 'tt' + Date.now(), team_id: teamId, ...clean, created_by: userId ?? null, created_at: new Date().toISOString() });
+          list.push(termin);
+          return termin;
+        }
+        try {
+          const insertObj = { team_id: teamId, ...clean, uhrzeit: clean.uhrzeit || null };
+          if (userId) insertObj.created_by = userId;
+          const { data, error } = await this.sb.from('team_termine').insert(insertObj).select('*').single();
+          if (error) throw error;
+          return this._normalizeTermin(data);
+        } catch (err) {
+          console.error('createTeamTermin error:', err);
+          showToast(/row-level security|policy|permission|denied/i.test(err && err.message || '')
+            ? 'Keine Berechtigung: Nur Team-Mitglieder können Termine anlegen.'
+            : 'Termin konnte nicht gespeichert werden. Bitte versuche es erneut.', 'error');
+          return null;
+        }
+      }
+
+      async updateTeamTermin(terminId, updates = {}) {
+        // Nur übergebene Felder ändern; Pflichtfelder werden dabei validiert.
+        const patch = {};
+        if (updates.titel !== undefined) {
+          const t = String(updates.titel || '').trim().substring(0, 120);
+          if (!t) { showToast('Bitte gib dem Termin einen Titel.', 'error'); return null; }
+          patch.titel = t;
+        }
+        if (updates.datum !== undefined) {
+          const d = String(updates.datum || '').trim();
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) { showToast('Bitte wähle ein gültiges Datum.', 'error'); return null; }
+          patch.datum = d;
+        }
+        if (updates.uhrzeit !== undefined) {
+          const u = String(updates.uhrzeit || '').trim().substring(0, 5);
+          if (u && !/^\d{2}:\d{2}$/.test(u)) { showToast('Bitte gib die Uhrzeit als HH:MM an (oder lasse sie leer).', 'error'); return null; }
+          patch.uhrzeit = u;
+        }
+        if (updates.ort !== undefined) patch.ort = String(updates.ort || '').trim().substring(0, 120);
+        if (updates.beschreibung !== undefined) patch.beschreibung = String(updates.beschreibung || '').trim().substring(0, 500);
+        if (this.isDemo) {
+          for (const list of Object.values(MOCK_TEAM_TERMINE)) {
+            const t = list.find(x => String(x.id) === String(terminId));
+            if (t) { Object.assign(t, patch, { updated_at: new Date().toISOString() }); return this._normalizeTermin(t); }
+          }
+          return null;
+        }
+        try {
+          const dbPatch = { ...patch, updated_at: new Date().toISOString() };
+          if (dbPatch.uhrzeit === '') dbPatch.uhrzeit = null;
+          const { data, error } = await this.sb.from('team_termine').update(dbPatch).eq('id', terminId).select('*').single();
+          if (error) throw error;
+          return this._normalizeTermin(data);
+        } catch (err) {
+          console.error('updateTeamTermin error:', err);
+          showToast(/row-level security|policy|permission|denied/i.test(err && err.message || '')
+            ? 'Keine Berechtigung: Nur Ersteller:in oder Team-Admins können diesen Termin bearbeiten.'
+            : 'Termin konnte nicht geändert werden. Bitte versuche es erneut.', 'error');
+          return null;
+        }
+      }
+
+      async deleteTeamTermin(terminId) {
+        if (this.isDemo) {
+          for (const list of Object.values(MOCK_TEAM_TERMINE)) {
+            const idx = list.findIndex(x => String(x.id) === String(terminId));
+            if (idx !== -1) { list.splice(idx, 1); return true; }
+          }
+          return false;
+        }
+        try {
+          const { error } = await this.sb.from('team_termine').delete().eq('id', terminId);
+          if (error) throw error;
+          return true;
+        } catch (err) {
+          console.error('deleteTeamTermin error:', err);
+          showToast(/row-level security|policy|permission|denied/i.test(err && err.message || '')
+            ? 'Keine Berechtigung: Nur Ersteller:in oder Team-Admins können diesen Termin löschen.'
+            : 'Termin konnte nicht gelöscht werden. Bitte versuche es erneut.', 'error');
+          return false;
+        }
       }
 
       // ── Reactions ──────────────────────────────
@@ -4443,7 +4778,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.11.2';
+    window.KRS_VERSION = '4.12.0';
     // Für E2E-Tests: Sortier-Helfer der Chat-Übersicht exponieren
     window.__krsSortConversationsByActivity = sortConversationsByActivity;
     window.__krsUpdateConversationActivity = updateConversationActivity;
@@ -4455,6 +4790,8 @@
     window.__krsSimplifyPastedHtml = simplifyPastedHtml; // Test-Hook: Paste-Bereinigung (Farben/Bilder)
     window.__krsHtmlToText = htmlToText;                 // Test-Hook: sichtbarer Text (Längen-Prüfung)
     window.__krsConfig = CONFIG;                         // Test-Hook: Limits (MAX_POST_LENGTH …)
+    window.__krsIsSafeHttpUrl = isSafeHttpUrl;           // Test-Hook: URL-Validierung Dateiablage-Links (v4.12.0)
+    window.__krsLocalDateStr = krsLocalDateStr;          // Test-Hook: lokale Datums-Hilfe (Termine kommend/vergangen)
 
     // ============================================================
     // UPLOAD-KONFIG: zentrale Konstanten für DataService.uploadFile
@@ -6607,18 +6944,358 @@
     // ============================================================
     const FEEDBACK_GAS_URL = 'https://script.google.com/macros/s/AKfycbwr9ZV9108jpkfN4nKboTuwMEgUhBOxW2c2ksWgazKNeSgiINL4G2ZNUMKeEzfaOj3H_g/exec';
 
-    // ── Dateiablage-Platzhalter ──────────────────────────────────────────
-    // Bewusster Hinweis: eigene Dateiablage (wie OneDrive) wird mit Nextcloud
-    // nachgerüstet. Bis dahin Verweis auf die iServ-Dateiablage der Schule.
+    // ── Dateiablage (v4.12.0) ─────────────────────────────────────────────
+    // Der Platzhalter aus v4.7.0 (iServ-Hinweis, Nextcloud folgt) bleibt —
+    // NEU: pro Team pflegbare, benannte Links (team_links). KEIN eigener
+    // Datei-Speicher; nur Verweise auf iServ-/Nextcloud-Ordner u. Ä.
     const ISERV_FILES_URL = 'https://krs.sh-schulen.de';
-    function FilesPlaceholderModal({ onClose }) {
+
+    // Formular-Modal für Team-Links (neu anlegen & bearbeiten).
+    // Stale-Closure-Regel: ALLE Feld-Handler nutzen funktionale Updates
+    // (setForm(prev => …)); der Speichern-Handler liest den frischen State
+    // aus dem Render-Scope (Handler werden pro Render neu erzeugt).
+    function TeamLinkFormModal({ link, teamName, onSave, onClose }) {
+      const [form, setForm] = useState(() => ({
+        titel: link?.titel || '',
+        url: link?.url || '',
+        beschreibung: link?.beschreibung || '',
+        icon: link?.icon || ''
+      }));
+      const [saving, setSaving] = useState(false);
+      const setField = (feld) => (e) => {
+        const v = e.target.value;
+        setForm(prev => ({ ...prev, [feld]: v }));
+      };
+      const urlProblem = !!form.url.trim() && !isSafeHttpUrl(form.url);
+      const canSave = !!form.titel.trim() && isSafeHttpUrl(form.url) && !saving;
+      const handleSave = async () => {
+        if (!canSave) return;
+        setSaving(true);
+        const ok = await onSave({ titel: form.titel, url: form.url, beschreibung: form.beschreibung, icon: form.icon });
+        setSaving(false);
+        if (ok) onClose();
+      };
+      return React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': link ? 'Link bearbeiten' : 'Link hinzufügen', onClick: onClose },
+        React.createElement('div', { className: 'channel-dialog', onClick: e => e.stopPropagation() },
+          React.createElement('h3', null, link ? '🔗 Link bearbeiten' : '🔗 Link hinzufügen'),
+          teamName && React.createElement('p', { style: { fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 12px 0' } }, 'Gilt für das Team „' + teamName + '".'),
+          React.createElement('input', {
+            'data-testid': 'team-link-titel',
+            placeholder: 'Titel (z. B. „iServ-Ordner Fachschaft")',
+            value: form.titel, autoFocus: true, maxLength: 120,
+            onChange: setField('titel'),
+            onKeyDown: (e) => { if (e.key === 'Escape') onClose(); }
+          }),
+          React.createElement('input', {
+            'data-testid': 'team-link-url',
+            placeholder: 'https://… (nur http/https)',
+            value: form.url, maxLength: 500, type: 'url', inputMode: 'url',
+            onChange: setField('url'),
+            onKeyDown: (e) => { if (e.key === 'Escape') onClose(); }
+          }),
+          urlProblem && React.createElement('p', { style: { fontSize: '12px', color: 'var(--accent-red, #d33)', margin: '-6px 0 8px' } }, 'Nur Links mit http:// oder https:// sind erlaubt.'),
+          React.createElement('input', {
+            'data-testid': 'team-link-beschreibung',
+            placeholder: 'Beschreibung (optional)',
+            value: form.beschreibung, maxLength: 300,
+            onChange: setField('beschreibung'),
+            onKeyDown: (e) => { if (e.key === 'Escape') onClose(); }
+          }),
+          React.createElement('input', {
+            'data-testid': 'team-link-icon',
+            placeholder: 'Icon/Emoji (optional, z. B. 📁)',
+            value: form.icon, maxLength: 8,
+            onChange: setField('icon'),
+            onKeyDown: (e) => { if (e.key === 'Escape') onClose(); }
+          }),
+          React.createElement('div', { className: 'dialog-actions' },
+            React.createElement('button', { onClick: onClose }, 'Abbrechen'),
+            React.createElement('button', { className: 'btn-primary', disabled: !canSave, onClick: handleSave }, saving ? 'Speichert …' : 'Speichern')
+          )
+        )
+      );
+    }
+
+    // Liste der Team-Links (im Dateiablage-Tab des Teams und im Dateiablage-Modal).
+    // Rechte: Hinzufügen dürfen alle Team-Mitglieder; Bearbeiten/Löschen nur
+    // Ersteller:in oder (Team-/globale) Admins — serverseitig per RLS gespiegelt.
+    function TeamLinksSection({ team, dataService, user, isTeamAdmin }) {
+      const [links, setLinks] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [editing, setEditing] = useState(null); // null | 'neu' | link-Objekt
+
+      useEffect(() => {
+        let cancelled = false;
+        setLoading(true);
+        dataService.getTeamLinks(team.id)
+          .then(ls => { if (!cancelled) { setLinks(ls); setLoading(false); } })
+          .catch(err => { console.error('getTeamLinks error:', err); if (!cancelled) { setLinks([]); setLoading(false); } });
+        return () => { cancelled = true; };
+      }, [dataService, team.id]);
+
+      const canEdit = (l) => isTeamAdmin || (user && l.created_by != null && String(l.created_by) === String(user.id));
+
+      const handleSave = async (felder) => {
+        if (editing === 'neu') {
+          const created = await dataService.createTeamLink(team.id, felder, user?.id);
+          if (!created) return false;
+          setLinks(prev => [...prev, created]);
+          showToast('Link „' + created.titel + '" hinzugefügt', 'success');
+          return true;
+        }
+        const updated = await dataService.updateTeamLink(editing.id, felder);
+        if (!updated) return false;
+        setLinks(prev => prev.map(l => String(l.id) === String(updated.id) ? updated : l));
+        showToast('Link aktualisiert', 'success');
+        return true;
+      };
+
+      const handleDelete = async (l) => {
+        if (!confirm('Link „' + l.titel + '" wirklich löschen?')) return;
+        const ok = await dataService.deleteTeamLink(l.id);
+        if (ok) {
+          setLinks(prev => prev.filter(x => String(x.id) !== String(l.id)));
+          showToast('Link gelöscht', 'info');
+        }
+      };
+
+      return React.createElement('div', { 'data-testid': 'team-links-section' },
+        loading && React.createElement('p', { style: { fontSize: '13px', color: 'var(--text-muted)' } }, 'Links werden geladen …'),
+        !loading && links.length === 0 && React.createElement('p', { style: { fontSize: '13px', color: 'var(--text-muted)', margin: '0 0 12px' } },
+          'Noch keine Links in diesem Team. Lege den ersten an — z. B. zum iServ- oder Nextcloud-Ordner.'),
+        !loading && links.map(l =>
+          React.createElement('div', { key: l.id, 'data-testid': 'team-link-item', style: { display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', marginBottom: '8px' } },
+            React.createElement('span', { style: { fontSize: '18px', flex: '0 0 auto' }, 'aria-hidden': 'true' }, l.icon || '🔗'),
+            React.createElement('div', { style: { flex: 1, minWidth: 0 } },
+              React.createElement('a', {
+                href: l.url, target: '_blank', rel: 'noopener noreferrer',
+                style: { fontSize: '14px', fontWeight: 600, color: 'var(--accent)', textDecoration: 'none', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
+              }, l.titel),
+              l.beschreibung && React.createElement('div', { style: { fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, l.beschreibung)
+            ),
+            canEdit(l) && React.createElement('button', {
+              className: 'icon-btn', title: 'Link bearbeiten', 'aria-label': 'Link bearbeiten',
+              'data-testid': 'team-link-edit',
+              onClick: () => setEditing(l),
+              style: { minWidth: '44px', minHeight: '44px' }
+            }, '✏️'),
+            canEdit(l) && React.createElement('button', {
+              className: 'icon-btn', title: 'Link löschen', 'aria-label': 'Link löschen',
+              'data-testid': 'team-link-delete',
+              onClick: () => handleDelete(l),
+              style: { minWidth: '44px', minHeight: '44px', color: 'var(--accent-red, #d33)' }
+            }, '🗑')
+          )
+        ),
+        React.createElement('button', {
+          'data-testid': 'team-link-add',
+          onClick: () => setEditing('neu'),
+          style: { display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 16px', minHeight: '44px', background: 'var(--bg-tertiary)', border: '1px dashed var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', color: 'var(--text-primary)', fontSize: '14px', marginTop: '4px' }
+        }, '＋ Link hinzufügen'),
+        editing && React.createElement(TeamLinkFormModal, {
+          link: editing === 'neu' ? null : editing,
+          teamName: team.name,
+          onSave: handleSave,
+          onClose: () => setEditing(null)
+        })
+      );
+    }
+
+    // Formular-Modal für Team-Termine (gleiche Stale-Closure-Regeln wie oben).
+    function TeamTerminFormModal({ termin, teamName, onSave, onClose }) {
+      const [form, setForm] = useState(() => ({
+        titel: termin?.titel || '',
+        datum: termin?.datum || '',
+        uhrzeit: termin?.uhrzeit || '',
+        ort: termin?.ort || '',
+        beschreibung: termin?.beschreibung || ''
+      }));
+      const [saving, setSaving] = useState(false);
+      const setField = (feld) => (e) => {
+        const v = e.target.value;
+        setForm(prev => ({ ...prev, [feld]: v }));
+      };
+      const canSave = !!form.titel.trim() && /^\d{4}-\d{2}-\d{2}$/.test(form.datum) && !saving;
+      const handleSave = async () => {
+        if (!canSave) return;
+        setSaving(true);
+        const ok = await onSave({ titel: form.titel, datum: form.datum, uhrzeit: form.uhrzeit, ort: form.ort, beschreibung: form.beschreibung });
+        setSaving(false);
+        if (ok) onClose();
+      };
+      const labelStyle = { display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', margin: '0 0 4px' };
+      return React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': termin ? 'Termin bearbeiten' : 'Termin anlegen', onClick: onClose },
+        React.createElement('div', { className: 'channel-dialog', onClick: e => e.stopPropagation() },
+          React.createElement('h3', null, termin ? '📅 Termin bearbeiten' : '📅 Termin anlegen'),
+          teamName && React.createElement('p', { style: { fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 12px 0' } }, 'Gilt für das Team „' + teamName + '".'),
+          React.createElement('input', {
+            'data-testid': 'team-termin-titel',
+            placeholder: 'Titel (z. B. „Fachschaftssitzung")',
+            value: form.titel, autoFocus: true, maxLength: 120,
+            onChange: setField('titel'),
+            onKeyDown: (e) => { if (e.key === 'Escape') onClose(); }
+          }),
+          React.createElement('label', { style: labelStyle, htmlFor: 'team-termin-datum' }, 'Datum (Pflicht)'),
+          React.createElement('input', {
+            id: 'team-termin-datum', 'data-testid': 'team-termin-datum',
+            type: 'date', value: form.datum,
+            onChange: setField('datum'),
+            onKeyDown: (e) => { if (e.key === 'Escape') onClose(); }
+          }),
+          React.createElement('label', { style: labelStyle, htmlFor: 'team-termin-uhrzeit' }, 'Uhrzeit (optional)'),
+          React.createElement('input', {
+            id: 'team-termin-uhrzeit', 'data-testid': 'team-termin-uhrzeit',
+            type: 'time', value: form.uhrzeit,
+            onChange: setField('uhrzeit'),
+            onKeyDown: (e) => { if (e.key === 'Escape') onClose(); }
+          }),
+          React.createElement('input', {
+            'data-testid': 'team-termin-ort',
+            placeholder: 'Ort (optional)',
+            value: form.ort, maxLength: 120,
+            onChange: setField('ort'),
+            onKeyDown: (e) => { if (e.key === 'Escape') onClose(); }
+          }),
+          React.createElement('input', {
+            'data-testid': 'team-termin-beschreibung',
+            placeholder: 'Beschreibung (optional)',
+            value: form.beschreibung, maxLength: 500,
+            onChange: setField('beschreibung'),
+            onKeyDown: (e) => { if (e.key === 'Escape') onClose(); }
+          }),
+          React.createElement('div', { className: 'dialog-actions' },
+            React.createElement('button', { onClick: onClose }, 'Abbrechen'),
+            React.createElement('button', { className: 'btn-primary', disabled: !canSave, onClick: handleSave }, saving ? 'Speichert …' : 'Speichern')
+          )
+        )
+      );
+    }
+
+    // Termin-Liste pro Team: kommende Termine aufsteigend, vergangene
+    // eingeklappt darunter. Anlegen: alle Team-Mitglieder; Bearbeiten/Löschen:
+    // Ersteller:in oder Admin (serverseitig per RLS gespiegelt).
+    function TeamTermineSection({ team, dataService, user, isTeamAdmin }) {
+      const [termine, setTermine] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [editing, setEditing] = useState(null); // null | 'neu' | termin-Objekt
+      const [showPast, setShowPast] = useState(false);
+
+      useEffect(() => {
+        let cancelled = false;
+        setLoading(true);
+        dataService.getTeamTermine(team.id)
+          .then(ts => { if (!cancelled) { setTermine(ts); setLoading(false); } })
+          .catch(err => { console.error('getTeamTermine error:', err); if (!cancelled) { setTermine([]); setLoading(false); } });
+        return () => { cancelled = true; };
+      }, [dataService, team.id]);
+
+      const heute = krsLocalDateStr(new Date());
+      const kommende = termine.filter(t => t.datum >= heute); // bereits aufsteigend sortiert
+      const vergangene = termine.filter(t => t.datum < heute).slice().reverse(); // jüngste zuerst
+
+      const canEdit = (t) => isTeamAdmin || (user && t.created_by != null && String(t.created_by) === String(user.id));
+
+      const formatDatum = (datum) => {
+        try {
+          return new Date(datum + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
+        } catch (e) { return datum; }
+      };
+
+      const handleSave = async (felder) => {
+        if (editing === 'neu') {
+          const created = await dataService.createTeamTermin(team.id, felder, user?.id);
+          if (!created) return false;
+          setTermine(prev => dataService._sortTermineAufsteigend([...prev, created]));
+          showToast('Termin „' + created.titel + '" angelegt', 'success');
+          return true;
+        }
+        const updated = await dataService.updateTeamTermin(editing.id, felder);
+        if (!updated) return false;
+        setTermine(prev => dataService._sortTermineAufsteigend(prev.map(t => String(t.id) === String(updated.id) ? updated : t)));
+        showToast('Termin aktualisiert', 'success');
+        return true;
+      };
+
+      const handleDelete = async (t) => {
+        if (!confirm('Termin „' + t.titel + '" wirklich löschen?')) return;
+        const ok = await dataService.deleteTeamTermin(t.id);
+        if (ok) {
+          setTermine(prev => prev.filter(x => String(x.id) !== String(t.id)));
+          showToast('Termin gelöscht', 'info');
+        }
+      };
+
+      const terminRow = (t, isPast) => React.createElement('div', {
+        key: t.id,
+        'data-testid': isPast ? 'termin-item-past' : 'termin-item',
+        style: { display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '10px 12px', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', marginBottom: '8px', opacity: isPast ? 0.65 : 1 }
+      },
+        React.createElement('span', { style: { fontSize: '18px', flex: '0 0 auto' }, 'aria-hidden': 'true' }, '📅'),
+        React.createElement('div', { style: { flex: 1, minWidth: 0 } },
+          React.createElement('div', { style: { fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' } }, t.titel),
+          React.createElement('div', { style: { fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' } },
+            formatDatum(t.datum) + (t.uhrzeit ? ' · ' + t.uhrzeit + ' Uhr' : '') + (t.ort ? ' · ' + t.ort : '')
+          ),
+          t.beschreibung && React.createElement('div', { style: { fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' } }, t.beschreibung)
+        ),
+        canEdit(t) && React.createElement('button', {
+          className: 'icon-btn', title: 'Termin bearbeiten', 'aria-label': 'Termin bearbeiten',
+          'data-testid': 'team-termin-edit',
+          onClick: () => setEditing(t),
+          style: { minWidth: '44px', minHeight: '44px' }
+        }, '✏️'),
+        canEdit(t) && React.createElement('button', {
+          className: 'icon-btn', title: 'Termin löschen', 'aria-label': 'Termin löschen',
+          'data-testid': 'team-termin-delete',
+          onClick: () => handleDelete(t),
+          style: { minWidth: '44px', minHeight: '44px', color: 'var(--accent-red, #d33)' }
+        }, '🗑')
+      );
+
+      return React.createElement('div', { 'data-testid': 'team-termine-section' },
+        React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' } },
+          React.createElement('h2', { style: { margin: 0, fontSize: '15px' } }, 'Kommende Termine'),
+          React.createElement('button', {
+            'data-testid': 'team-termin-add',
+            onClick: () => setEditing('neu'),
+            style: { display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', minHeight: '44px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--radius)', cursor: 'pointer', fontSize: '14px', fontWeight: 600 }
+          }, '＋ Termin')
+        ),
+        loading && React.createElement('p', { style: { fontSize: '13px', color: 'var(--text-muted)' } }, 'Termine werden geladen …'),
+        !loading && kommende.length === 0 && React.createElement('p', { style: { fontSize: '13px', color: 'var(--text-muted)', margin: '0 0 12px' } },
+          'Keine kommenden Termine in diesem Team.'),
+        !loading && kommende.map(t => terminRow(t, false)),
+        !loading && vergangene.length > 0 && React.createElement('div', { style: { marginTop: '12px' } },
+          React.createElement('button', {
+            className: 'hidden-teams-toggle',
+            'data-testid': 'termine-past-toggle',
+            onClick: () => setShowPast(prev => !prev),
+            style: { minHeight: '44px' }
+          },
+            React.createElement('span', null, showPast ? '▾' : '▸'),
+            React.createElement('span', null, 'Vergangene Termine (' + vergangene.length + ')')
+          ),
+          showPast && vergangene.map(t => terminRow(t, true))
+        ),
+        editing && React.createElement(TeamTerminFormModal, {
+          termin: editing === 'neu' ? null : editing,
+          teamName: team.name,
+          onSave: handleSave,
+          onClose: () => setEditing(null)
+        })
+      );
+    }
+
+    // Dateiablage-Modal (Platzhalter aus v4.7.0, erweitert in v4.12.0):
+    // iServ-Hinweis bleibt; darunter erscheinen die Links des gewählten Teams.
+    function FilesPlaceholderModal({ onClose, team, dataService, user, isTeamAdmin }) {
       React.useEffect(() => {
         const onKey = (e) => { if (e.key === 'Escape') onClose(); };
         document.addEventListener('keydown', onKey);
         return () => document.removeEventListener('keydown', onKey);
       }, [onClose]);
       return React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Dateiablage', onClick: onClose },
-        React.createElement('div', { className: 'modal', onClick: e => e.stopPropagation(), style: { width: '480px', maxWidth: '96vw' } },
+        React.createElement('div', { className: 'modal', onClick: e => e.stopPropagation(), style: { width: '520px', maxWidth: '96vw' } },
           React.createElement('div', { className: 'modal-header' },
             React.createElement('h3', null, '📁 Dateiablage'),
             React.createElement('button', { className: 'icon-btn', onClick: onClose, title: 'Schließen', 'aria-label': 'Schließen', dangerouslySetInnerHTML: { __html: Icons.x } })
@@ -6639,7 +7316,17 @@
               href: ISERV_FILES_URL, target: '_blank', rel: 'noopener noreferrer',
               style: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', boxSizing: 'border-box', padding: '12px 16px', background: 'var(--accent)', color: '#fff', borderRadius: 'var(--radius)', fontSize: '15px', fontWeight: 600, textDecoration: 'none', minHeight: '48px' }
             }, '🔗 iServ-Dateiablage öffnen'),
-            React.createElement('p', { style: { fontSize: '12px', color: 'var(--text-muted)', margin: '12px 0 0', textAlign: 'center' } }, 'Öffnet krs.sh-schulen.de in einem neuen Tab (Login mit deinem iServ-Zugang).')
+            React.createElement('p', { style: { fontSize: '12px', color: 'var(--text-muted)', margin: '12px 0 0', textAlign: 'center' } }, 'Öffnet krs.sh-schulen.de in einem neuen Tab (Login mit deinem iServ-Zugang).'),
+            // v4.12.0: Links des aktuell gewählten Teams direkt im Modal
+            React.createElement('div', { style: { borderTop: '1px solid var(--border)', margin: '16px -20px 0', padding: '14px 20px 0' } },
+              team && dataService
+                ? React.createElement(React.Fragment, null,
+                    React.createElement('h4', { style: { margin: '0 0 10px', fontSize: '14px' } }, '🔗 Links für „' + team.name + '"'),
+                    React.createElement(TeamLinksSection, { team, dataService, user, isTeamAdmin })
+                  )
+                : React.createElement('p', { style: { fontSize: '13px', color: 'var(--text-muted)', margin: 0 } },
+                    'Tipp: Wähle links ein Team, dann kannst du hier dessen Dateiablage-Links sehen und pflegen — oder nutze den Tab „📁 Dateiablage" direkt im Team.')
+            )
           )
         )
       );
@@ -7064,6 +7751,7 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.12.0', date: '02.07.2026', items: ['Dateiablage pro Team: benannte Links (z. B. iServ- oder Nextcloud-Ordner) direkt im Team anlegen und pflegen', 'Neuer Tab 📅 Termine pro Team: kommende Termine auf einen Blick, vergangene ausklappbar', 'Anlegen dürfen alle Team-Mitglieder; Bearbeiten/Löschen die Ersteller:in und Team-Admins'] },
       { v: '4.11.2', date: '28.06.2026', items: ['Zurück-Button: aus Hilfe, Datenschutz oder Feedback kommst du mit „← Zurück" wieder zu den Einstellungen — eine Ebene zurück statt alles zu schließen'] },
       { v: '4.11.1', date: '28.06.2026', items: ['Sehr lange Beiträge mit eingebetteten Bildern sind jetzt möglich', 'Die Längen-Begrenzung zählt nur den sichtbaren Text, nicht die Bilddaten'] },
       { v: '4.11.0', date: '28.06.2026', items: ['Farben und eingefügte Bilder bleiben jetzt auch im angezeigten Beitrag erhalten', 'Neuer Farb-Button in der Formatierleiste'] },
@@ -7458,6 +8146,8 @@
       const [loadingUsers, setLoadingUsers] = useState(false);
       const [loadingMore, setLoadingMore] = useState(false);
       const [userTeamRole, setUserTeamRole] = useState(null);
+      // v4.12.0: Team-Bereiche als Tabs — Beiträge | Dateiablage (Links) | Termine
+      const [teamTab, setTeamTab] = useState('posts');
       const [onlineUsers, setOnlineUsers] = useState(new Set());
       const [onboardingStep, setOnboardingStep] = useState(0);
       const PAGE_SIZE = 50;
@@ -8136,6 +8826,7 @@
       // Clear unread posts when selecting a channel
       const handleChannelSelect = useCallback((ch) => {
         setSelectedChannel(ch);
+        setTeamTab('posts'); // v4.12.0: Kanal-Klick wechselt zurück zu den Beiträgen
         setMobileSidebarOpen(false);
         // Mark as read (Phase 6: Supabase + localStorage)
         dataService.markChannelRead(ch.id, user?.id);
@@ -8163,6 +8854,7 @@
 
       const handleTeamSelect = async (team) => {
         setSelectedTeam(team);
+        setTeamTab('posts'); // v4.12.0: Teamwechsel startet immer bei den Beiträgen
         const channelsData = await dataService.getChannels(team.id);
         setChannels(channelsData);
         // Merge new channel unreads into Map + update channelTeamMap
@@ -8509,7 +9201,46 @@
           !selectedChannel && React.createElement('div', { style: { padding: '16px' } },
             React.createElement('button', { className: 'mobile-menu-btn', onClick: () => setMobileSidebarOpen(true), style: { display: 'none', alignItems: 'center', gap: '8px', padding: '10px 14px', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', color: 'var(--text-primary)', fontSize: '15px' } }, '☰ Team & Kanal wählen')
           ),
-          selectedChannel && React.createElement(React.Fragment, null,
+          // v4.12.0: Tab-Leiste pro Team — Beiträge | Dateiablage (Links) | Termine
+          selectedTeam && React.createElement('div', { className: 'team-tabs', role: 'tablist', 'aria-label': 'Team-Bereiche' },
+            [['posts', '💬 Beiträge'], ['links', '📁 Dateiablage'], ['termine', '📅 Termine']].map(([key, label]) =>
+              React.createElement('button', {
+                key,
+                role: 'tab',
+                'aria-selected': teamTab === key ? 'true' : 'false',
+                'data-testid': 'team-tab-' + key,
+                className: 'team-tab' + (teamTab === key ? ' active' : ''),
+                onClick: () => setTeamTab(key)
+              }, label)
+            )
+          ),
+          // v4.12.0: Dateiablage-Links des Teams (kein eigener Datei-Speicher)
+          selectedTeam && teamTab === 'links' && React.createElement(React.Fragment, null,
+            React.createElement('div', { className: 'content-header' },
+              React.createElement('h1', null, '📁 Dateiablage — ' + selectedTeam.name)
+            ),
+            React.createElement('div', { className: 'content-body' },
+              React.createElement('p', { style: { fontSize: '13px', color: 'var(--text-muted)', margin: 0 } },
+                'Benannte Links zu gemeinsamen Ordnern (z. B. iServ oder Nextcloud). Die Dateien selbst bleiben dort — KRS Connect speichert nur die Verweise.'),
+              React.createElement(TeamLinksSection, {
+                team: selectedTeam, dataService, user,
+                isTeamAdmin: userTeamRole === 'admin' || user?.role === 'admin'
+              })
+            )
+          ),
+          // v4.12.0: Termin-Liste des Teams (bewusst kein Vollkalender)
+          selectedTeam && teamTab === 'termine' && React.createElement(React.Fragment, null,
+            React.createElement('div', { className: 'content-header' },
+              React.createElement('h1', null, '📅 Termine — ' + selectedTeam.name)
+            ),
+            React.createElement('div', { className: 'content-body' },
+              React.createElement(TeamTermineSection, {
+                team: selectedTeam, dataService, user,
+                isTeamAdmin: userTeamRole === 'admin' || user?.role === 'admin'
+              })
+            )
+          ),
+          teamTab === 'posts' && selectedChannel && React.createElement(React.Fragment, null,
             React.createElement('div', { className: 'content-header', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
               React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
                 React.createElement('button', { className: 'mobile-menu-btn', onClick: () => setMobileSidebarOpen(true), style: { display: 'none', background: 'none', border: 'none', cursor: 'pointer', fontSize: '24px', color: 'var(--text-secondary)' } }, '\u2630'),
@@ -8817,7 +9548,12 @@
         React.createElement(UpdateBanner, null),
         topModal === 'feedback' && React.createElement(FeedbackModal, { user, dataService, onClose: backModal, canGoBack, onOpenBoard: () => openModal('feedbackBoard') }),
         topModal === 'feedbackBoard' && React.createElement(FeedbackBoardModal, { dataService, isAdmin: user?.role === 'admin', onClose: backModal, canGoBack, onNewFeedback: () => openModal('feedback') }),
-        showFiles && React.createElement(FilesPlaceholderModal, { onClose: () => setShowFiles(false) }),
+        showFiles && React.createElement(FilesPlaceholderModal, {
+          onClose: () => setShowFiles(false),
+          // v4.12.0: Links des gewählten Teams direkt im Dateiablage-Modal
+          team: selectedTeam, dataService, user,
+          isTeamAdmin: userTeamRole === 'admin' || user?.role === 'admin'
+        }),
         showBulkTeams && React.createElement(BulkDeleteTeamsModal, {
           teams, archivedTeams, dataService,
           onClose: () => setShowBulkTeams(false),
