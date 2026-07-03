@@ -1401,6 +1401,57 @@
 
   <script>
     // ============================================================
+    // S1 · Signed-URL-Resolver für den PRIVATEN Storage-Bucket "images"
+    // Uploads liegen ab jetzt im privaten Bucket; öffentliche URLs (getPublicUrl)
+    // liefern 400. Gespeichert wird der Objekt-Pfad; beim Rendern wird eine
+    // kurzlebige Signed URL (TTL 1 h) frisch gezogen und gecacht. Legacy-Posts
+    // mit alten /public/-URLs werden zur Render-Zeit auf den Pfad reduziert und
+    // ebenfalls signiert. Test-Hooks: window.__krsStoragePath / __krsResolveStorageUrl.
+    // ============================================================
+    (function () {
+      var TTL = 3600;                 // Signed-URL-Lebensdauer in Sekunden
+      var cache = new Map();          // path -> { url, exp(ms) }
+
+      // Extrahiert den Storage-Objekt-Pfad ODER gibt null zurück, wenn die
+      // Referenz unverändert durchgereicht werden soll (data:, blob:, externe
+      // URL) bzw. leer ist.
+      function storagePath(ref) {
+        if (!ref || typeof ref !== 'string') return null;
+        if (/^(data:|blob:)/i.test(ref)) return null;            // Inline → durchreichen
+        if (/^(https?:)?\/\//i.test(ref)) {
+          var m = ref.match(/\/storage\/v1\/object\/(?:public|sign|authenticated)\/images\/([^?#]+)/);
+          return m ? decodeURIComponent(m[1]) : null;            // fremde URL → durchreichen
+        }
+        return ref.replace(/^\/+/, '');                           // roher Objekt-Pfad
+      }
+
+      // Liefert eine anzeigbare URL: Signed URL für Storage-Objekte, sonst die
+      // Original-Referenz. Wirft nie — im Fehlerfall Original zurück.
+      async function resolveStorageUrl(ref) {
+        var path = storagePath(ref);
+        var sb = window.__krsSb;
+        if (!path || !sb || !sb.storage) return ref;              // Demo / Nicht-Storage
+        var now = Date.now();
+        var hit = cache.get(path);
+        if (hit && hit.exp > now + 60000) return hit.url;         // >1 min Restlaufzeit
+        try {
+          var res = await sb.storage.from('images').createSignedUrl(path, TTL);
+          var signed = res && res.data && res.data.signedUrl;
+          if ((res && res.error) || !signed) return ref;
+          cache.set(path, { url: signed, exp: now + TTL * 1000 });
+          return signed;
+        } catch (e) {
+          return ref;
+        }
+      }
+
+      window.__krsStoragePath = storagePath;
+      window.__krsResolveStorageUrl = resolveStorageUrl;
+    })();
+  </script>
+
+  <script>
+    // ============================================================
     // LIGHTBOX — Fullscreen-Bildanzeige mit Navigation & Download
     // ============================================================
     (function() {
@@ -1448,7 +1499,8 @@
         // Image
         var imgEl = document.createElement('img');
         imgEl.className = 'lightbox-img';
-        imgEl.src = imgUrl;
+        // S1: privater Bucket → Signed URL auflösen (Fallback: Original).
+        if (window.__krsResolveStorageUrl) { window.__krsResolveStorageUrl(imgUrl).then(function(u){ imgEl.src = u; }); } else { imgEl.src = imgUrl; }
         imgEl.alt = imgName;
         imgEl.onclick = function(e) { e.stopPropagation(); };
         ov.appendChild(imgEl);
@@ -1573,13 +1625,17 @@
 
       // ---- Download erzwingen (mit Originalnamen) ----
       function forceDownload(file){
-        fetch(file.url).then(function(r){ return r.blob(); }).then(function(blob){
-          var u = URL.createObjectURL(blob);
-          var a = document.createElement('a'); a.href = u; a.download = file.name || 'datei';
-          document.body.appendChild(a); a.click(); a.remove();
-          setTimeout(function(){ URL.revokeObjectURL(u); }, 5000);
-        }).catch(function(){
-          var a = document.createElement('a'); a.href = file.url; a.download = file.name || 'datei'; a.target = '_blank'; a.rel = 'noopener'; a.click();
+        // S1: privater Bucket → Signed URL ziehen, dann laden.
+        var rp = window.__krsResolveStorageUrl ? window.__krsResolveStorageUrl(file.url) : Promise.resolve(file.url);
+        rp.then(function(url){
+          fetch(url).then(function(r){ return r.blob(); }).then(function(blob){
+            var u = URL.createObjectURL(blob);
+            var a = document.createElement('a'); a.href = u; a.download = file.name || 'datei';
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(function(){ URL.revokeObjectURL(u); }, 5000);
+          }).catch(function(){
+            var a = document.createElement('a'); a.href = url; a.download = file.name || 'datei'; a.target = '_blank'; a.rel = 'noopener'; a.click();
+          });
         });
       }
       window.__krsDownloadFile = forceDownload;
@@ -1617,7 +1673,9 @@
         var tools = document.createElement('div'); tools.className = 'fv-tools';
         var dl = document.createElement('button'); dl.className = 'fv-btn'; dl.textContent = '⬇ Herunterladen'; dl.onclick = function(){ forceDownload(file); }; tools.appendChild(dl);
         if (window.__krsForwardFile) { var fw = document.createElement('button'); fw.className = 'fv-btn'; fw.textContent = '↪ Weiterleiten'; fw.onclick = function(){ close(); window.__krsForwardFile(file); }; tools.appendChild(fw); }
-        var nt = document.createElement('a'); nt.className = 'fv-btn'; nt.href = file.url; nt.target = '_blank'; nt.rel = 'noopener'; nt.textContent = '↗ Neuer Tab'; tools.appendChild(nt);
+        var nt = document.createElement('a'); nt.className = 'fv-btn'; nt.href = file.url; nt.target = '_blank'; nt.rel = 'noopener'; nt.textContent = '↗ Neuer Tab';
+        nt.onclick = function(e){ if (window.__krsResolveStorageUrl) { e.preventDefault(); window.__krsResolveStorageUrl(file.url).then(function(u){ window.open(u, '_blank', 'noopener'); }); } };
+        tools.appendChild(nt);
         var cl = document.createElement('button'); cl.className = 'fv-btn fv-close'; cl.setAttribute('aria-label', 'Schließen'); cl.textContent = '✕'; cl.onclick = close; tools.appendChild(cl);
         head.appendChild(tools);
         box.appendChild(head);
@@ -1652,24 +1710,31 @@
       }
 
       function renderPreview(file, body){
-        var ext = extOf(file);
+        // S1: privater Bucket → erst Signed URL ziehen, dann mit ihr rendern.
         body.innerHTML = '<div class="fv-loading">Vorschau wird geladen…</div>';
+        var p = window.__krsResolveStorageUrl ? window.__krsResolveStorageUrl(file.url) : Promise.resolve(file.url);
+        p.then(function(url){ renderPreviewResolved(file, body, url); })
+         .catch(function(){ renderPreviewResolved(file, body, file.url); });
+      }
+
+      function renderPreviewResolved(file, body, url){
+        var ext = extOf(file);
         try {
           if (isImage(file)) {
-            body.innerHTML = ''; var img = document.createElement('img'); img.className = 'fv-img'; img.src = file.url; img.alt = file.name || ''; body.appendChild(img); return;
+            body.innerHTML = ''; var img = document.createElement('img'); img.className = 'fv-img'; img.src = url; img.alt = file.name || ''; body.appendChild(img); return;
           }
           if (ext === 'pdf') {
-            body.innerHTML = ''; var ifr = document.createElement('iframe'); ifr.className = 'fv-frame'; ifr.src = file.url; ifr.title = file.name || 'PDF'; body.appendChild(ifr); return;
+            body.innerHTML = ''; var ifr = document.createElement('iframe'); ifr.className = 'fv-frame'; ifr.src = url; ifr.title = file.name || 'PDF'; body.appendChild(ifr); return;
           }
           if (ext === 'txt' || ext === 'csv' || ext === 'md') {
-            fetch(file.url).then(function(r){ return r.text(); }).then(function(t){
+            fetch(url).then(function(r){ return r.text(); }).then(function(t){
               body.innerHTML = ''; var pre = document.createElement('pre'); pre.className = 'fv-text'; pre.textContent = t.slice(0, 300000); body.appendChild(pre);
             }).catch(function(){ noPreview(body, 'Vorschau konnte nicht geladen werden.', file); });
             return;
           }
           if (ext === 'docx') {
             loadScript('mammoth', ['https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js', 'https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js'])
-              .then(function(){ return fetch(file.url); }).then(function(r){ return r.arrayBuffer(); })
+              .then(function(){ return fetch(url); }).then(function(r){ return r.arrayBuffer(); })
               .then(function(buf){ return window.mammoth.convertToHtml({ arrayBuffer: buf }); })
               .then(function(out){ body.innerHTML = ''; var d = document.createElement('div'); d.className = 'fv-doc'; d.innerHTML = purify(out.value || '<em>Leeres Dokument</em>'); body.appendChild(d); })
               .catch(function(){ noPreview(body, 'Word-Vorschau nicht verfügbar.', file); });
@@ -1677,7 +1742,7 @@
           }
           if (ext === 'xlsx' || ext === 'xls') {
             loadScript('xlsx', ['https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'])
-              .then(function(){ return fetch(file.url); }).then(function(r){ return r.arrayBuffer(); })
+              .then(function(){ return fetch(url); }).then(function(r){ return r.arrayBuffer(); })
               .then(function(buf){
                 var wb = window.XLSX.read(buf, { type: 'array' });
                 body.innerHTML = ''; var wrap = document.createElement('div'); wrap.className = 'fv-doc';
@@ -1808,8 +1873,9 @@
     // ============================================================
     const MOCK_USERS = [
       { id: 1, username: 'nk', display_name: 'Norbert K.', avatar_color: '#7c6ff7', role: 'admin' },
-      { id: 2, username: 'ds', display_name: 'Daniel S.', avatar_color: '#f59e0b', role: 'admin' },
-      { id: 3, username: 'pc', display_name: 'Petra C.', avatar_color: '#ec4899', role: 'admin' },
+      // S2: Demo-User anonymisiert — keine Initialen echter Lehrkräfte
+      { id: 2, username: 'lb', display_name: 'Lehrkraft B', avatar_color: '#f59e0b', role: 'admin' },
+      { id: 3, username: 'lc', display_name: 'Lehrkraft C', avatar_color: '#ec4899', role: 'admin' },
       { id: 4, username: 'al', display_name: 'Anna L.', avatar_color: '#10b981', role: 'member' },
       { id: 5, username: 'mk', display_name: 'Markus K.', avatar_color: '#3b82f6', role: 'member' },
       { id: 6, username: 'sh', display_name: 'Sabine H.', avatar_color: '#ef4444', role: 'member' },
@@ -1835,8 +1901,8 @@
 
     // Demo-Store für Feedback-Board (#12): Status offen | in_arbeit | erledigt
     let MOCK_FEEDBACK = [
-      { id: 'fb1', user_id: 2, name: 'Petra Carse', category: 'verbesserung', rating: 4, message: 'Könnte man Beiträge auch anpinnen?', page: '', status: 'erledigt', created_at: '2026-06-21T09:12:00.000Z' },
-      { id: 'fb2', user_id: 3, name: 'Daniel Schmitt', category: 'bug', rating: 0, message: 'Beim Hochladen eines PDFs passiert manchmal nichts.', page: '', status: 'in_arbeit', created_at: '2026-06-21T14:30:00.000Z' },
+      { id: 'fb1', user_id: 2, name: 'Lehrkraft B', category: 'verbesserung', rating: 4, message: 'Könnte man Beiträge auch anpinnen?', page: '', status: 'erledigt', created_at: '2026-06-21T09:12:00.000Z' },
+      { id: 'fb2', user_id: 3, name: 'Lehrkraft C', category: 'bug', rating: 0, message: 'Beim Hochladen eines PDFs passiert manchmal nichts.', page: '', status: 'in_arbeit', created_at: '2026-06-21T14:30:00.000Z' },
       { id: 'fb3', user_id: null, name: 'Anonym', category: 'lob', rating: 5, message: 'Viel besser als Teams – danke!', page: '', status: 'offen', created_at: '2026-06-22T07:45:00.000Z' }
     ];
 
@@ -2135,6 +2201,8 @@
       constructor(supabaseClient = null) {
         this.sb = supabaseClient;
         this.isDemo = !supabaseClient;
+        // S1: Signed-URL-Resolver braucht den echten Client (Demo bleibt null → Pass-Through).
+        if (supabaseClient) window.__krsSb = supabaseClient;
         this.subscriptions = []; // Legacy (wird noch von altem Code genutzt)
         this.subManager = new SubscriptionManager(supabaseClient);
       }
@@ -2537,8 +2605,10 @@
             upsert: false
           });
           if (error) throw error;
-          const { data: urlData } = this.sb.storage.from('images').getPublicUrl(data.path);
-          return urlData.publicUrl;
+          // S1: Bucket ist privat — NICHT die öffentliche URL speichern (400 ohne
+          // Login), sondern den stabilen Objekt-Pfad. Beim Rendern zieht das
+          // Frontend daraus eine kurzlebige Signed URL (window.__krsResolveStorageUrl).
+          return data.path;
         } catch (err) {
           console.error('uploadFile error:', err);
           // Spezifische Fehlermeldungen je nach Supabase-Error
@@ -4106,10 +4176,33 @@
       }, '📖 ', label || title);
     }
 
+    // S1: löst eine Storage-Referenz asynchron in eine Signed URL auf.
+    // Nicht-Storage-Referenzen (data:/blob:/extern) kommen sofort zurück.
+    function useSignedUrl(ref) {
+      var _immediate = (window.__krsStoragePath && window.__krsStoragePath(ref)) ? null : ref;
+      const [url, setUrl] = React.useState(_immediate);
+      React.useEffect(function () {
+        let alive = true;
+        if (!ref) { setUrl(null); return; }
+        if (!window.__krsResolveStorageUrl) { setUrl(ref); return; }
+        window.__krsResolveStorageUrl(ref).then(function (u) { if (alive) setUrl(u); });
+        return function () { alive = false; };
+      }, [ref]);
+      return url;
+    }
+
+    // S1: <img>, dessen src über eine Signed URL aufgelöst wird.
+    function SignedImg(props) {
+      var src = useSignedUrl(props.src);
+      var rest = Object.assign({}, props); delete rest.src;
+      return React.createElement('img', Object.assign(rest, { src: src || undefined }));
+    }
+
     function Avatar({ user, size = 36 }) {
-      if (user.avatar_url) {
+      const avatarSrc = useSignedUrl(user.avatar_url); // S1: Hook unbedingt vor return
+      if (user.avatar_url && avatarSrc) {
         return React.createElement('img', {
-          src: user.avatar_url,
+          src: avatarSrc,
           className: 'avatar',
           style: { width: size, height: size, borderRadius: '50%', objectFit: 'cover' },
           alt: user.display_name
@@ -4667,6 +4760,7 @@
     function getSupabaseClient() {
       if (!_supabaseClientSingleton && window.supabase) {
         _supabaseClientSingleton = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        window.__krsSb = _supabaseClientSingleton; // S1: Signed-URL-Resolver nutzt diesen Client
       }
       return _supabaseClientSingleton;
     }
@@ -5354,7 +5448,7 @@
       function openAt(f){ return function(){ window.openFileViewer(files, files.indexOf(f)); }; }
       return React.createElement('div', { style: { margin: compact ? '0 0 4px' : '8px 0' } },
         images.length > 0 && React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: docs.length > 0 ? '6px' : 0 } },
-          images.map(function(img, i){ return React.createElement('img', { key: i, src: img.url, alt: img.name || '', title: img.name || '',
+          images.map(function(img, i){ return React.createElement(SignedImg, { key: i, src: img.url, alt: img.name || '', title: img.name || '',
             style: { maxWidth: images.length === 1 ? (compact ? '240px' : '100%') : (compact ? '120px' : '48%'), maxHeight: images.length === 1 ? (compact ? '200px' : '400px') : (compact ? '100px' : '200px'), borderRadius: 'var(--radius)', cursor: 'pointer', objectFit: 'cover', display: 'block' },
             onClick: openAt(img) }); })
         ),
@@ -8754,9 +8848,9 @@
       useEffect(() => {
         if (!user || !dataService?.isDemo) return;
         const demoMessages = [
-          { type: 'chat', convId: 1, from: 'Daniel S.', text: 'Hast du kurz Zeit?' },
+          { type: 'chat', convId: 1, from: 'Lehrkraft B', text: 'Hast du kurz Zeit?' },
           { type: 'chat', convId: 3, from: 'Sandra M.', text: 'Arbeitsblatt ist fertig!' },
-          { type: 'post', channelId: 2, from: 'Petra C.', text: 'Neue Info zum Elternabend' },
+          { type: 'post', channelId: 2, from: 'Lehrkraft C', text: 'Neue Info zum Elternabend' },
           { type: 'post', channelId: 7, from: 'Lisa W.', text: 'SMV-Treffen verschoben' },
           { type: 'chat', convId: 2, from: 'Martina F.', text: 'Danke dir!' },
           { type: 'post', channelId: 21, from: 'Thomas K.', text: 'iPad-Update steht an' },
