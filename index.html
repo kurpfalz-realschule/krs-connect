@@ -1602,7 +1602,7 @@
       // ---- Helfer ----
       var EXT_ICON = { pdf:'📕', doc:'📘', docx:'📘', xls:'📗', xlsx:'📗', csv:'📗', ppt:'📙', pptx:'📙', txt:'📄', md:'📄', zip:'🗜️' };
       function extOf(f){ var n = (f.name || f.url || '').split('?')[0]; return (n.split('.').pop() || '').toLowerCase(); }
-      function isImage(f){ return /^image\//.test(f.type || '') || /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i.test(f.url || ''); }
+      function isImage(f){ return /^image\//.test(f.type || '') || /\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(f.url || ''); }
       function iconFor(f){ if (isImage(f)) return '🖼️'; return EXT_ICON[extOf(f)] || '📎'; }
       function fmtSize(b){ if (b == null || isNaN(b)) return ''; if (b < 1024) return b + ' B'; if (b < 1048576) return Math.round(b/1024) + ' KB'; return (b/1048576).toFixed(1) + ' MB'; }
 
@@ -1821,7 +1821,7 @@
       MAX_POLL_OPTION: 100,
 
       // Upload-Extension-Whitelist (nur erlaubte Dateiendungen)
-      BLOCKED_EXTENSIONS: new Set(['exe', 'bat', 'cmd', 'scr', 'msi', 'ps1', 'vbs', 'js', 'jar', 'com', 'pif', 'wsf', 'reg']),
+      BLOCKED_EXTENSIONS: new Set(['exe', 'bat', 'cmd', 'scr', 'msi', 'ps1', 'vbs', 'js', 'jar', 'com', 'pif', 'wsf', 'reg', 'svg', 'svgz', 'html', 'htm', 'xhtml']),
 
       // Phase 7.8: Feature-Flags (für schrittweisen Rollout)
       FEATURES: {
@@ -4266,9 +4266,10 @@
     }
 
     // Nur http(s)- und data:image-Quellen sind als Bild erlaubt (kein javascript:, kein data:text/html).
+    // SVG bewusst NICHT erlaubt (S4): data:image/svg+xml kann <script>/on*-Handler enthalten → Stored-XSS.
     function isSafeImageSrc(src) {
       src = String(src || '').trim();
-      return /^https?:\/\//i.test(src) || /^data:image\/(png|jpe?g|gif|webp|bmp|svg\+xml);/i.test(src);
+      return /^https?:\/\//i.test(src) || /^data:image\/(png|jpe?g|gif|webp|bmp);/i.test(src);
     }
 
     function simplifyPastedHtml(rawHtml) {
@@ -4872,7 +4873,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.12.0';
+    window.KRS_VERSION = '4.12.1';
     // Für E2E-Tests: Sortier-Helfer der Chat-Übersicht exponieren
     window.__krsSortConversationsByActivity = sortConversationsByActivity;
     window.__krsUpdateConversationActivity = updateConversationActivity;
@@ -4884,6 +4885,7 @@
     window.__krsSimplifyPastedHtml = simplifyPastedHtml; // Test-Hook: Paste-Bereinigung (Farben/Bilder)
     window.__krsHtmlToText = htmlToText;                 // Test-Hook: sichtbarer Text (Längen-Prüfung)
     window.__krsConfig = CONFIG;                         // Test-Hook: Limits (MAX_POST_LENGTH …)
+    window.__krsIsSafeImageSrc = isSafeImageSrc;         // Test-Hook: Bild-Quellen-Whitelist (S4: kein svg+xml)
     window.__krsIsSafeHttpUrl = isSafeHttpUrl;           // Test-Hook: URL-Validierung Dateiablage-Links (v4.12.0)
     window.__krsLocalDateStr = krsLocalDateStr;          // Test-Hook: lokale Datums-Hilfe (Termine kommend/vergangen)
 
@@ -4895,8 +4897,11 @@
     const UPLOAD_CONFIG = {
       MAX_BYTES: 25 * 1024 * 1024, // 25 MB pro Datei (Bucket-Limit)
       ALLOWED_MIME: new Set([
+        // image/svg+xml bewusst NICHT erlaubt (S4): SVG kann aktiven Code
+        // (<script>/on*-Handler) tragen → Stored-XSS. Muss synchron mit
+        // Storage-Policy images_insert_validated bleiben.
         'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
-        'image/heic', 'image/svg+xml',
+        'image/heic',
         'application/pdf',
         'application/msword',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -4907,11 +4912,12 @@
         'text/plain', 'text/csv', 'text/markdown'
       ]),
       ALLOWED_EXT: new Set([
-        'jpg','jpeg','png','gif','webp','heic','svg',
+        'jpg','jpeg','png','gif','webp','heic',
         'pdf','doc','docx','xls','xlsx','ppt','pptx',
         'txt','csv','md'
       ])
     };
+    window.__krsUploadConfig = UPLOAD_CONFIG;            // Test-Hook: Upload-Whitelist (S4: kein svg)
 
     function sanitizeHtml(html) {
       if (!html) return '';
@@ -5413,7 +5419,7 @@
     // Klick öffnet den Datei-Viewer (Vorschau), Karte hat Download-Button.
     // ============================================================
     function _attExt(f){ var n = (f.name || f.url || '').split('?')[0]; return (n.split('.').pop() || '').toLowerCase(); }
-    function _attIsImage(f){ return /^image\//.test(f.type || '') || /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i.test(f.url || ''); }
+    function _attIsImage(f){ return /^image\//.test(f.type || '') || /\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(f.url || ''); }
     function _attIcon(f){ if (_attIsImage(f)) return '🖼️'; var m = { pdf:'📕', doc:'📘', docx:'📘', xls:'📗', xlsx:'📗', csv:'📗', ppt:'📙', pptx:'📙', txt:'📄', md:'📄', zip:'🗜️' }; return m[_attExt(f)] || '📎'; }
     function _attSize(b){ if (b == null || isNaN(b)) return ''; if (b < 1024) return b + ' B'; if (b < 1048576) return Math.round(b/1024) + ' KB'; return (b/1048576).toFixed(1) + ' MB'; }
     function _attParse(image_url){
@@ -7845,6 +7851,7 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.12.1', date: '04.07.2026', items: ['Sicherheit: SVG-Dateien können nicht mehr hochgeladen oder als Bild eingebettet werden (Schutz vor eingebettetem Schadcode)'] },
       { v: '4.12.0', date: '02.07.2026', items: ['Dateiablage pro Team: benannte Links (z. B. iServ- oder Nextcloud-Ordner) direkt im Team anlegen und pflegen', 'Neuer Tab 📅 Termine pro Team: kommende Termine auf einen Blick, vergangene ausklappbar', 'Anlegen dürfen alle Team-Mitglieder; Bearbeiten/Löschen die Ersteller:in und Team-Admins'] },
       { v: '4.11.2', date: '28.06.2026', items: ['Zurück-Button: aus Hilfe, Datenschutz oder Feedback kommst du mit „← Zurück" wieder zu den Einstellungen — eine Ebene zurück statt alles zu schließen'] },
       { v: '4.11.1', date: '28.06.2026', items: ['Sehr lange Beiträge mit eingebetteten Bildern sind jetzt möglich', 'Die Längen-Begrenzung zählt nur den sichtbaren Text, nicht die Bilddaten'] },
