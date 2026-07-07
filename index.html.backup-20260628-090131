@@ -276,28 +276,6 @@
     }
 
     .content-header h1 { margin: 0; font-size: 18px; }
-    /* v4.12.0: Tab-Leiste pro Team (Beiträge | Dateiablage | Termine) */
-    .team-tabs {
-      display: flex;
-      gap: 4px;
-      padding: 6px 16px 0;
-      border-bottom: 1px solid var(--border);
-      background: var(--bg-primary);
-      flex: 0 0 auto;
-    }
-    .team-tab {
-      border: none;
-      background: none;
-      cursor: pointer;
-      padding: 8px 14px;
-      min-height: 44px; /* Touch-Target (iPad-Kollegium) */
-      font-size: 14px;
-      color: var(--text-secondary);
-      border-bottom: 2px solid transparent;
-      border-radius: var(--radius) var(--radius) 0 0;
-    }
-    .team-tab:hover { background: var(--bg-tertiary); }
-    .team-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
 
     .header-actions {
       display: flex;
@@ -1401,57 +1379,6 @@
 
   <script>
     // ============================================================
-    // S1 · Signed-URL-Resolver für den PRIVATEN Storage-Bucket "images"
-    // Uploads liegen ab jetzt im privaten Bucket; öffentliche URLs (getPublicUrl)
-    // liefern 400. Gespeichert wird der Objekt-Pfad; beim Rendern wird eine
-    // kurzlebige Signed URL (TTL 1 h) frisch gezogen und gecacht. Legacy-Posts
-    // mit alten /public/-URLs werden zur Render-Zeit auf den Pfad reduziert und
-    // ebenfalls signiert. Test-Hooks: window.__krsStoragePath / __krsResolveStorageUrl.
-    // ============================================================
-    (function () {
-      var TTL = 3600;                 // Signed-URL-Lebensdauer in Sekunden
-      var cache = new Map();          // path -> { url, exp(ms) }
-
-      // Extrahiert den Storage-Objekt-Pfad ODER gibt null zurück, wenn die
-      // Referenz unverändert durchgereicht werden soll (data:, blob:, externe
-      // URL) bzw. leer ist.
-      function storagePath(ref) {
-        if (!ref || typeof ref !== 'string') return null;
-        if (/^(data:|blob:)/i.test(ref)) return null;            // Inline → durchreichen
-        if (/^(https?:)?\/\//i.test(ref)) {
-          var m = ref.match(/\/storage\/v1\/object\/(?:public|sign|authenticated)\/images\/([^?#]+)/);
-          return m ? decodeURIComponent(m[1]) : null;            // fremde URL → durchreichen
-        }
-        return ref.replace(/^\/+/, '');                           // roher Objekt-Pfad
-      }
-
-      // Liefert eine anzeigbare URL: Signed URL für Storage-Objekte, sonst die
-      // Original-Referenz. Wirft nie — im Fehlerfall Original zurück.
-      async function resolveStorageUrl(ref) {
-        var path = storagePath(ref);
-        var sb = window.__krsSb;
-        if (!path || !sb || !sb.storage) return ref;              // Demo / Nicht-Storage
-        var now = Date.now();
-        var hit = cache.get(path);
-        if (hit && hit.exp > now + 60000) return hit.url;         // >1 min Restlaufzeit
-        try {
-          var res = await sb.storage.from('images').createSignedUrl(path, TTL);
-          var signed = res && res.data && res.data.signedUrl;
-          if ((res && res.error) || !signed) return ref;
-          cache.set(path, { url: signed, exp: now + TTL * 1000 });
-          return signed;
-        } catch (e) {
-          return ref;
-        }
-      }
-
-      window.__krsStoragePath = storagePath;
-      window.__krsResolveStorageUrl = resolveStorageUrl;
-    })();
-  </script>
-
-  <script>
-    // ============================================================
     // LIGHTBOX — Fullscreen-Bildanzeige mit Navigation & Download
     // ============================================================
     (function() {
@@ -1499,8 +1426,7 @@
         // Image
         var imgEl = document.createElement('img');
         imgEl.className = 'lightbox-img';
-        // S1: privater Bucket → Signed URL auflösen (Fallback: Original).
-        if (window.__krsResolveStorageUrl) { window.__krsResolveStorageUrl(imgUrl).then(function(u){ imgEl.src = u; }); } else { imgEl.src = imgUrl; }
+        imgEl.src = imgUrl;
         imgEl.alt = imgName;
         imgEl.onclick = function(e) { e.stopPropagation(); };
         ov.appendChild(imgEl);
@@ -1602,7 +1528,7 @@
       // ---- Helfer ----
       var EXT_ICON = { pdf:'📕', doc:'📘', docx:'📘', xls:'📗', xlsx:'📗', csv:'📗', ppt:'📙', pptx:'📙', txt:'📄', md:'📄', zip:'🗜️' };
       function extOf(f){ var n = (f.name || f.url || '').split('?')[0]; return (n.split('.').pop() || '').toLowerCase(); }
-      function isImage(f){ return /^image\//.test(f.type || '') || /\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(f.url || ''); }
+      function isImage(f){ return /^image\//.test(f.type || '') || /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i.test(f.url || ''); }
       function iconFor(f){ if (isImage(f)) return '🖼️'; return EXT_ICON[extOf(f)] || '📎'; }
       function fmtSize(b){ if (b == null || isNaN(b)) return ''; if (b < 1024) return b + ' B'; if (b < 1048576) return Math.round(b/1024) + ' KB'; return (b/1048576).toFixed(1) + ' MB'; }
 
@@ -1625,17 +1551,13 @@
 
       // ---- Download erzwingen (mit Originalnamen) ----
       function forceDownload(file){
-        // S1: privater Bucket → Signed URL ziehen, dann laden.
-        var rp = window.__krsResolveStorageUrl ? window.__krsResolveStorageUrl(file.url) : Promise.resolve(file.url);
-        rp.then(function(url){
-          fetch(url).then(function(r){ return r.blob(); }).then(function(blob){
-            var u = URL.createObjectURL(blob);
-            var a = document.createElement('a'); a.href = u; a.download = file.name || 'datei';
-            document.body.appendChild(a); a.click(); a.remove();
-            setTimeout(function(){ URL.revokeObjectURL(u); }, 5000);
-          }).catch(function(){
-            var a = document.createElement('a'); a.href = url; a.download = file.name || 'datei'; a.target = '_blank'; a.rel = 'noopener'; a.click();
-          });
+        fetch(file.url).then(function(r){ return r.blob(); }).then(function(blob){
+          var u = URL.createObjectURL(blob);
+          var a = document.createElement('a'); a.href = u; a.download = file.name || 'datei';
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(function(){ URL.revokeObjectURL(u); }, 5000);
+        }).catch(function(){
+          var a = document.createElement('a'); a.href = file.url; a.download = file.name || 'datei'; a.target = '_blank'; a.rel = 'noopener'; a.click();
         });
       }
       window.__krsDownloadFile = forceDownload;
@@ -1673,9 +1595,7 @@
         var tools = document.createElement('div'); tools.className = 'fv-tools';
         var dl = document.createElement('button'); dl.className = 'fv-btn'; dl.textContent = '⬇ Herunterladen'; dl.onclick = function(){ forceDownload(file); }; tools.appendChild(dl);
         if (window.__krsForwardFile) { var fw = document.createElement('button'); fw.className = 'fv-btn'; fw.textContent = '↪ Weiterleiten'; fw.onclick = function(){ close(); window.__krsForwardFile(file); }; tools.appendChild(fw); }
-        var nt = document.createElement('a'); nt.className = 'fv-btn'; nt.href = file.url; nt.target = '_blank'; nt.rel = 'noopener'; nt.textContent = '↗ Neuer Tab';
-        nt.onclick = function(e){ if (window.__krsResolveStorageUrl) { e.preventDefault(); window.__krsResolveStorageUrl(file.url).then(function(u){ window.open(u, '_blank', 'noopener'); }); } };
-        tools.appendChild(nt);
+        var nt = document.createElement('a'); nt.className = 'fv-btn'; nt.href = file.url; nt.target = '_blank'; nt.rel = 'noopener'; nt.textContent = '↗ Neuer Tab'; tools.appendChild(nt);
         var cl = document.createElement('button'); cl.className = 'fv-btn fv-close'; cl.setAttribute('aria-label', 'Schließen'); cl.textContent = '✕'; cl.onclick = close; tools.appendChild(cl);
         head.appendChild(tools);
         box.appendChild(head);
@@ -1710,31 +1630,24 @@
       }
 
       function renderPreview(file, body){
-        // S1: privater Bucket → erst Signed URL ziehen, dann mit ihr rendern.
-        body.innerHTML = '<div class="fv-loading">Vorschau wird geladen…</div>';
-        var p = window.__krsResolveStorageUrl ? window.__krsResolveStorageUrl(file.url) : Promise.resolve(file.url);
-        p.then(function(url){ renderPreviewResolved(file, body, url); })
-         .catch(function(){ renderPreviewResolved(file, body, file.url); });
-      }
-
-      function renderPreviewResolved(file, body, url){
         var ext = extOf(file);
+        body.innerHTML = '<div class="fv-loading">Vorschau wird geladen…</div>';
         try {
           if (isImage(file)) {
-            body.innerHTML = ''; var img = document.createElement('img'); img.className = 'fv-img'; img.src = url; img.alt = file.name || ''; body.appendChild(img); return;
+            body.innerHTML = ''; var img = document.createElement('img'); img.className = 'fv-img'; img.src = file.url; img.alt = file.name || ''; body.appendChild(img); return;
           }
           if (ext === 'pdf') {
-            body.innerHTML = ''; var ifr = document.createElement('iframe'); ifr.className = 'fv-frame'; ifr.src = url; ifr.title = file.name || 'PDF'; body.appendChild(ifr); return;
+            body.innerHTML = ''; var ifr = document.createElement('iframe'); ifr.className = 'fv-frame'; ifr.src = file.url; ifr.title = file.name || 'PDF'; body.appendChild(ifr); return;
           }
           if (ext === 'txt' || ext === 'csv' || ext === 'md') {
-            fetch(url).then(function(r){ return r.text(); }).then(function(t){
+            fetch(file.url).then(function(r){ return r.text(); }).then(function(t){
               body.innerHTML = ''; var pre = document.createElement('pre'); pre.className = 'fv-text'; pre.textContent = t.slice(0, 300000); body.appendChild(pre);
             }).catch(function(){ noPreview(body, 'Vorschau konnte nicht geladen werden.', file); });
             return;
           }
           if (ext === 'docx') {
             loadScript('mammoth', ['https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js', 'https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js'])
-              .then(function(){ return fetch(url); }).then(function(r){ return r.arrayBuffer(); })
+              .then(function(){ return fetch(file.url); }).then(function(r){ return r.arrayBuffer(); })
               .then(function(buf){ return window.mammoth.convertToHtml({ arrayBuffer: buf }); })
               .then(function(out){ body.innerHTML = ''; var d = document.createElement('div'); d.className = 'fv-doc'; d.innerHTML = purify(out.value || '<em>Leeres Dokument</em>'); body.appendChild(d); })
               .catch(function(){ noPreview(body, 'Word-Vorschau nicht verfügbar.', file); });
@@ -1742,7 +1655,7 @@
           }
           if (ext === 'xlsx' || ext === 'xls') {
             loadScript('xlsx', ['https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'])
-              .then(function(){ return fetch(url); }).then(function(r){ return r.arrayBuffer(); })
+              .then(function(){ return fetch(file.url); }).then(function(r){ return r.arrayBuffer(); })
               .then(function(buf){
                 var wb = window.XLSX.read(buf, { type: 'array' });
                 body.innerHTML = ''; var wrap = document.createElement('div'); wrap.className = 'fv-doc';
@@ -1815,13 +1728,12 @@
 
       // Input-Validierung
       MAX_CHANNEL_NAME: 50,
-      MAX_POST_LENGTH: 20000,        // sichtbarer Text (ohne eingebettete Bilddaten)
-      MAX_POST_HTML_LENGTH: 4000000, // Gesamt inkl. eingebetteter Bilder (~4 MB)
+      MAX_POST_LENGTH: 10000,
       MAX_POLL_QUESTION: 200,
       MAX_POLL_OPTION: 100,
 
       // Upload-Extension-Whitelist (nur erlaubte Dateiendungen)
-      BLOCKED_EXTENSIONS: new Set(['exe', 'bat', 'cmd', 'scr', 'msi', 'ps1', 'vbs', 'js', 'jar', 'com', 'pif', 'wsf', 'reg', 'svg', 'svgz', 'html', 'htm', 'xhtml']),
+      BLOCKED_EXTENSIONS: new Set(['exe', 'bat', 'cmd', 'scr', 'msi', 'ps1', 'vbs', 'js', 'jar', 'com', 'pif', 'wsf', 'reg']),
 
       // Phase 7.8: Feature-Flags (für schrittweisen Rollout)
       FEATURES: {
@@ -1873,9 +1785,8 @@
     // ============================================================
     const MOCK_USERS = [
       { id: 1, username: 'nk', display_name: 'Norbert K.', avatar_color: '#7c6ff7', role: 'admin' },
-      // S2: Demo-User anonymisiert — keine Initialen echter Lehrkräfte
-      { id: 2, username: 'lb', display_name: 'Lehrkraft B', avatar_color: '#f59e0b', role: 'admin' },
-      { id: 3, username: 'lc', display_name: 'Lehrkraft C', avatar_color: '#ec4899', role: 'admin' },
+      { id: 2, username: 'ds', display_name: 'Daniel S.', avatar_color: '#f59e0b', role: 'admin' },
+      { id: 3, username: 'pc', display_name: 'Petra C.', avatar_color: '#ec4899', role: 'admin' },
       { id: 4, username: 'al', display_name: 'Anna L.', avatar_color: '#10b981', role: 'member' },
       { id: 5, username: 'mk', display_name: 'Markus K.', avatar_color: '#3b82f6', role: 'member' },
       { id: 6, username: 'sh', display_name: 'Sabine H.', avatar_color: '#ef4444', role: 'member' },
@@ -1901,58 +1812,10 @@
 
     // Demo-Store für Feedback-Board (#12): Status offen | in_arbeit | erledigt
     let MOCK_FEEDBACK = [
-      { id: 'fb1', user_id: 2, name: 'Lehrkraft B', category: 'verbesserung', rating: 4, message: 'Könnte man Beiträge auch anpinnen?', page: '', status: 'erledigt', created_at: '2026-06-21T09:12:00.000Z' },
-      { id: 'fb2', user_id: 3, name: 'Lehrkraft C', category: 'bug', rating: 0, message: 'Beim Hochladen eines PDFs passiert manchmal nichts.', page: '', status: 'in_arbeit', created_at: '2026-06-21T14:30:00.000Z' },
+      { id: 'fb1', user_id: 2, name: 'Petra Carse', category: 'verbesserung', rating: 4, message: 'Könnte man Beiträge auch anpinnen?', page: '', status: 'erledigt', created_at: '2026-06-21T09:12:00.000Z' },
+      { id: 'fb2', user_id: 3, name: 'Daniel Schmitt', category: 'bug', rating: 0, message: 'Beim Hochladen eines PDFs passiert manchmal nichts.', page: '', status: 'in_arbeit', created_at: '2026-06-21T14:30:00.000Z' },
       { id: 'fb3', user_id: null, name: 'Anonym', category: 'lob', rating: 5, message: 'Viel besser als Teams – danke!', page: '', status: 'offen', created_at: '2026-06-22T07:45:00.000Z' }
     ];
-
-    // ── Helfer: lokales Datum als 'YYYY-MM-DD' (v4.12.0) ──────────────
-    // Bewusst LOKAL (nicht toISOString/UTC), damit die Auf-/Abtrennung
-    // „kommend vs. vergangen" bei Terminen mit der Nutzer-Zeitzone übereinstimmt.
-    function krsLocalDateStr(d) {
-      const p = (n) => String(n).padStart(2, '0');
-      return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
-    }
-    // Demo-Datum relativ zu heute (hält Mock-Termine & E2E-Tests dauerhaft stabil)
-    function __demoDatum(offsetTage) {
-      const d = new Date();
-      d.setDate(d.getDate() + offsetTage);
-      return krsLocalDateStr(d);
-    }
-
-    // ── URL-Validierung für Dateiablage-Links (v4.12.0) ───────────────
-    // Nur http/https — javascript:, data:, ftp: usw. werden abgelehnt.
-    function isSafeHttpUrl(value) {
-      if (!value || typeof value !== 'string') return false;
-      try {
-        const u = new URL(value.trim());
-        return u.protocol === 'http:' || u.protocol === 'https:';
-      } catch (e) { return false; }
-    }
-
-    // Demo-Store für Team-Dateiablage-Links (v4.12.0): { [teamId]: [link, ...] }
-    let MOCK_TEAM_LINKS = {
-      1: [
-        { id: 'tl1', team_id: 1, titel: 'iServ-Ordner Kollegium', url: 'https://krs.sh-schulen.de/iserv/file/-/Groups/Kollegium', beschreibung: 'Gemeinsame Dateien des Kollegiums', icon: '📁', created_by: 1, created_at: '2026-06-25T08:00:00.000Z', sort_order: 0 },
-        { id: 'tl2', team_id: 1, titel: 'Nextcloud Schulordner', url: 'https://cloud.krs-beispiel.de/s/kollegium', beschreibung: 'Pilot der eigenen Dateiablage', icon: '☁️', created_by: 2, created_at: '2026-06-26T10:15:00.000Z', sort_order: 1 }
-      ],
-      2: [
-        { id: 'tl3', team_id: 2, titel: 'Noten & Arrangements (iServ)', url: 'https://krs.sh-schulen.de/iserv/file/-/Groups/Musik', beschreibung: 'Ablage der Fachschaft Musik', icon: '🎵', created_by: 1, created_at: '2026-06-27T12:00:00.000Z', sort_order: 0 }
-      ]
-    };
-
-    // Demo-Store für Team-Termine (v4.12.0): { [teamId]: [termin, ...] }
-    // Daten relativ zu heute, damit „kommend/vergangen" im Demo-Modus immer stimmt.
-    let MOCK_TEAM_TERMINE = {
-      1: [
-        { id: 'tt1', team_id: 1, titel: 'Gesamtlehrerkonferenz', datum: __demoDatum(13), uhrzeit: '14:00', ort: 'Musiksaal', beschreibung: 'Themen: Zeugnisse, Schuljahresplanung', created_by: 2, created_at: '2026-06-20T09:00:00.000Z' },
-        { id: 'tt2', team_id: 1, titel: 'Schulfest-Aufbau', datum: __demoDatum(18), uhrzeit: '13:00', ort: 'Schulhof', beschreibung: '', created_by: 1, created_at: '2026-06-21T11:30:00.000Z' },
-        { id: 'tt3', team_id: 1, titel: 'Pädagogischer Tag', datum: __demoDatum(-30), uhrzeit: '', ort: 'Aula', beschreibung: 'Bereits vorbei — steht unter „Vergangene Termine".', created_by: 3, created_at: '2026-03-20T08:00:00.000Z' }
-      ],
-      2: [
-        { id: 'tt4', team_id: 2, titel: 'Schulband-Generalprobe', datum: __demoDatum(8), uhrzeit: '15:30', ort: 'Musiksaal', beschreibung: 'Generalprobe fürs Sommerkonzert', created_by: 1, created_at: '2026-06-22T10:00:00.000Z' }
-      ]
-    };
 
     const MOCK_CHANNELS = {
       1: [
@@ -2201,8 +2064,6 @@
       constructor(supabaseClient = null) {
         this.sb = supabaseClient;
         this.isDemo = !supabaseClient;
-        // S1: Signed-URL-Resolver braucht den echten Client (Demo bleibt null → Pass-Through).
-        if (supabaseClient) window.__krsSb = supabaseClient;
         this.subscriptions = []; // Legacy (wird noch von altem Code genutzt)
         this.subManager = new SubscriptionManager(supabaseClient);
       }
@@ -2605,10 +2466,8 @@
             upsert: false
           });
           if (error) throw error;
-          // S1: Bucket ist privat — NICHT die öffentliche URL speichern (400 ohne
-          // Login), sondern den stabilen Objekt-Pfad. Beim Rendern zieht das
-          // Frontend daraus eine kurzlebige Signed URL (window.__krsResolveStorageUrl).
-          return data.path;
+          const { data: urlData } = this.sb.storage.from('images').getPublicUrl(data.path);
+          return urlData.publicUrl;
         } catch (err) {
           console.error('uploadFile error:', err);
           // Spezifische Fehlermeldungen je nach Supabase-Error
@@ -2742,271 +2601,6 @@
           if (error) throw error;
           return data;
         } catch (err) { console.error('updateFeedbackStatus error:', err); showToast('Status konnte nicht geändert werden.', 'error'); return null; }
-      }
-
-      // ── Team-Dateiablage-Links (v4.12.0) ───────────────────
-      // WICHTIG (Normalizer-Drift-Falle): _normalizeTeamLink ist das EINZIGE
-      // Mapping DB/Mock → UI. Neue Spalten hier ergänzen, sonst verschwinden
-      // sie nach dem Neuladen still aus dem UI.
-      _normalizeTeamLink(row) {
-        if (!row) return null;
-        return {
-          id: row.id,
-          team_id: row.team_id,
-          titel: row.titel || '',
-          url: row.url || '',
-          beschreibung: row.beschreibung || '',
-          icon: row.icon || '',
-          created_by: row.created_by ?? null,
-          created_at: row.created_at || null,
-          sort_order: row.sort_order ?? 0
-        };
-      }
-
-      async getTeamLinks(teamId) {
-        if (this.isDemo) {
-          const list = MOCK_TEAM_LINKS[teamId] || [];
-          return list.map(l => this._normalizeTeamLink(l))
-            .sort((a, b) => (a.sort_order - b.sort_order) || String(a.created_at || '').localeCompare(String(b.created_at || '')));
-        }
-        try {
-          const { data, error } = await this.sb.from('team_links').select('*')
-            .eq('team_id', teamId)
-            .order('sort_order', { ascending: true })
-            .order('created_at', { ascending: true });
-          if (error) throw error;
-          return (data || []).map(l => this._normalizeTeamLink(l));
-        } catch (err) { console.error('getTeamLinks error:', err); return []; }
-      }
-
-      async createTeamLink(teamId, { titel, url, beschreibung = '', icon = '' } = {}, userId = null) {
-        const cleanTitel = String(titel || '').trim().substring(0, 120);
-        const cleanUrl = String(url || '').trim().substring(0, 500);
-        if (!cleanTitel) { showToast('Bitte gib dem Link einen Titel.', 'error'); return null; }
-        if (!isSafeHttpUrl(cleanUrl)) { showToast('Nur Links mit http:// oder https:// sind erlaubt.', 'error'); return null; }
-        const clean = {
-          team_id: teamId,
-          titel: cleanTitel,
-          url: cleanUrl,
-          beschreibung: String(beschreibung || '').trim().substring(0, 300),
-          icon: String(icon || '').trim().substring(0, 8)
-        };
-        if (this.isDemo) {
-          const list = MOCK_TEAM_LINKS[teamId] || (MOCK_TEAM_LINKS[teamId] = []);
-          const link = this._normalizeTeamLink({ id: 'tl' + Date.now(), ...clean, created_by: userId ?? null, created_at: new Date().toISOString(), sort_order: list.length });
-          list.push(link);
-          return link;
-        }
-        try {
-          const insertObj = { ...clean, sort_order: 0 };
-          if (userId) insertObj.created_by = userId;
-          const { data, error } = await this.sb.from('team_links').insert(insertObj).select('*').single();
-          if (error) throw error;
-          return this._normalizeTeamLink(data);
-        } catch (err) {
-          console.error('createTeamLink error:', err);
-          showToast(/row-level security|policy|permission|denied/i.test(err && err.message || '')
-            ? 'Keine Berechtigung: Nur Team-Mitglieder können Links anlegen.'
-            : 'Link konnte nicht gespeichert werden. Bitte versuche es erneut.', 'error');
-          return null;
-        }
-      }
-
-      async updateTeamLink(linkId, updates = {}) {
-        const patch = {};
-        if (updates.titel !== undefined) {
-          const t = String(updates.titel || '').trim().substring(0, 120);
-          if (!t) { showToast('Bitte gib dem Link einen Titel.', 'error'); return null; }
-          patch.titel = t;
-        }
-        if (updates.url !== undefined) {
-          const u = String(updates.url || '').trim().substring(0, 500);
-          if (!isSafeHttpUrl(u)) { showToast('Nur Links mit http:// oder https:// sind erlaubt.', 'error'); return null; }
-          patch.url = u;
-        }
-        if (updates.beschreibung !== undefined) patch.beschreibung = String(updates.beschreibung || '').trim().substring(0, 300);
-        if (updates.icon !== undefined) patch.icon = String(updates.icon || '').trim().substring(0, 8);
-        if (updates.sort_order !== undefined) patch.sort_order = parseInt(updates.sort_order, 10) || 0;
-        if (this.isDemo) {
-          for (const list of Object.values(MOCK_TEAM_LINKS)) {
-            const l = list.find(x => String(x.id) === String(linkId));
-            if (l) { Object.assign(l, patch, { updated_at: new Date().toISOString() }); return this._normalizeTeamLink(l); }
-          }
-          return null;
-        }
-        try {
-          const { data, error } = await this.sb.from('team_links').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', linkId).select('*').single();
-          if (error) throw error;
-          return this._normalizeTeamLink(data);
-        } catch (err) {
-          console.error('updateTeamLink error:', err);
-          showToast(/row-level security|policy|permission|denied/i.test(err && err.message || '')
-            ? 'Keine Berechtigung: Nur Ersteller:in oder Team-Admins können diesen Link bearbeiten.'
-            : 'Link konnte nicht geändert werden. Bitte versuche es erneut.', 'error');
-          return null;
-        }
-      }
-
-      async deleteTeamLink(linkId) {
-        if (this.isDemo) {
-          for (const list of Object.values(MOCK_TEAM_LINKS)) {
-            const idx = list.findIndex(x => String(x.id) === String(linkId));
-            if (idx !== -1) { list.splice(idx, 1); return true; }
-          }
-          return false;
-        }
-        try {
-          const { error } = await this.sb.from('team_links').delete().eq('id', linkId);
-          if (error) throw error;
-          return true;
-        } catch (err) {
-          console.error('deleteTeamLink error:', err);
-          showToast(/row-level security|policy|permission|denied/i.test(err && err.message || '')
-            ? 'Keine Berechtigung: Nur Ersteller:in oder Team-Admins können diesen Link löschen.'
-            : 'Link konnte nicht gelöscht werden. Bitte versuche es erneut.', 'error');
-          return false;
-        }
-      }
-
-      // ── Team-Termine (v4.12.0) ─────────────────────────────
-      // Bewusst KEIN Vollkalender: keine Wiederholungen, keine Erinnerungen.
-      // Gleiche Normalizer-Regel wie bei den Team-Links (s. o.).
-      _normalizeTermin(row) {
-        if (!row) return null;
-        return {
-          id: row.id,
-          team_id: row.team_id,
-          titel: row.titel || '',
-          datum: row.datum ? String(row.datum).substring(0, 10) : '',
-          uhrzeit: row.uhrzeit ? String(row.uhrzeit).substring(0, 5) : '',
-          ort: row.ort || '',
-          beschreibung: row.beschreibung || '',
-          created_by: row.created_by ?? null,
-          created_at: row.created_at || null
-        };
-      }
-
-      _sortTermineAufsteigend(list) {
-        return [...list].sort((a, b) =>
-          (a.datum + 'T' + (a.uhrzeit || '00:00')).localeCompare(b.datum + 'T' + (b.uhrzeit || '00:00')));
-      }
-
-      _cleanTerminFelder({ titel, datum, uhrzeit = '', ort = '', beschreibung = '' } = {}) {
-        const cleanTitel = String(titel || '').trim().substring(0, 120);
-        const cleanDatum = String(datum || '').trim();
-        const cleanUhrzeit = String(uhrzeit || '').trim().substring(0, 5);
-        if (!cleanTitel) { showToast('Bitte gib dem Termin einen Titel.', 'error'); return null; }
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(cleanDatum)) { showToast('Bitte wähle ein gültiges Datum.', 'error'); return null; }
-        if (cleanUhrzeit && !/^\d{2}:\d{2}$/.test(cleanUhrzeit)) { showToast('Bitte gib die Uhrzeit als HH:MM an (oder lasse sie leer).', 'error'); return null; }
-        return {
-          titel: cleanTitel,
-          datum: cleanDatum,
-          uhrzeit: cleanUhrzeit,
-          ort: String(ort || '').trim().substring(0, 120),
-          beschreibung: String(beschreibung || '').trim().substring(0, 500)
-        };
-      }
-
-      async getTeamTermine(teamId) {
-        if (this.isDemo) {
-          const list = MOCK_TEAM_TERMINE[teamId] || [];
-          return this._sortTermineAufsteigend(list.map(t => this._normalizeTermin(t)));
-        }
-        try {
-          const { data, error } = await this.sb.from('team_termine').select('*')
-            .eq('team_id', teamId)
-            .order('datum', { ascending: true })
-            .order('uhrzeit', { ascending: true, nullsFirst: true });
-          if (error) throw error;
-          return (data || []).map(t => this._normalizeTermin(t));
-        } catch (err) { console.error('getTeamTermine error:', err); return []; }
-      }
-
-      async createTeamTermin(teamId, felder = {}, userId = null) {
-        const clean = this._cleanTerminFelder(felder);
-        if (!clean) return null;
-        if (this.isDemo) {
-          const list = MOCK_TEAM_TERMINE[teamId] || (MOCK_TEAM_TERMINE[teamId] = []);
-          const termin = this._normalizeTermin({ id: 'tt' + Date.now(), team_id: teamId, ...clean, created_by: userId ?? null, created_at: new Date().toISOString() });
-          list.push(termin);
-          return termin;
-        }
-        try {
-          const insertObj = { team_id: teamId, ...clean, uhrzeit: clean.uhrzeit || null };
-          if (userId) insertObj.created_by = userId;
-          const { data, error } = await this.sb.from('team_termine').insert(insertObj).select('*').single();
-          if (error) throw error;
-          return this._normalizeTermin(data);
-        } catch (err) {
-          console.error('createTeamTermin error:', err);
-          showToast(/row-level security|policy|permission|denied/i.test(err && err.message || '')
-            ? 'Keine Berechtigung: Nur Team-Mitglieder können Termine anlegen.'
-            : 'Termin konnte nicht gespeichert werden. Bitte versuche es erneut.', 'error');
-          return null;
-        }
-      }
-
-      async updateTeamTermin(terminId, updates = {}) {
-        // Nur übergebene Felder ändern; Pflichtfelder werden dabei validiert.
-        const patch = {};
-        if (updates.titel !== undefined) {
-          const t = String(updates.titel || '').trim().substring(0, 120);
-          if (!t) { showToast('Bitte gib dem Termin einen Titel.', 'error'); return null; }
-          patch.titel = t;
-        }
-        if (updates.datum !== undefined) {
-          const d = String(updates.datum || '').trim();
-          if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) { showToast('Bitte wähle ein gültiges Datum.', 'error'); return null; }
-          patch.datum = d;
-        }
-        if (updates.uhrzeit !== undefined) {
-          const u = String(updates.uhrzeit || '').trim().substring(0, 5);
-          if (u && !/^\d{2}:\d{2}$/.test(u)) { showToast('Bitte gib die Uhrzeit als HH:MM an (oder lasse sie leer).', 'error'); return null; }
-          patch.uhrzeit = u;
-        }
-        if (updates.ort !== undefined) patch.ort = String(updates.ort || '').trim().substring(0, 120);
-        if (updates.beschreibung !== undefined) patch.beschreibung = String(updates.beschreibung || '').trim().substring(0, 500);
-        if (this.isDemo) {
-          for (const list of Object.values(MOCK_TEAM_TERMINE)) {
-            const t = list.find(x => String(x.id) === String(terminId));
-            if (t) { Object.assign(t, patch, { updated_at: new Date().toISOString() }); return this._normalizeTermin(t); }
-          }
-          return null;
-        }
-        try {
-          const dbPatch = { ...patch, updated_at: new Date().toISOString() };
-          if (dbPatch.uhrzeit === '') dbPatch.uhrzeit = null;
-          const { data, error } = await this.sb.from('team_termine').update(dbPatch).eq('id', terminId).select('*').single();
-          if (error) throw error;
-          return this._normalizeTermin(data);
-        } catch (err) {
-          console.error('updateTeamTermin error:', err);
-          showToast(/row-level security|policy|permission|denied/i.test(err && err.message || '')
-            ? 'Keine Berechtigung: Nur Ersteller:in oder Team-Admins können diesen Termin bearbeiten.'
-            : 'Termin konnte nicht geändert werden. Bitte versuche es erneut.', 'error');
-          return null;
-        }
-      }
-
-      async deleteTeamTermin(terminId) {
-        if (this.isDemo) {
-          for (const list of Object.values(MOCK_TEAM_TERMINE)) {
-            const idx = list.findIndex(x => String(x.id) === String(terminId));
-            if (idx !== -1) { list.splice(idx, 1); return true; }
-          }
-          return false;
-        }
-        try {
-          const { error } = await this.sb.from('team_termine').delete().eq('id', terminId);
-          if (error) throw error;
-          return true;
-        } catch (err) {
-          console.error('deleteTeamTermin error:', err);
-          showToast(/row-level security|policy|permission|denied/i.test(err && err.message || '')
-            ? 'Keine Berechtigung: Nur Ersteller:in oder Team-Admins können diesen Termin löschen.'
-            : 'Termin konnte nicht gelöscht werden. Bitte versuche es erneut.', 'error');
-          return false;
-        }
       }
 
       // ── Reactions ──────────────────────────────
@@ -3799,38 +3393,6 @@
         }
       }
 
-      // Passwort-Reset-Mail anfordern ("Passwort vergessen" — Selbstservice)
-      // Schickt eine E-Mail mit Reset-Link an die eingetragene Adresse.
-      async sendPasswordReset(email) {
-        if (this.isDemo || !this.sb) return { error: null };
-        try {
-          const { error } = await this.sb.auth.resetPasswordForEmail(email, {
-            // Nach Klick auf den Link landet der Kollege wieder in Connect;
-            // Supabase hängt #access_token=...&type=recovery an → Recovery-Screen.
-            redirectTo: window.location.origin + window.location.pathname
-          });
-          if (error) throw error;
-          return { error: null };
-        } catch (err) {
-          console.error('sendPasswordReset error:', err);
-          return { error: err.message || 'Reset-Mail konnte nicht gesendet werden.' };
-        }
-      }
-
-      // Passwort neu setzen — sowohl nach Reset-Link (Recovery-Session) als auch
-      // eingeloggt in den Einstellungen. Ändert das Passwort des aktiven Auth-Users.
-      async updatePassword(newPassword) {
-        if (this.isDemo || !this.sb) return { error: null };
-        try {
-          const { error } = await this.sb.auth.updateUser({ password: newPassword });
-          if (error) throw error;
-          return { error: null };
-        } catch (err) {
-          console.error('updatePassword error:', err);
-          return { error: err.message || 'Passwort konnte nicht geändert werden.' };
-        }
-      }
-
       // Aktuelle Session prüfen
       async getSession() {
         if (this.isDemo || !this.sb) return null;
@@ -4208,33 +3770,10 @@
       }, '📖 ', label || title);
     }
 
-    // S1: löst eine Storage-Referenz asynchron in eine Signed URL auf.
-    // Nicht-Storage-Referenzen (data:/blob:/extern) kommen sofort zurück.
-    function useSignedUrl(ref) {
-      var _immediate = (window.__krsStoragePath && window.__krsStoragePath(ref)) ? null : ref;
-      const [url, setUrl] = React.useState(_immediate);
-      React.useEffect(function () {
-        let alive = true;
-        if (!ref) { setUrl(null); return; }
-        if (!window.__krsResolveStorageUrl) { setUrl(ref); return; }
-        window.__krsResolveStorageUrl(ref).then(function (u) { if (alive) setUrl(u); });
-        return function () { alive = false; };
-      }, [ref]);
-      return url;
-    }
-
-    // S1: <img>, dessen src über eine Signed URL aufgelöst wird.
-    function SignedImg(props) {
-      var src = useSignedUrl(props.src);
-      var rest = Object.assign({}, props); delete rest.src;
-      return React.createElement('img', Object.assign(rest, { src: src || undefined }));
-    }
-
     function Avatar({ user, size = 36 }) {
-      const avatarSrc = useSignedUrl(user.avatar_url); // S1: Hook unbedingt vor return
-      if (user.avatar_url && avatarSrc) {
+      if (user.avatar_url) {
         return React.createElement('img', {
-          src: avatarSrc,
+          src: user.avatar_url,
           className: 'avatar',
           style: { width: size, height: size, borderRadius: '50%', objectFit: 'cover' },
           alt: user.display_name
@@ -4267,43 +3806,6 @@
     // Default-/Müll-Farben aus Word/Outlook, die wir verwerfen (= keine echte Hervorhebung)
     const PASTE_DEFAULT_COLORS = ['black','#000','#000000','windowtext','inherit','initial','currentcolor','auto','rgb(0,0,0)','rgb(0, 0, 0)'];
 
-    // ── Gemeinsame Helfer für sichere Inline-Styles & Bilder ──
-    // Erlaubt nur unbedenkliche Farbwerte (Hex, Namen, rgb/rgba/hsl). Blockt url(), expression, javascript:.
-    function safeColorVal(v) {
-      v = String(v || '').trim();
-      if (!v || /url|expression|javascript|[<>{}\\]/i.test(v)) return false;
-      if (/^#[0-9a-f]{3,8}$/i.test(v)) return true;                       // Hex
-      if (/^[a-z]+$/i.test(v)) return true;                               // benannte Farbe (red, gold …)
-      if (/^(rgb|rgba|hsl|hsla)\(\s*[\d.,\s%]+\)$/i.test(v)) return true; // rgb()/rgba()/hsl()
-      return false;
-    }
-
-    // Reduziert das style-Attribut eines Knotens auf eine sichere Whitelist
-    // (Textfarbe, Hintergrundfarbe, Fett, Kursiv, Unterstrichen). Alles andere fliegt raus.
-    function filterSafeStyle(node) {
-      if (!node || !node.hasAttribute || !node.hasAttribute('style')) return;
-      const style = node.getAttribute('style');
-      const keep = [];
-      const grab = (re) => { const m = re.exec(style); return m ? m[1].trim() : null; };
-      const color = grab(/(?:^|;|\s)color\s*:\s*([^;]+)/i);
-      if (color && safeColorVal(color) && !PASTE_DEFAULT_COLORS.includes(color.toLowerCase())) keep.push('color: ' + color);
-      const bg = grab(/(?:^|;|\s)background-color\s*:\s*([^;]+)/i);
-      if (bg && safeColorVal(bg) && !PASTE_DEFAULT_COLORS.includes(bg.toLowerCase())) keep.push('background-color: ' + bg);
-      const fw = grab(/font-weight\s*:\s*([^;]+)/i);
-      if (fw && (/bold/i.test(fw) || parseInt(fw, 10) >= 600)) keep.push('font-weight: 700');
-      if (/font-style\s*:\s*italic/i.test(style)) keep.push('font-style: italic');
-      if (/text-decoration\s*:[^;]*underline/i.test(style)) keep.push('text-decoration: underline');
-      if (keep.length) node.setAttribute('style', keep.join('; '));
-      else node.removeAttribute('style');
-    }
-
-    // Nur http(s)- und data:image-Quellen sind als Bild erlaubt (kein javascript:, kein data:text/html).
-    // SVG bewusst NICHT erlaubt (S4): data:image/svg+xml kann <script>/on*-Handler enthalten → Stored-XSS.
-    function isSafeImageSrc(src) {
-      src = String(src || '').trim();
-      return /^https?:\/\//i.test(src) || /^data:image\/(png|jpe?g|gif|webp|bmp);/i.test(src);
-    }
-
     function simplifyPastedHtml(rawHtml) {
       if (!window.DOMPurify) {
         // Kein DOMPurify → kein HTML vertrauen; auf Plaintext degradieren (XSS-sicher)
@@ -4319,19 +3821,36 @@
         .replace(/&nbsp;/gi, ' ');                        // NBSP → normales Leerzeichen
 
       const ALLOWED = {
-        ALLOWED_TAGS: ['b','strong','i','em','u','s','a','ul','ol','li','p','br','span','h1','h2','h3','code','pre','blockquote','img'],
-        ALLOWED_ATTR: ['href','target','rel','style','src','alt','width','height'],
-        ADD_DATA_URI_TAGS: ['img'], // data:image/... in <img src> zulassen
+        ALLOWED_TAGS: ['b','strong','i','em','u','s','a','ul','ol','li','p','br','span','h1','h2','h3','code','pre','blockquote'],
+        ALLOWED_ATTR: ['href','target','rel','style'],
         FORCE_BODY: true,
       };
 
-      // Hook: style auf sichere Hervorhebungen reduzieren (Farbe/Hintergrund/Fett/Kursiv/Unterstrichen),
-      // a[target] absichern. Bild-Quellen werden nach dem Sanitizing geprüft (siehe unten).
+      // Hook: style auf sinnvolle, sichere Hervorhebungen reduzieren; Default-Farben/-Gewichte verwerfen
       DOMPurify.addHook('afterSanitizeAttributes', (node) => {
         if (node.tagName === 'A' && node.hasAttribute('target')) {
           node.setAttribute('rel', 'noopener noreferrer');
         }
-        filterSafeStyle(node);
+        if (node.hasAttribute && node.hasAttribute('style')) {
+          const style = node.getAttribute('style');
+          const keep = [];
+          const grab = (re) => { const m = re.exec(style); return m ? m[1].trim() : null; };
+          // Farbe: nur behalten, wenn sicher UND keine Default-/Müllfarbe
+          const color = grab(/(?:^|;|\s)color\s*:\s*([^;]+)/i);
+          if (color && !/[(){}<>\\]|url|expression|javascript/i.test(color)
+              && !PASTE_DEFAULT_COLORS.includes(color.toLowerCase())) {
+            keep.push('color: ' + color);
+          }
+          // Fett: nur bold / >=600 (Word liefert 400 = normal → verwerfen)
+          const fw = grab(/font-weight\s*:\s*([^;]+)/i);
+          if (fw && (/bold/i.test(fw) || parseInt(fw, 10) >= 600)) keep.push('font-weight: 700');
+          // Kursiv / Unterstrichen
+          if (/font-style\s*:\s*italic/i.test(style)) keep.push('font-style: italic');
+          if (/text-decoration\s*:[^;]*underline/i.test(style)) keep.push('text-decoration: underline');
+
+          if (keep.length) node.setAttribute('style', keep.join('; '));
+          else node.removeAttribute('style');
+        }
       });
 
       const sanitized = DOMPurify.sanitize(pre, ALLOWED);
@@ -4340,15 +3859,6 @@
       // 2) DOM-Nachbearbeitung: Word-Span-Suppe auflösen + leere Knoten entfernen
       const root = document.createElement('div');
       root.innerHTML = sanitized;
-
-      // 2.0) Bilder: unsichere Quellen entfernen, sichere Bilder DSGVO-schonend laden
-      root.querySelectorAll('img').forEach(img => {
-        const src = img.getAttribute('src') || '';
-        if (!isSafeImageSrc(src)) { img.remove(); return; }
-        img.removeAttribute('style');            // keine Layout-Styles aus Fremdquellen
-        img.setAttribute('loading', 'lazy');
-        img.setAttribute('referrerpolicy', 'no-referrer');
-      });
 
       // 2a) Bedeutungslose <span> (ohne style) auflösen — bis stabil
       let changed = true, guard = 0;
@@ -4505,7 +4015,6 @@
     function MentionTextarea({ value, onChange, allUsers, placeholder, autoFocus, style, showToolbar, onFilePaste, onEnter, editorRef: editorRefProp }) {
       const [mentionQuery, setMentionQuery] = useState(null);
       const [mentionIdx, setMentionIdx] = useState(0);
-      const [showColors, setShowColors] = useState(false);
       const _localEditorRef = useRef(null);
       const editorRef = editorRefProp || _localEditorRef;
 
@@ -4623,37 +4132,10 @@
         }
       };
 
-      // Textfarbe setzen — styleWithCSS sorgt für <span style="color:…"> (statt <font>),
-      // damit die Farbe den Render-Sanitizer übersteht.
-      const TEXT_COLORS = [
-        ['KRS-Akzent', '#D4762C'], ['Rot', '#C0392B'], ['Grün', '#1E8449'],
-        ['Blau', '#2D6CDF'], ['Lila', '#8E44AD'], ['Standard', '#1F2937']
-      ];
-      const applyColor = (color) => {
-        const el = editorRef.current;
-        if (el) el.focus();
-        try { document.execCommand('styleWithCSS', false, true); } catch (_) {}
-        try { document.execCommand('foreColor', false, color); } catch (_) {}
-        try { document.execCommand('styleWithCSS', false, false); } catch (_) {}
-        setShowColors(false);
-        emitChange();
-      };
-
-      const toolbar = showToolbar === false ? null : React.createElement('div', { className: 'rich-toolbar', role: 'toolbar', 'aria-label': 'Formatierung', style: { position: 'relative' } },
+      const toolbar = showToolbar === false ? null : React.createElement('div', { className: 'rich-toolbar', role: 'toolbar', 'aria-label': 'Formatierung' },
         React.createElement('button', { type: 'button', title: 'Fett (Strg+B)', 'aria-label': 'Fett', onMouseDown: (e) => { e.preventDefault(); exec('bold'); }, style: { fontWeight: 700 } }, 'B'),
         React.createElement('button', { type: 'button', title: 'Kursiv (Strg+I)', 'aria-label': 'Kursiv', onMouseDown: (e) => { e.preventDefault(); exec('italic'); }, style: { fontStyle: 'italic' } }, 'I'),
         React.createElement('button', { type: 'button', title: 'Unterstrichen (Strg+U)', 'aria-label': 'Unterstrichen', onMouseDown: (e) => { e.preventDefault(); exec('underline'); }, style: { textDecoration: 'underline' } }, 'U'),
-        React.createElement('button', { type: 'button', title: 'Textfarbe', 'aria-label': 'Textfarbe', 'aria-haspopup': 'true', 'aria-expanded': showColors, onMouseDown: (e) => { e.preventDefault(); setShowColors(v => !v); } }, '🎨'),
-        showColors && React.createElement('div', { className: 'rich-color-pop', role: 'menu', 'aria-label': 'Farbe wählen' },
-          TEXT_COLORS.map(([name, c]) =>
-            React.createElement('button', {
-              key: c, type: 'button', title: name, 'aria-label': name, role: 'menuitem',
-              className: 'rich-color-swatch',
-              style: { background: c },
-              onMouseDown: (e) => { e.preventDefault(); applyColor(c); }
-            })
-          )
-        ),
         React.createElement('button', { type: 'button', title: 'Aufzählung', 'aria-label': 'Aufzählung', onMouseDown: (e) => { e.preventDefault(); exec('insertUnorderedList'); } }, '• Liste'),
         React.createElement('button', { type: 'button', title: 'Nummerierte Liste', 'aria-label': 'Nummerierte Liste', onMouseDown: (e) => { e.preventDefault(); exec('insertOrderedList'); } }, '1. Liste'),
         React.createElement('button', { type: 'button', title: 'Link einfügen', 'aria-label': 'Link', onMouseDown: (e) => { e.preventDefault(); addLink(); } }, '🔗')
@@ -4792,25 +4274,7 @@
     let _supabaseClientSingleton = null;
     function getSupabaseClient() {
       if (!_supabaseClientSingleton && window.supabase) {
-        _supabaseClientSingleton = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-          // Implicit-Flow pinnen: Recovery-/Magic-Links kommen dann als #...type=recovery
-          // im Hash (nicht als ?code=). Darauf verlässt sich die Recovery-Erkennung.
-          // persistSession/autoRefreshToken/detectSessionInUrl bleiben auf Default (true).
-          auth: { flowType: 'implicit' }
-        });
-        window.__krsSb = _supabaseClientSingleton; // S1: Signed-URL-Resolver nutzt diesen Client
-        // Recovery-Erkennung: Klickt ein Kollege den "Passwort vergessen"-Link,
-        // feuert Supabase beim Verarbeiten des URL-Hashes PASSWORD_RECOVERY.
-        // Wir merken das global, damit der Login-Screen den Neu-Setzen-Dialog
-        // zeigt statt still einzuloggen. (Muss synchron nach createClient hängen.)
-        try {
-          _supabaseClientSingleton.auth.onAuthStateChange(function (event) {
-            if (event === 'PASSWORD_RECOVERY') {
-              window.__KRS_RECOVERY = true;
-              try { window.dispatchEvent(new Event('krs-recovery')); } catch (e) {}
-            }
-          });
-        } catch (e) { /* Listener optional — Hash-Fallback greift zusätzlich */ }
+        _supabaseClientSingleton = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       }
       return _supabaseClientSingleton;
     }
@@ -4880,9 +4344,8 @@
 
     // HTML-Sanitizer: DOMPurify mit Legacy-Fallback
     const SANITIZE_CONFIG = {
-      ALLOWED_TAGS: ['p','br','b','strong','i','em','u','a','ul','ol','li','h1','h2','h3','h4','blockquote','pre','code','span','div','hr','img'],
-      ALLOWED_ATTR: ['href','target','rel','class','style','src','alt','width','height'],
-      ADD_DATA_URI_TAGS: ['img'], // data:image/... in <img src> zulassen
+      ALLOWED_TAGS: ['p','br','b','strong','i','em','u','a','ul','ol','li','h1','h2','h3','h4','blockquote','pre','code','span','div','hr'],
+      ALLOWED_ATTR: ['href','target','rel','class'],
       ALLOW_DATA_ATTR: false
     };
 
@@ -4922,14 +4385,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.13.0';
-    // Recovery-Fallback: Reset-Link öffnet die App mit #...type=recovery im Hash.
-    // Früh (synchron) merken, bevor supabase-js den Hash beim Init bereinigt.
-    try {
-      if (typeof location !== 'undefined' && /type=recovery/.test((location.hash || '') + '&' + (location.search || ''))) {
-        window.__KRS_RECOVERY = true;
-      }
-    } catch (e) {}
+    window.KRS_VERSION = '4.10.5';
     // Für E2E-Tests: Sortier-Helfer der Chat-Übersicht exponieren
     window.__krsSortConversationsByActivity = sortConversationsByActivity;
     window.__krsUpdateConversationActivity = updateConversationActivity;
@@ -4937,13 +4393,6 @@
     window.__KRS_FORCE_DEMO = __KRS_QS.get('forceMode') === 'demo';
     window.__KRS_FORCE_USER = __KRS_QS.get('forceUser') || null; // optional: direktes Login als kuerzel
     window.DataService = DataService; // Test-Hook: Upload-Validierung prüft die Klasse direkt (smoke-upload-validation)
-    window.__krsSanitizeHtml = sanitizeHtml;             // Test-Hook: Render-Sanitizer (Farben/Bilder)
-    window.__krsSimplifyPastedHtml = simplifyPastedHtml; // Test-Hook: Paste-Bereinigung (Farben/Bilder)
-    window.__krsHtmlToText = htmlToText;                 // Test-Hook: sichtbarer Text (Längen-Prüfung)
-    window.__krsConfig = CONFIG;                         // Test-Hook: Limits (MAX_POST_LENGTH …)
-    window.__krsIsSafeImageSrc = isSafeImageSrc;         // Test-Hook: Bild-Quellen-Whitelist (S4: kein svg+xml)
-    window.__krsIsSafeHttpUrl = isSafeHttpUrl;           // Test-Hook: URL-Validierung Dateiablage-Links (v4.12.0)
-    window.__krsLocalDateStr = krsLocalDateStr;          // Test-Hook: lokale Datums-Hilfe (Termine kommend/vergangen)
 
     // ============================================================
     // UPLOAD-KONFIG: zentrale Konstanten für DataService.uploadFile
@@ -4953,11 +4402,8 @@
     const UPLOAD_CONFIG = {
       MAX_BYTES: 25 * 1024 * 1024, // 25 MB pro Datei (Bucket-Limit)
       ALLOWED_MIME: new Set([
-        // image/svg+xml bewusst NICHT erlaubt (S4): SVG kann aktiven Code
-        // (<script>/on*-Handler) tragen → Stored-XSS. Muss synchron mit
-        // Storage-Policy images_insert_validated bleiben.
         'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
-        'image/heic',
+        'image/heic', 'image/svg+xml',
         'application/pdf',
         'application/msword',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -4968,12 +4414,11 @@
         'text/plain', 'text/csv', 'text/markdown'
       ]),
       ALLOWED_EXT: new Set([
-        'jpg','jpeg','png','gif','webp','heic',
+        'jpg','jpeg','png','gif','webp','heic','svg',
         'pdf','doc','docx','xls','xlsx','ppt','pptx',
         'txt','csv','md'
       ])
     };
-    window.__krsUploadConfig = UPLOAD_CONFIG;            // Test-Hook: Upload-Whitelist (S4: kein svg)
 
     function sanitizeHtml(html) {
       if (!html) return '';
@@ -4982,16 +4427,6 @@
       if (window.DOMPurify && window.DOMPurify.sanitize) {
         // SICHER: DOMPurify verfügbar
         tmp.innerHTML = DOMPurify.sanitize(html, SANITIZE_CONFIG);
-        // Inline-Styles auf sichere Whitelist reduzieren (Farben bleiben erhalten)
-        tmp.querySelectorAll('[style]').forEach(filterSafeStyle);
-        // Bilder: unsichere Quellen entfernen, sichere Bilder DSGVO-schonend laden
-        tmp.querySelectorAll('img').forEach(img => {
-          const src = img.getAttribute('src') || '';
-          if (!isSafeImageSrc(src)) { img.remove(); return; }
-          img.removeAttribute('style');
-          img.setAttribute('loading', 'lazy');
-          img.setAttribute('referrerpolicy', 'no-referrer');
-        });
         tmp.querySelectorAll('a').forEach(a => {
           a.setAttribute('target', '_blank');
           a.setAttribute('rel', 'noopener noreferrer');
@@ -5009,68 +4444,12 @@
       return tmp.innerHTML;
     }
 
-    // Neues Passwort setzen — erscheint, wenn ein Kollege den "Passwort
-    // vergessen"-Link geöffnet hat (Recovery-Session). Kein altes Passwort nötig.
-    function PasswordRecoveryScreen({ onDone }) {
-      const [pw, setPw] = useState('');
-      const [pw2, setPw2] = useState('');
-      const [error, setError] = useState('');
-      const [loading, setLoading] = useState(false);
-      const [done, setDone] = useState(false);
-
-      const submit = async () => {
-        if (pw.length < 8) { setError('Das neue Passwort muss mindestens 8 Zeichen lang sein.'); return; }
-        if (pw !== pw2) { setError('Die beiden Passwörter stimmen nicht überein.'); return; }
-        setLoading(true); setError('');
-        try {
-          const client = await ensureSupabaseClient();
-          if (!client) throw new Error('Verbindung zum Server fehlgeschlagen. Bitte Seite neu laden.');
-          const ds = new DataService(client);
-          const { error: err } = await ds.updatePassword(pw);
-          if (err) { setError(err); setLoading(false); return; }
-          // Recovery-Session beenden → sauberer Login mit neuem Passwort
-          try { await client.auth.signOut(); } catch (e) {}
-          window.__KRS_RECOVERY = false;
-          try { history.replaceState(null, '', window.location.origin + window.location.pathname); } catch (e) {}
-          setDone(true); setLoading(false);
-        } catch (e) {
-          setError('Fehler: ' + e.message); setLoading(false);
-        }
-      };
-
-      const logo = React.createElement('img', { src: KRS_LOGO, alt: 'KRS Logo', style: { width: '80px', height: '80px', objectFit: 'contain', marginBottom: '12px' } });
-      const inputStyle = { padding: '12px 16px', fontSize: '15px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', outline: 'none', textAlign: 'center' };
-
-      if (done) {
-        return React.createElement('div', { className: 'setup-screen' },
-          logo,
-          React.createElement('h1', null, '✅ Passwort geändert'),
-          React.createElement('p', { style: { color: 'var(--text-secondary)', marginBottom: '24px', maxWidth: '360px', textAlign: 'center' } }, 'Du kannst dich jetzt mit deinem neuen Passwort anmelden.'),
-          React.createElement('button', { onClick: onDone, style: { padding: '12px 40px', fontSize: '16px' } }, '🔓 Zur Anmeldung')
-        );
-      }
-
-      return React.createElement('div', { className: 'setup-screen' },
-        logo,
-        React.createElement('h1', null, '🔑 Neues Passwort setzen'),
-        React.createElement('p', { style: { color: 'var(--text-secondary)', marginBottom: '20px', maxWidth: '360px', textAlign: 'center' } }, 'Bitte vergib ein neues Passwort für deinen Zugang (mindestens 8 Zeichen).'),
-        React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', maxWidth: '320px', marginBottom: '16px' } },
-          React.createElement('input', { type: 'password', placeholder: 'Neues Passwort', value: pw, onChange: (e) => setPw(e.target.value), disabled: loading, autoComplete: 'new-password', style: inputStyle }),
-          React.createElement('input', { type: 'password', placeholder: 'Neues Passwort bestätigen', value: pw2, onChange: (e) => setPw2(e.target.value), onKeyDown: (e) => e.key === 'Enter' && submit(), disabled: loading, autoComplete: 'new-password', style: inputStyle }),
-          React.createElement('button', { onClick: submit, disabled: loading || !pw || !pw2, style: { padding: '12px 40px', fontSize: '16px' } }, loading ? 'Speichern...' : '💾 Passwort speichern')
-        ),
-        error && React.createElement('p', { style: { color: 'var(--danger)', marginTop: '4px', fontSize: '13px', maxWidth: '320px', textAlign: 'center' } }, error)
-      );
-    }
-
     function SetupScreen({ onSetupComplete }) {
       const [error, setError] = useState('');
       const [loading, setLoading] = useState(false);
       const [email, setEmail] = useState('');
       const [password, setPassword] = useState('');
       const [magicLinkSent, setMagicLinkSent] = useState(false);
-      const [resetSent, setResetSent] = useState(false);
-      const [recoveryMode, setRecoveryMode] = useState(window.__KRS_RECOVERY === true);
       const [checkingSession, setCheckingSession] = useState(true);
 
       // Beim Laden: Prüfe ob bereits eine Supabase-Session existiert (mit Timeout)
@@ -5080,20 +4459,10 @@
           onSetupComplete({ isDemo: true });
           return;
         }
-        // Recovery-Modus (Passwort-vergessen-Link): NICHT auto-einloggen,
-        // sondern den Neu-Setzen-Dialog zeigen.
-        const onRecovery = () => { setRecoveryMode(true); setCheckingSession(false); };
-        window.addEventListener('krs-recovery', onRecovery);
-        if (window.__KRS_RECOVERY === true) {
-          setRecoveryMode(true); setCheckingSession(false);
-          return () => window.removeEventListener('krs-recovery', onRecovery);
-        }
         const checkExistingSession = async () => {
           try {
             const client = await ensureSupabaseClient();
             if (!client) { setCheckingSession(false); return; }
-            // Client-Init kann PASSWORD_RECOVERY ausgelöst haben → dann nicht einloggen.
-            if (window.__KRS_RECOVERY === true) { setRecoveryMode(true); setCheckingSession(false); return; }
             // Timeout: Wenn Supabase nicht in 6s antwortet → Login-Screen zeigen
             const sessionPromise = client.auth.getSession();
             const timeoutPromise = new Promise((_, reject) =>
@@ -5115,43 +4484,7 @@
           setCheckingSession(false);
         };
         checkExistingSession();
-        return () => window.removeEventListener('krs-recovery', onRecovery);
       }, []);
-
-      // "Passwort vergessen?" — Reset-Mail an die eingetragene Schul-Adresse.
-      const handleForgotPassword = async () => {
-        const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]{1,64}@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z]{2,})+$/;
-        const trimmedEmail = email.trim().toLowerCase();
-        if (!trimmedEmail || !emailRegex.test(trimmedEmail)) {
-          setError('Bitte zuerst deine E-Mail-Adresse oben eintragen — dann auf „Passwort vergessen?" tippen.');
-          return;
-        }
-        const domain = trimmedEmail.split('@')[1];
-        if (!ALLOWED_EMAIL_DOMAINS.includes(domain) && !ALLOWED_ADMIN_EMAILS.includes(trimmedEmail)) {
-          setError('Bitte verwende deine Schul-E-Mail-Adresse (@realschule-schriesheim.de).');
-          return;
-        }
-        setLoading(true); setError('');
-        try {
-          const client = await ensureSupabaseClient();
-          if (!client) throw new Error('Verbindung zum Server fehlgeschlagen. Bitte Seite neu laden (Netzwerk/CDN).');
-          const ds = new DataService(client);
-          const { error: resetErr } = await ds.sendPasswordReset(trimmedEmail);
-          // Hinweis: Aus Datenschutzgründen (keine Konto-Existenz verraten) zeigen
-          // wir auch bei internem Fehler die neutrale Bestätigung. Ausnahme: harte
-          // Rate-Limit-/Netzfehler geben wir zurück, damit der Kollege es später probiert.
-          if (resetErr && /rate|limit|zu viele|too many/i.test(resetErr)) {
-            setError('Zu viele Anfragen. Bitte in ein paar Minuten erneut versuchen.');
-            setLoading(false);
-            return;
-          }
-          setResetSent(true);
-          setLoading(false);
-        } catch (err) {
-          setError('Verbindung fehlgeschlagen: ' + err.message);
-          setLoading(false);
-        }
-      };
 
       const handleMagicLink = async () => {
         const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]{1,64}@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z]{2,})+$/;
@@ -5206,34 +4539,11 @@
         onSetupComplete({ isDemo: true });
       };
 
-      // Recovery-Modus: Kollege hat den Reset-Link geöffnet → neues Passwort setzen.
-      if (recoveryMode) {
-        return React.createElement(PasswordRecoveryScreen, {
-          onDone: () => { setRecoveryMode(false); setEmail(''); setPassword(''); }
-        });
-      }
-
       if (checkingSession) {
         return React.createElement('div', { className: 'setup-screen' },
           React.createElement('img', { src: KRS_LOGO, alt: 'KRS Logo', style: { width: '80px', height: '80px', objectFit: 'contain', marginBottom: '12px' } }),
           React.createElement('h1', null, 'KRS Connect'),
           React.createElement('p', { style: { color: 'var(--text-secondary)' } }, 'Anmeldung wird geprüft...')
-        );
-      }
-
-      // Reset-Mail wurde angefordert → neutrale Bestätigung.
-      if (resetSent) {
-        return React.createElement('div', { className: 'setup-screen' },
-          React.createElement('img', { src: KRS_LOGO, alt: 'KRS Logo', style: { width: '80px', height: '80px', objectFit: 'contain', marginBottom: '12px' } }),
-          React.createElement('h1', null, '📧 E-Mail prüfen!'),
-          React.createElement('p', { style: { color: 'var(--text-secondary)', marginBottom: '8px', maxWidth: '400px', textAlign: 'center', lineHeight: '1.5' } },
-            'Falls für ', React.createElement('strong', null, email), ' ein Zugang besteht, wurde ein Link zum Zurücksetzen des Passworts gesendet.'),
-          React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: '13px', maxWidth: '400px', textAlign: 'center', lineHeight: '1.5' } },
-            'Der Link ist 1 Stunde gültig. Schau auch im Spam-Ordner nach. Kommt keine Mail an, melde dich bei Norbert — er kann das Passwort direkt zurücksetzen.'),
-          React.createElement('button', {
-            onClick: () => { setResetSent(false); setError(''); },
-            style: { marginTop: '24px', padding: '8px 24px', fontSize: '13px', background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border)' }
-          }, '← Zurück zur Anmeldung')
         );
       }
 
@@ -5285,13 +4595,6 @@
             style: { padding: '12px 40px', fontSize: '16px' }
           }, loading ? 'Anmelden...' : '🔓 Anmelden')
         ),
-
-        // Passwort vergessen?
-        React.createElement('button', {
-          onClick: handleForgotPassword,
-          disabled: loading,
-          style: { background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '13px', textDecoration: 'underline', padding: '4px 8px', minHeight: '32px', marginBottom: '8px' }
-        }, 'Passwort vergessen?'),
 
         React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: '12px', marginBottom: '16px' } }, 'Passwort von der Schulleitung erhalten? Sonst bei Norbert melden.'),
 
@@ -5607,7 +4910,7 @@
     // Klick öffnet den Datei-Viewer (Vorschau), Karte hat Download-Button.
     // ============================================================
     function _attExt(f){ var n = (f.name || f.url || '').split('?')[0]; return (n.split('.').pop() || '').toLowerCase(); }
-    function _attIsImage(f){ return /^image\//.test(f.type || '') || /\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(f.url || ''); }
+    function _attIsImage(f){ return /^image\//.test(f.type || '') || /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i.test(f.url || ''); }
     function _attIcon(f){ if (_attIsImage(f)) return '🖼️'; var m = { pdf:'📕', doc:'📘', docx:'📘', xls:'📗', xlsx:'📗', csv:'📗', ppt:'📙', pptx:'📙', txt:'📄', md:'📄', zip:'🗜️' }; return m[_attExt(f)] || '📎'; }
     function _attSize(b){ if (b == null || isNaN(b)) return ''; if (b < 1024) return b + ' B'; if (b < 1048576) return Math.round(b/1024) + ' KB'; return (b/1048576).toFixed(1) + ' MB'; }
     function _attParse(image_url){
@@ -5642,7 +4945,7 @@
       function openAt(f){ return function(){ window.openFileViewer(files, files.indexOf(f)); }; }
       return React.createElement('div', { style: { margin: compact ? '0 0 4px' : '8px 0' } },
         images.length > 0 && React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: docs.length > 0 ? '6px' : 0 } },
-          images.map(function(img, i){ return React.createElement(SignedImg, { key: i, src: img.url, alt: img.name || '', title: img.name || '',
+          images.map(function(img, i){ return React.createElement('img', { key: i, src: img.url, alt: img.name || '', title: img.name || '',
             style: { maxWidth: images.length === 1 ? (compact ? '240px' : '100%') : (compact ? '120px' : '48%'), maxHeight: images.length === 1 ? (compact ? '200px' : '400px') : (compact ? '100px' : '200px'), borderRadius: 'var(--radius)', cursor: 'pointer', objectFit: 'cover', display: 'block' },
             onClick: openAt(img) }); })
         ),
@@ -5854,10 +5157,7 @@
       const handleCreatePost = async (e) => {
         e.preventDefault();
         if (!newPostContent.trim() && selectedFiles.length === 0) return;
-        // Nur den sichtbaren Text begrenzen — eingebettete Bilder (Base64) zählen nicht als "Zeichen"
-        if (htmlToText(newPostContent).length > CONFIG.MAX_POST_LENGTH) { setPostError('Beitrag zu lang (max. ' + CONFIG.MAX_POST_LENGTH + ' Zeichen Text)'); return; }
-        // Gesamtgröße inkl. eingebetteter Bilder begrenzen (Performance/Realtime)
-        if (newPostContent.length > CONFIG.MAX_POST_HTML_LENGTH) { setPostError('Beitrag inkl. eingebetteter Bilder zu groß. Tipp: große Bilder lieber als Datei anhängen (📎) statt direkt einfügen.'); return; }
+        if (newPostContent.length > CONFIG.MAX_POST_LENGTH) { setPostError('Beitrag zu lang (max. ' + CONFIG.MAX_POST_LENGTH + ' Zeichen)'); return; }
         setSaving(true);
         setPostError('');
         try {
@@ -7232,358 +6532,18 @@
     // ============================================================
     const FEEDBACK_GAS_URL = 'https://script.google.com/macros/s/AKfycbwr9ZV9108jpkfN4nKboTuwMEgUhBOxW2c2ksWgazKNeSgiINL4G2ZNUMKeEzfaOj3H_g/exec';
 
-    // ── Dateiablage (v4.12.0) ─────────────────────────────────────────────
-    // Der Platzhalter aus v4.7.0 (iServ-Hinweis, Nextcloud folgt) bleibt —
-    // NEU: pro Team pflegbare, benannte Links (team_links). KEIN eigener
-    // Datei-Speicher; nur Verweise auf iServ-/Nextcloud-Ordner u. Ä.
+    // ── Dateiablage-Platzhalter ──────────────────────────────────────────
+    // Bewusster Hinweis: eigene Dateiablage (wie OneDrive) wird mit Nextcloud
+    // nachgerüstet. Bis dahin Verweis auf die iServ-Dateiablage der Schule.
     const ISERV_FILES_URL = 'https://krs.sh-schulen.de';
-
-    // Formular-Modal für Team-Links (neu anlegen & bearbeiten).
-    // Stale-Closure-Regel: ALLE Feld-Handler nutzen funktionale Updates
-    // (setForm(prev => …)); der Speichern-Handler liest den frischen State
-    // aus dem Render-Scope (Handler werden pro Render neu erzeugt).
-    function TeamLinkFormModal({ link, teamName, onSave, onClose }) {
-      const [form, setForm] = useState(() => ({
-        titel: link?.titel || '',
-        url: link?.url || '',
-        beschreibung: link?.beschreibung || '',
-        icon: link?.icon || ''
-      }));
-      const [saving, setSaving] = useState(false);
-      const setField = (feld) => (e) => {
-        const v = e.target.value;
-        setForm(prev => ({ ...prev, [feld]: v }));
-      };
-      const urlProblem = !!form.url.trim() && !isSafeHttpUrl(form.url);
-      const canSave = !!form.titel.trim() && isSafeHttpUrl(form.url) && !saving;
-      const handleSave = async () => {
-        if (!canSave) return;
-        setSaving(true);
-        const ok = await onSave({ titel: form.titel, url: form.url, beschreibung: form.beschreibung, icon: form.icon });
-        setSaving(false);
-        if (ok) onClose();
-      };
-      return React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': link ? 'Link bearbeiten' : 'Link hinzufügen', onClick: onClose },
-        React.createElement('div', { className: 'channel-dialog', onClick: e => e.stopPropagation() },
-          React.createElement('h3', null, link ? '🔗 Link bearbeiten' : '🔗 Link hinzufügen'),
-          teamName && React.createElement('p', { style: { fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 12px 0' } }, 'Gilt für das Team „' + teamName + '".'),
-          React.createElement('input', {
-            'data-testid': 'team-link-titel',
-            placeholder: 'Titel (z. B. „iServ-Ordner Fachschaft")',
-            value: form.titel, autoFocus: true, maxLength: 120,
-            onChange: setField('titel'),
-            onKeyDown: (e) => { if (e.key === 'Escape') onClose(); }
-          }),
-          React.createElement('input', {
-            'data-testid': 'team-link-url',
-            placeholder: 'https://… (nur http/https)',
-            value: form.url, maxLength: 500, type: 'url', inputMode: 'url',
-            onChange: setField('url'),
-            onKeyDown: (e) => { if (e.key === 'Escape') onClose(); }
-          }),
-          urlProblem && React.createElement('p', { style: { fontSize: '12px', color: 'var(--accent-red, #d33)', margin: '-6px 0 8px' } }, 'Nur Links mit http:// oder https:// sind erlaubt.'),
-          React.createElement('input', {
-            'data-testid': 'team-link-beschreibung',
-            placeholder: 'Beschreibung (optional)',
-            value: form.beschreibung, maxLength: 300,
-            onChange: setField('beschreibung'),
-            onKeyDown: (e) => { if (e.key === 'Escape') onClose(); }
-          }),
-          React.createElement('input', {
-            'data-testid': 'team-link-icon',
-            placeholder: 'Icon/Emoji (optional, z. B. 📁)',
-            value: form.icon, maxLength: 8,
-            onChange: setField('icon'),
-            onKeyDown: (e) => { if (e.key === 'Escape') onClose(); }
-          }),
-          React.createElement('div', { className: 'dialog-actions' },
-            React.createElement('button', { onClick: onClose }, 'Abbrechen'),
-            React.createElement('button', { className: 'btn-primary', disabled: !canSave, onClick: handleSave }, saving ? 'Speichert …' : 'Speichern')
-          )
-        )
-      );
-    }
-
-    // Liste der Team-Links (im Dateiablage-Tab des Teams und im Dateiablage-Modal).
-    // Rechte: Hinzufügen dürfen alle Team-Mitglieder; Bearbeiten/Löschen nur
-    // Ersteller:in oder (Team-/globale) Admins — serverseitig per RLS gespiegelt.
-    function TeamLinksSection({ team, dataService, user, isTeamAdmin }) {
-      const [links, setLinks] = useState([]);
-      const [loading, setLoading] = useState(true);
-      const [editing, setEditing] = useState(null); // null | 'neu' | link-Objekt
-
-      useEffect(() => {
-        let cancelled = false;
-        setLoading(true);
-        dataService.getTeamLinks(team.id)
-          .then(ls => { if (!cancelled) { setLinks(ls); setLoading(false); } })
-          .catch(err => { console.error('getTeamLinks error:', err); if (!cancelled) { setLinks([]); setLoading(false); } });
-        return () => { cancelled = true; };
-      }, [dataService, team.id]);
-
-      const canEdit = (l) => isTeamAdmin || (user && l.created_by != null && String(l.created_by) === String(user.id));
-
-      const handleSave = async (felder) => {
-        if (editing === 'neu') {
-          const created = await dataService.createTeamLink(team.id, felder, user?.id);
-          if (!created) return false;
-          setLinks(prev => [...prev, created]);
-          showToast('Link „' + created.titel + '" hinzugefügt', 'success');
-          return true;
-        }
-        const updated = await dataService.updateTeamLink(editing.id, felder);
-        if (!updated) return false;
-        setLinks(prev => prev.map(l => String(l.id) === String(updated.id) ? updated : l));
-        showToast('Link aktualisiert', 'success');
-        return true;
-      };
-
-      const handleDelete = async (l) => {
-        if (!confirm('Link „' + l.titel + '" wirklich löschen?')) return;
-        const ok = await dataService.deleteTeamLink(l.id);
-        if (ok) {
-          setLinks(prev => prev.filter(x => String(x.id) !== String(l.id)));
-          showToast('Link gelöscht', 'info');
-        }
-      };
-
-      return React.createElement('div', { 'data-testid': 'team-links-section' },
-        loading && React.createElement('p', { style: { fontSize: '13px', color: 'var(--text-muted)' } }, 'Links werden geladen …'),
-        !loading && links.length === 0 && React.createElement('p', { style: { fontSize: '13px', color: 'var(--text-muted)', margin: '0 0 12px' } },
-          'Noch keine Links in diesem Team. Lege den ersten an — z. B. zum iServ- oder Nextcloud-Ordner.'),
-        !loading && links.map(l =>
-          React.createElement('div', { key: l.id, 'data-testid': 'team-link-item', style: { display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', marginBottom: '8px' } },
-            React.createElement('span', { style: { fontSize: '18px', flex: '0 0 auto' }, 'aria-hidden': 'true' }, l.icon || '🔗'),
-            React.createElement('div', { style: { flex: 1, minWidth: 0 } },
-              React.createElement('a', {
-                href: l.url, target: '_blank', rel: 'noopener noreferrer',
-                style: { fontSize: '14px', fontWeight: 600, color: 'var(--accent)', textDecoration: 'none', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
-              }, l.titel),
-              l.beschreibung && React.createElement('div', { style: { fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, l.beschreibung)
-            ),
-            canEdit(l) && React.createElement('button', {
-              className: 'icon-btn', title: 'Link bearbeiten', 'aria-label': 'Link bearbeiten',
-              'data-testid': 'team-link-edit',
-              onClick: () => setEditing(l),
-              style: { minWidth: '44px', minHeight: '44px' }
-            }, '✏️'),
-            canEdit(l) && React.createElement('button', {
-              className: 'icon-btn', title: 'Link löschen', 'aria-label': 'Link löschen',
-              'data-testid': 'team-link-delete',
-              onClick: () => handleDelete(l),
-              style: { minWidth: '44px', minHeight: '44px', color: 'var(--accent-red, #d33)' }
-            }, '🗑')
-          )
-        ),
-        React.createElement('button', {
-          'data-testid': 'team-link-add',
-          onClick: () => setEditing('neu'),
-          style: { display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 16px', minHeight: '44px', background: 'var(--bg-tertiary)', border: '1px dashed var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', color: 'var(--text-primary)', fontSize: '14px', marginTop: '4px' }
-        }, '＋ Link hinzufügen'),
-        editing && React.createElement(TeamLinkFormModal, {
-          link: editing === 'neu' ? null : editing,
-          teamName: team.name,
-          onSave: handleSave,
-          onClose: () => setEditing(null)
-        })
-      );
-    }
-
-    // Formular-Modal für Team-Termine (gleiche Stale-Closure-Regeln wie oben).
-    function TeamTerminFormModal({ termin, teamName, onSave, onClose }) {
-      const [form, setForm] = useState(() => ({
-        titel: termin?.titel || '',
-        datum: termin?.datum || '',
-        uhrzeit: termin?.uhrzeit || '',
-        ort: termin?.ort || '',
-        beschreibung: termin?.beschreibung || ''
-      }));
-      const [saving, setSaving] = useState(false);
-      const setField = (feld) => (e) => {
-        const v = e.target.value;
-        setForm(prev => ({ ...prev, [feld]: v }));
-      };
-      const canSave = !!form.titel.trim() && /^\d{4}-\d{2}-\d{2}$/.test(form.datum) && !saving;
-      const handleSave = async () => {
-        if (!canSave) return;
-        setSaving(true);
-        const ok = await onSave({ titel: form.titel, datum: form.datum, uhrzeit: form.uhrzeit, ort: form.ort, beschreibung: form.beschreibung });
-        setSaving(false);
-        if (ok) onClose();
-      };
-      const labelStyle = { display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', margin: '0 0 4px' };
-      return React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': termin ? 'Termin bearbeiten' : 'Termin anlegen', onClick: onClose },
-        React.createElement('div', { className: 'channel-dialog', onClick: e => e.stopPropagation() },
-          React.createElement('h3', null, termin ? '📅 Termin bearbeiten' : '📅 Termin anlegen'),
-          teamName && React.createElement('p', { style: { fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 12px 0' } }, 'Gilt für das Team „' + teamName + '".'),
-          React.createElement('input', {
-            'data-testid': 'team-termin-titel',
-            placeholder: 'Titel (z. B. „Fachschaftssitzung")',
-            value: form.titel, autoFocus: true, maxLength: 120,
-            onChange: setField('titel'),
-            onKeyDown: (e) => { if (e.key === 'Escape') onClose(); }
-          }),
-          React.createElement('label', { style: labelStyle, htmlFor: 'team-termin-datum' }, 'Datum (Pflicht)'),
-          React.createElement('input', {
-            id: 'team-termin-datum', 'data-testid': 'team-termin-datum',
-            type: 'date', value: form.datum,
-            onChange: setField('datum'),
-            onKeyDown: (e) => { if (e.key === 'Escape') onClose(); }
-          }),
-          React.createElement('label', { style: labelStyle, htmlFor: 'team-termin-uhrzeit' }, 'Uhrzeit (optional)'),
-          React.createElement('input', {
-            id: 'team-termin-uhrzeit', 'data-testid': 'team-termin-uhrzeit',
-            type: 'time', value: form.uhrzeit,
-            onChange: setField('uhrzeit'),
-            onKeyDown: (e) => { if (e.key === 'Escape') onClose(); }
-          }),
-          React.createElement('input', {
-            'data-testid': 'team-termin-ort',
-            placeholder: 'Ort (optional)',
-            value: form.ort, maxLength: 120,
-            onChange: setField('ort'),
-            onKeyDown: (e) => { if (e.key === 'Escape') onClose(); }
-          }),
-          React.createElement('input', {
-            'data-testid': 'team-termin-beschreibung',
-            placeholder: 'Beschreibung (optional)',
-            value: form.beschreibung, maxLength: 500,
-            onChange: setField('beschreibung'),
-            onKeyDown: (e) => { if (e.key === 'Escape') onClose(); }
-          }),
-          React.createElement('div', { className: 'dialog-actions' },
-            React.createElement('button', { onClick: onClose }, 'Abbrechen'),
-            React.createElement('button', { className: 'btn-primary', disabled: !canSave, onClick: handleSave }, saving ? 'Speichert …' : 'Speichern')
-          )
-        )
-      );
-    }
-
-    // Termin-Liste pro Team: kommende Termine aufsteigend, vergangene
-    // eingeklappt darunter. Anlegen: alle Team-Mitglieder; Bearbeiten/Löschen:
-    // Ersteller:in oder Admin (serverseitig per RLS gespiegelt).
-    function TeamTermineSection({ team, dataService, user, isTeamAdmin }) {
-      const [termine, setTermine] = useState([]);
-      const [loading, setLoading] = useState(true);
-      const [editing, setEditing] = useState(null); // null | 'neu' | termin-Objekt
-      const [showPast, setShowPast] = useState(false);
-
-      useEffect(() => {
-        let cancelled = false;
-        setLoading(true);
-        dataService.getTeamTermine(team.id)
-          .then(ts => { if (!cancelled) { setTermine(ts); setLoading(false); } })
-          .catch(err => { console.error('getTeamTermine error:', err); if (!cancelled) { setTermine([]); setLoading(false); } });
-        return () => { cancelled = true; };
-      }, [dataService, team.id]);
-
-      const heute = krsLocalDateStr(new Date());
-      const kommende = termine.filter(t => t.datum >= heute); // bereits aufsteigend sortiert
-      const vergangene = termine.filter(t => t.datum < heute).slice().reverse(); // jüngste zuerst
-
-      const canEdit = (t) => isTeamAdmin || (user && t.created_by != null && String(t.created_by) === String(user.id));
-
-      const formatDatum = (datum) => {
-        try {
-          return new Date(datum + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
-        } catch (e) { return datum; }
-      };
-
-      const handleSave = async (felder) => {
-        if (editing === 'neu') {
-          const created = await dataService.createTeamTermin(team.id, felder, user?.id);
-          if (!created) return false;
-          setTermine(prev => dataService._sortTermineAufsteigend([...prev, created]));
-          showToast('Termin „' + created.titel + '" angelegt', 'success');
-          return true;
-        }
-        const updated = await dataService.updateTeamTermin(editing.id, felder);
-        if (!updated) return false;
-        setTermine(prev => dataService._sortTermineAufsteigend(prev.map(t => String(t.id) === String(updated.id) ? updated : t)));
-        showToast('Termin aktualisiert', 'success');
-        return true;
-      };
-
-      const handleDelete = async (t) => {
-        if (!confirm('Termin „' + t.titel + '" wirklich löschen?')) return;
-        const ok = await dataService.deleteTeamTermin(t.id);
-        if (ok) {
-          setTermine(prev => prev.filter(x => String(x.id) !== String(t.id)));
-          showToast('Termin gelöscht', 'info');
-        }
-      };
-
-      const terminRow = (t, isPast) => React.createElement('div', {
-        key: t.id,
-        'data-testid': isPast ? 'termin-item-past' : 'termin-item',
-        style: { display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '10px 12px', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', marginBottom: '8px', opacity: isPast ? 0.65 : 1 }
-      },
-        React.createElement('span', { style: { fontSize: '18px', flex: '0 0 auto' }, 'aria-hidden': 'true' }, '📅'),
-        React.createElement('div', { style: { flex: 1, minWidth: 0 } },
-          React.createElement('div', { style: { fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' } }, t.titel),
-          React.createElement('div', { style: { fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' } },
-            formatDatum(t.datum) + (t.uhrzeit ? ' · ' + t.uhrzeit + ' Uhr' : '') + (t.ort ? ' · ' + t.ort : '')
-          ),
-          t.beschreibung && React.createElement('div', { style: { fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' } }, t.beschreibung)
-        ),
-        canEdit(t) && React.createElement('button', {
-          className: 'icon-btn', title: 'Termin bearbeiten', 'aria-label': 'Termin bearbeiten',
-          'data-testid': 'team-termin-edit',
-          onClick: () => setEditing(t),
-          style: { minWidth: '44px', minHeight: '44px' }
-        }, '✏️'),
-        canEdit(t) && React.createElement('button', {
-          className: 'icon-btn', title: 'Termin löschen', 'aria-label': 'Termin löschen',
-          'data-testid': 'team-termin-delete',
-          onClick: () => handleDelete(t),
-          style: { minWidth: '44px', minHeight: '44px', color: 'var(--accent-red, #d33)' }
-        }, '🗑')
-      );
-
-      return React.createElement('div', { 'data-testid': 'team-termine-section' },
-        React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' } },
-          React.createElement('h2', { style: { margin: 0, fontSize: '15px' } }, 'Kommende Termine'),
-          React.createElement('button', {
-            'data-testid': 'team-termin-add',
-            onClick: () => setEditing('neu'),
-            style: { display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', minHeight: '44px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--radius)', cursor: 'pointer', fontSize: '14px', fontWeight: 600 }
-          }, '＋ Termin')
-        ),
-        loading && React.createElement('p', { style: { fontSize: '13px', color: 'var(--text-muted)' } }, 'Termine werden geladen …'),
-        !loading && kommende.length === 0 && React.createElement('p', { style: { fontSize: '13px', color: 'var(--text-muted)', margin: '0 0 12px' } },
-          'Keine kommenden Termine in diesem Team.'),
-        !loading && kommende.map(t => terminRow(t, false)),
-        !loading && vergangene.length > 0 && React.createElement('div', { style: { marginTop: '12px' } },
-          React.createElement('button', {
-            className: 'hidden-teams-toggle',
-            'data-testid': 'termine-past-toggle',
-            onClick: () => setShowPast(prev => !prev),
-            style: { minHeight: '44px' }
-          },
-            React.createElement('span', null, showPast ? '▾' : '▸'),
-            React.createElement('span', null, 'Vergangene Termine (' + vergangene.length + ')')
-          ),
-          showPast && vergangene.map(t => terminRow(t, true))
-        ),
-        editing && React.createElement(TeamTerminFormModal, {
-          termin: editing === 'neu' ? null : editing,
-          teamName: team.name,
-          onSave: handleSave,
-          onClose: () => setEditing(null)
-        })
-      );
-    }
-
-    // Dateiablage-Modal (Platzhalter aus v4.7.0, erweitert in v4.12.0):
-    // iServ-Hinweis bleibt; darunter erscheinen die Links des gewählten Teams.
-    function FilesPlaceholderModal({ onClose, team, dataService, user, isTeamAdmin }) {
+    function FilesPlaceholderModal({ onClose }) {
       React.useEffect(() => {
         const onKey = (e) => { if (e.key === 'Escape') onClose(); };
         document.addEventListener('keydown', onKey);
         return () => document.removeEventListener('keydown', onKey);
       }, [onClose]);
       return React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Dateiablage', onClick: onClose },
-        React.createElement('div', { className: 'modal', onClick: e => e.stopPropagation(), style: { width: '520px', maxWidth: '96vw' } },
+        React.createElement('div', { className: 'modal', onClick: e => e.stopPropagation(), style: { width: '480px', maxWidth: '96vw' } },
           React.createElement('div', { className: 'modal-header' },
             React.createElement('h3', null, '📁 Dateiablage'),
             React.createElement('button', { className: 'icon-btn', onClick: onClose, title: 'Schließen', 'aria-label': 'Schließen', dangerouslySetInnerHTML: { __html: Icons.x } })
@@ -7604,23 +6564,13 @@
               href: ISERV_FILES_URL, target: '_blank', rel: 'noopener noreferrer',
               style: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', boxSizing: 'border-box', padding: '12px 16px', background: 'var(--accent)', color: '#fff', borderRadius: 'var(--radius)', fontSize: '15px', fontWeight: 600, textDecoration: 'none', minHeight: '48px' }
             }, '🔗 iServ-Dateiablage öffnen'),
-            React.createElement('p', { style: { fontSize: '12px', color: 'var(--text-muted)', margin: '12px 0 0', textAlign: 'center' } }, 'Öffnet krs.sh-schulen.de in einem neuen Tab (Login mit deinem iServ-Zugang).'),
-            // v4.12.0: Links des aktuell gewählten Teams direkt im Modal
-            React.createElement('div', { style: { borderTop: '1px solid var(--border)', margin: '16px -20px 0', padding: '14px 20px 0' } },
-              team && dataService
-                ? React.createElement(React.Fragment, null,
-                    React.createElement('h4', { style: { margin: '0 0 10px', fontSize: '14px' } }, '🔗 Links für „' + team.name + '"'),
-                    React.createElement(TeamLinksSection, { team, dataService, user, isTeamAdmin })
-                  )
-                : React.createElement('p', { style: { fontSize: '13px', color: 'var(--text-muted)', margin: 0 } },
-                    'Tipp: Wähle links ein Team, dann kannst du hier dessen Dateiablage-Links sehen und pflegen — oder nutze den Tab „📁 Dateiablage" direkt im Team.')
-            )
+            React.createElement('p', { style: { fontSize: '12px', color: 'var(--text-muted)', margin: '12px 0 0', textAlign: 'center' } }, 'Öffnet krs.sh-schulen.de in einem neuen Tab (Login mit deinem iServ-Zugang).')
           )
         )
       );
     }
 
-    function FeedbackModal({ user, dataService, onClose, onOpenBoard, canGoBack }) {
+    function FeedbackModal({ user, dataService, onClose, onOpenBoard }) {
       const [category, setCategory] = useState('');
       const [rating, setRating] = useState(0);
       const [message, setMessage] = useState('');
@@ -7729,11 +6679,11 @@
           !canSend && React.createElement('div', { style: { fontSize: '12px', color: 'var(--text-muted)', marginTop: '8px' } },
             !category ? 'Bitte zuerst ein Thema wählen.' : 'Bitte noch eine Nachricht schreiben.'),
           onOpenBoard && React.createElement('button', {
-            onClick: () => onOpenBoard(),
+            onClick: () => { onClose(); onOpenBoard(); },
             style: { background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '13px', padding: '8px 0', textDecoration: 'underline' }
           }, '📋 Alle Feedbacks ansehen'),
           React.createElement('div', { className: 'feedback-actions' },
-            React.createElement('button', { className: 'feedback-btn feedback-btn-cancel', onClick: onClose }, canGoBack ? '← Zurück' : 'Abbrechen'),
+            React.createElement('button', { className: 'feedback-btn feedback-btn-cancel', onClick: onClose }, 'Abbrechen'),
             React.createElement('button', {
               className: 'feedback-btn feedback-btn-send',
               onClick: handleSubmit,
@@ -7748,15 +6698,10 @@
     // ============================================================
     // FEEDBACK-BOARD (#12) — Liste aller Feedbacks mit Status-Workflow
     // ============================================================
-    function FeedbackBoardModal({ dataService, isAdmin, onClose, onNewFeedback, canGoBack }) {
+    function FeedbackBoardModal({ dataService, isAdmin, onClose, onNewFeedback }) {
       const [items, setItems] = useState(null); // null = lädt
       const [filter, setFilter] = useState('alle');
       const [savingId, setSavingId] = useState(null);
-      useEffect(() => {
-        const onKey = (e) => { if (e.key === 'Escape') onClose(); };
-        document.addEventListener('keydown', onKey);
-        return () => document.removeEventListener('keydown', onKey);
-      }, [onClose]);
 
       const CAT = { bug: '🐛 Bug', verbesserung: '💡 Verbesserung', lob: '👍 Lob', frage: '❓ Frage', sonstiges: '📝 Sonstiges' };
       const STATUS_LABEL = { offen: 'Offen', in_arbeit: 'In Arbeit', erledigt: 'Erledigt' };
@@ -7787,7 +6732,7 @@
         React.createElement('div', { className: 'feedback-modal fb-board-modal' },
           React.createElement('div', { className: 'feedback-title', style: { justifyContent: 'space-between' } },
             React.createElement('span', null, '📋 Feedback-Board ', React.createElement('span', { style: { fontSize: '11px', fontWeight: 800, background: 'var(--accent-orange,#f59e0b)', color: '#fff', padding: '2px 7px', borderRadius: '10px', verticalAlign: 'middle' } }, 'BETA')),
-            React.createElement('button', { onClick: onClose, 'aria-label': canGoBack ? 'Zurück' : 'Schließen', title: canGoBack ? 'Zurück' : 'Schließen', style: { background: 'none', border: 'none', fontSize: canGoBack ? '14px' : '20px', fontWeight: canGoBack ? 600 : 400, cursor: 'pointer', color: canGoBack ? 'var(--accent)' : 'var(--text-muted)', whiteSpace: 'nowrap' } }, canGoBack ? '← Zurück' : '✕')
+            React.createElement('button', { onClick: onClose, 'aria-label': 'Schließen', style: { background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'var(--text-muted)' } }, '✕')
           ),
           React.createElement('div', { className: 'fb-board-toolbar' },
             ['alle', 'offen', 'in_arbeit', 'erledigt'].map(f =>
@@ -7798,7 +6743,7 @@
               }, (f === 'alle' ? 'Alle' : STATUS_LABEL[f]) + (f === 'alle' ? ' (' + (items ? items.length : 0) + ')' : ' (' + countBy(f) + ')'))
             ),
             onNewFeedback && React.createElement('button', {
-              onClick: () => onNewFeedback(),
+              onClick: () => { onClose(); onNewFeedback(); },
               style: { marginLeft: 'auto', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--radius)', padding: '6px 12px', minHeight: '36px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }
             }, '＋ Feedback schreiben')
           ),
@@ -7941,12 +6886,7 @@
     // ============================================================
     // HELP PANEL — Aufklappbare Hilfe-Übersicht
     // ============================================================
-    function HelpPanel({ onClose, onStartOnboarding, canGoBack }) {
-      useEffect(() => {
-        const onKey = (e) => { if (e.key === 'Escape') onClose(); };
-        document.addEventListener('keydown', onKey);
-        return () => document.removeEventListener('keydown', onKey);
-      }, [onClose]);
+    function HelpPanel({ onClose, onStartOnboarding }) {
       return React.createElement('div', {
         className: 'modal-overlay',
         role: 'dialog', 'aria-modal': 'true',
@@ -7959,7 +6899,7 @@
         },
           React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' } },
             React.createElement('h2', { style: { margin: 0, fontSize: '20px' } }, '❓ Hilfe & Tipps'),
-            React.createElement('button', { onClick: onClose, 'aria-label': canGoBack ? 'Zurück' : 'Schließen', title: canGoBack ? 'Zurück' : 'Schließen', style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: canGoBack ? '14px' : '20px', fontWeight: canGoBack ? 600 : 400, color: canGoBack ? 'var(--accent)' : 'var(--text-muted)', padding: '8px', whiteSpace: 'nowrap' } }, canGoBack ? '← Zurück' : '✕')
+            React.createElement('button', { onClick: onClose, 'aria-label': 'Schließen', style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '20px', color: 'var(--text-muted)', padding: '8px' } }, '✕')
           ),
           React.createElement('div', { style: { fontSize: '14px', lineHeight: '1.6', color: 'var(--text-secondary)' } },
             React.createElement(Accordion, { title: 'Wie funktionieren Teams & Kanäle?', icon: '📢', defaultOpen: true },
@@ -8039,12 +6979,6 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
-      { v: '4.13.0', date: '07.07.2026', items: ['Passwort selbst zurücksetzen: „Passwort vergessen?" auf dem Anmeldebildschirm schickt einen Link an deine Schul-E-Mail', 'Neues Passwort danach direkt in Connect setzen — kein altes Passwort nötig', 'Passwort ändern in den ⚙️ Einstellungen (eingeloggt, jederzeit)', 'Kommt keine Reset-Mail an, kann Norbert das Passwort weiterhin direkt zurücksetzen'] },
-      { v: '4.12.1', date: '04.07.2026', items: ['Sicherheit: SVG-Dateien können nicht mehr hochgeladen oder als Bild eingebettet werden (Schutz vor eingebettetem Schadcode)'] },
-      { v: '4.12.0', date: '02.07.2026', items: ['Dateiablage pro Team: benannte Links (z. B. iServ- oder Nextcloud-Ordner) direkt im Team anlegen und pflegen', 'Neuer Tab 📅 Termine pro Team: kommende Termine auf einen Blick, vergangene ausklappbar', 'Anlegen dürfen alle Team-Mitglieder; Bearbeiten/Löschen die Ersteller:in und Team-Admins'] },
-      { v: '4.11.2', date: '28.06.2026', items: ['Zurück-Button: aus Hilfe, Datenschutz oder Feedback kommst du mit „← Zurück" wieder zu den Einstellungen — eine Ebene zurück statt alles zu schließen'] },
-      { v: '4.11.1', date: '28.06.2026', items: ['Sehr lange Beiträge mit eingebetteten Bildern sind jetzt möglich', 'Die Längen-Begrenzung zählt nur den sichtbaren Text, nicht die Bilddaten'] },
-      { v: '4.11.0', date: '28.06.2026', items: ['Farben und eingefügte Bilder bleiben jetzt auch im angezeigten Beitrag erhalten', 'Neuer Farb-Button in der Formatierleiste'] },
       { v: '4.10.5', date: '27.06.2026', items: ['Hier unter „Was ist neu" siehst du jetzt die komplette Entwicklungs-Chronik seit März 2026'] },
       { v: '4.10.4', date: '27.06.2026', items: ['Formatiertes Schreiben & Einfügen jetzt überall: Chat, Antworten und Bearbeiten zeigen Formatierung direkt an (wie bei Teams) — keine HTML-Tags mehr sichtbar', 'Enter sendet, Umschalt+Enter macht einen Zeilenumbruch'] },
       { v: '4.10.3', date: '26.06.2026', items: ['Einfügen aus Word/Outlook wird automatisch aufgeräumt: nur noch Fett, Kursiv, Listen, Farben & Links — kein Code-Wirrwarr mehr'] },
@@ -8069,30 +7003,12 @@
     // ── Einstellungen-Panel (⚙️) — v4.10.0 ───────────────────────────
     // Bündelt Benachrichtigungen, Lesebestätigungen, Hilfe/Datenschutz und
     // den Changelog an einem Ort. Ersetzt die verstreuten Icons unten links.
-    function SettingsPanel({ onClose, canGoBack, notificationsEnabled, notificationPermission, onToggleNotifications, readReceiptsEnabled, onToggleReadReceipts, onOpenHelp, onOpenPrivacy, onOpenFeedback, onChangePassword }) {
+    function SettingsPanel({ onClose, notificationsEnabled, notificationPermission, onToggleNotifications, readReceiptsEnabled, onToggleReadReceipts, onOpenHelp, onOpenPrivacy, onOpenFeedback }) {
       useEffect(() => {
         const onKey = (e) => { if (e.key === 'Escape') onClose(); };
         document.addEventListener('keydown', onKey);
         return () => document.removeEventListener('keydown', onKey);
       }, [onClose]);
-
-      // Passwort ändern (nur im echten Login verfügbar → onChangePassword gesetzt)
-      const [pwOpen, setPwOpen] = useState(false);
-      const [pwNew, setPwNew] = useState('');
-      const [pwNew2, setPwNew2] = useState('');
-      const [pwError, setPwError] = useState('');
-      const [pwLoading, setPwLoading] = useState(false);
-      const [pwDone, setPwDone] = useState(false);
-      const submitPwChange = async () => {
-        if (pwNew.length < 8) { setPwError('Das neue Passwort muss mindestens 8 Zeichen lang sein.'); return; }
-        if (pwNew !== pwNew2) { setPwError('Die beiden Passwörter stimmen nicht überein.'); return; }
-        setPwLoading(true); setPwError('');
-        const { error } = await onChangePassword(pwNew);
-        if (error) { setPwError(error); setPwLoading(false); return; }
-        setPwLoading(false); setPwDone(true); setPwNew(''); setPwNew2('');
-        try { showToast('Passwort geändert.', 'success'); } catch (e) {}
-        setTimeout(() => { setPwOpen(false); setPwDone(false); }, 1800);
-      };
 
       const notifOn = notificationsEnabled && notificationPermission === 'granted';
       const sectionStyle = { padding: '16px 0', borderBottom: '1px solid var(--border)' };
@@ -8115,7 +7031,7 @@
         },
           React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' } },
             React.createElement('h2', { style: { margin: 0, fontSize: '20px' } }, '⚙️ Einstellungen'),
-            React.createElement('button', { onClick: onClose, 'aria-label': canGoBack ? 'Zurück' : 'Schließen', title: canGoBack ? 'Zurück' : 'Schließen', style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: canGoBack ? '14px' : '20px', fontWeight: canGoBack ? 600 : 400, color: canGoBack ? 'var(--accent)' : 'var(--text-muted)', padding: '8px', minWidth: '44px', minHeight: '44px', whiteSpace: 'nowrap' } }, canGoBack ? '← Zurück' : '✕')
+            React.createElement('button', { onClick: onClose, 'aria-label': 'Schließen', style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '20px', color: 'var(--text-muted)', padding: '8px', minWidth: '44px', minHeight: '44px' } }, '✕')
           ),
           // Benachrichtigungen
           React.createElement('div', { style: sectionStyle },
@@ -8141,32 +7057,9 @@
           React.createElement('div', { style: sectionStyle },
             React.createElement('div', { style: labelStyle }, '❓ Hilfe, Datenschutz & Feedback'),
             React.createElement('div', { style: { display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '10px' } },
-              React.createElement('button', { onClick: () => onOpenHelp(), style: { padding: '10px 14px', minHeight: '44px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '13px' } }, '❓ Hilfe & Tipps'),
-              React.createElement('button', { onClick: () => onOpenPrivacy(), style: { padding: '10px 14px', minHeight: '44px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '13px' } }, '🔒 Datenschutz'),
-              onOpenFeedback && React.createElement('button', { onClick: () => onOpenFeedback(), style: { padding: '10px 14px', minHeight: '44px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '13px' } }, '📣 Feedback')
-            )
-          ),
-          // Konto — Passwort ändern (nur im echten Login)
-          onChangePassword && React.createElement('div', { style: sectionStyle },
-            React.createElement('div', { style: { ...rowStyle, marginBottom: pwOpen ? '12px' : 0 } },
-              React.createElement('div', null,
-                React.createElement('div', { style: labelStyle }, '🔑 Passwort ändern'),
-                React.createElement('div', { style: hintStyle }, 'Neues Passwort für deinen Zugang festlegen.')
-              ),
-              !pwOpen && React.createElement('button', {
-                onClick: () => { setPwOpen(true); setPwError(''); setPwDone(false); },
-                style: { padding: '10px 14px', minHeight: '44px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '13px', whiteSpace: 'nowrap' }
-              }, 'Ändern')
-            ),
-            pwOpen && React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px', maxWidth: '340px' } },
-              React.createElement('input', { type: 'password', placeholder: 'Neues Passwort (mind. 8 Zeichen)', value: pwNew, onChange: (e) => setPwNew(e.target.value), disabled: pwLoading, autoComplete: 'new-password', style: { padding: '10px 14px', fontSize: '14px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', outline: 'none' } }),
-              React.createElement('input', { type: 'password', placeholder: 'Neues Passwort bestätigen', value: pwNew2, onChange: (e) => setPwNew2(e.target.value), onKeyDown: (e) => e.key === 'Enter' && submitPwChange(), disabled: pwLoading, autoComplete: 'new-password', style: { padding: '10px 14px', fontSize: '14px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', outline: 'none' } }),
-              React.createElement('div', { style: { display: 'flex', gap: '8px' } },
-                React.createElement('button', { onClick: submitPwChange, disabled: pwLoading || !pwNew || !pwNew2, style: { flex: 1, padding: '10px 14px', minHeight: '44px', borderRadius: 'var(--radius)', border: 'none', background: 'var(--accent)', color: '#fff', cursor: 'pointer', fontSize: '13px', fontWeight: 600 } }, pwLoading ? 'Speichern...' : '💾 Speichern'),
-                React.createElement('button', { onClick: () => { setPwOpen(false); setPwNew(''); setPwNew2(''); setPwError(''); }, disabled: pwLoading, style: { padding: '10px 14px', minHeight: '44px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '13px' } }, 'Abbrechen')
-              ),
-              pwDone && React.createElement('div', { style: { color: 'var(--success, #2e7d32)', fontSize: '13px' } }, '✅ Passwort geändert.'),
-              pwError && React.createElement('div', { style: { color: 'var(--danger)', fontSize: '13px' } }, pwError)
+              React.createElement('button', { onClick: () => { onClose(); onOpenHelp(); }, style: { padding: '10px 14px', minHeight: '44px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '13px' } }, '❓ Hilfe & Tipps'),
+              React.createElement('button', { onClick: () => { onClose(); onOpenPrivacy(); }, style: { padding: '10px 14px', minHeight: '44px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '13px' } }, '🔒 Datenschutz'),
+              onOpenFeedback && React.createElement('button', { onClick: () => { onClose(); onOpenFeedback(); }, style: { padding: '10px 14px', minHeight: '44px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '13px' } }, '📣 Feedback')
             )
           ),
           // Was ist neu (Changelog)
@@ -8192,12 +7085,7 @@
       );
     }
 
-    function PrivacyModal({ onClose, canGoBack }) {
-      useEffect(() => {
-        const onKey = (e) => { if (e.key === 'Escape') onClose(); };
-        document.addEventListener('keydown', onKey);
-        return () => document.removeEventListener('keydown', onKey);
-      }, [onClose]);
+    function PrivacyModal({ onClose }) {
       return React.createElement('div', {
         className: 'modal-overlay',
         role: 'dialog', 'aria-modal': 'true',
@@ -8210,7 +7098,7 @@
         },
           React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' } },
             React.createElement('h2', { style: { margin: 0, fontSize: '20px' } }, '🔒 Datenschutzhinweis'),
-            React.createElement('button', { onClick: onClose, 'aria-label': canGoBack ? 'Zurück' : 'Schließen', title: canGoBack ? 'Zurück' : 'Schließen', style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: canGoBack ? '14px' : '20px', fontWeight: canGoBack ? 600 : 400, color: canGoBack ? 'var(--accent)' : 'var(--text-muted)', padding: '8px', whiteSpace: 'nowrap' } }, canGoBack ? '← Zurück' : '✕')
+            React.createElement('button', { onClick: onClose, 'aria-label': 'Schließen', style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '20px', color: 'var(--text-muted)', padding: '8px' } }, '✕')
           ),
           React.createElement('div', { style: { fontSize: '14px', lineHeight: '1.6', color: 'var(--text-secondary)' } },
             React.createElement(Accordion, { title: 'Verantwortlicher', icon: '🏫', defaultOpen: true },
@@ -8323,16 +7211,10 @@
       const [showForwardModal, setShowForwardModal] = useState(null); // post to forward
       const [showAdmin, setShowAdmin] = useState(false); // Phase 6: Admin-Panel
       const [showSettings, setShowSettings] = useState(false); // v4.10.0: Einstellungen-Panel (⚙️)
-      // v4.10.6: Globaler Modal-Zurück-Stack (Einstellungen-Familie). „Zurück" = eine Ebene hoch.
-      const [modalStack, setModalStack] = useState([]);
-      const openModal = useCallback((name) => setModalStack(s => (s[s.length - 1] === name ? s : [...s, name])), []);
-      const backModal = useCallback(() => setModalStack(s => s.slice(0, -1)), []);
-      const closeModals = useCallback(() => setModalStack([]), []);
       const [savedPosts, setSavedPosts] = useState(() => {
         try { return JSON.parse(localStorage.getItem('krs-saved-posts') || '[]'); } catch(e) { return []; }
       });
-      return { modalStack, openModal, backModal, closeModals,
-        showOnlinePanel, setShowOnlinePanel, showFeedback, setShowFeedback,
+      return { showOnlinePanel, setShowOnlinePanel, showFeedback, setShowFeedback,
         showFeedbackBoard, setShowFeedbackBoard,
         showFiles, setShowFiles,
         showBulkTeams, setShowBulkTeams,
@@ -8477,8 +7359,6 @@
       const [loadingUsers, setLoadingUsers] = useState(false);
       const [loadingMore, setLoadingMore] = useState(false);
       const [userTeamRole, setUserTeamRole] = useState(null);
-      // v4.12.0: Team-Bereiche als Tabs — Beiträge | Dateiablage (Links) | Termine
-      const [teamTab, setTeamTab] = useState('posts');
       const [onlineUsers, setOnlineUsers] = useState(new Set());
       const [onboardingStep, setOnboardingStep] = useState(0);
       const PAGE_SIZE = 50;
@@ -8507,8 +7387,7 @@
         channelTeamMap, setChannelTeamMap } = unreadState;
 
       const modals = useModals();
-      const { modalStack, openModal, backModal, closeModals,
-        showOnlinePanel, setShowOnlinePanel, showFeedback, setShowFeedback,
+      const { showOnlinePanel, setShowOnlinePanel, showFeedback, setShowFeedback,
         showFeedbackBoard, setShowFeedbackBoard,
         showFiles, setShowFiles,
         showBulkTeams, setShowBulkTeams,
@@ -8519,8 +7398,6 @@
         channelContextMenu, setChannelContextMenu, editingChannel, setEditingChannel,
         showForwardModal, setShowForwardModal, showAdmin, setShowAdmin,
         showSettings, setShowSettings, savedPosts, setSavedPosts } = modals;
-      const topModal = modalStack[modalStack.length - 1] || null;
-      const canGoBack = modalStack.length > 1;
 
       const { notificationsEnabled, notificationPermission, requestNotifications,
         toggleNotifications, sendBrowserNotification } = useNotifications();
@@ -9085,9 +7962,9 @@
       useEffect(() => {
         if (!user || !dataService?.isDemo) return;
         const demoMessages = [
-          { type: 'chat', convId: 1, from: 'Lehrkraft B', text: 'Hast du kurz Zeit?' },
+          { type: 'chat', convId: 1, from: 'Daniel S.', text: 'Hast du kurz Zeit?' },
           { type: 'chat', convId: 3, from: 'Sandra M.', text: 'Arbeitsblatt ist fertig!' },
-          { type: 'post', channelId: 2, from: 'Lehrkraft C', text: 'Neue Info zum Elternabend' },
+          { type: 'post', channelId: 2, from: 'Petra C.', text: 'Neue Info zum Elternabend' },
           { type: 'post', channelId: 7, from: 'Lisa W.', text: 'SMV-Treffen verschoben' },
           { type: 'chat', convId: 2, from: 'Martina F.', text: 'Danke dir!' },
           { type: 'post', channelId: 21, from: 'Thomas K.', text: 'iPad-Update steht an' },
@@ -9157,7 +8034,6 @@
       // Clear unread posts when selecting a channel
       const handleChannelSelect = useCallback((ch) => {
         setSelectedChannel(ch);
-        setTeamTab('posts'); // v4.12.0: Kanal-Klick wechselt zurück zu den Beiträgen
         setMobileSidebarOpen(false);
         // Mark as read (Phase 6: Supabase + localStorage)
         dataService.markChannelRead(ch.id, user?.id);
@@ -9185,7 +8061,6 @@
 
       const handleTeamSelect = async (team) => {
         setSelectedTeam(team);
-        setTeamTab('posts'); // v4.12.0: Teamwechsel startet immer bei den Beiträgen
         const channelsData = await dataService.getChannels(team.id);
         setChannels(channelsData);
         // Merge new channel unreads into Map + update channelTeamMap
@@ -9379,12 +8254,6 @@
         userRole: user?.role || 'member',
       }), [dataService, user, allUsers, onlineUsers, readReceiptsEnabled]);
 
-      // Eigenes Passwort ändern (Einstellungen) — nur im echten Login.
-      const handleChangePassword = React.useCallback(async (newPassword) => {
-        if (!dataService || dataService.isDemo) return { error: 'Im Demo-Modus nicht verfügbar.' };
-        return await dataService.updatePassword(newPassword);
-      }, [dataService]);
-
       if (!setupComplete) {
         return React.createElement(SetupScreen, { onSetupComplete: handleSetupComplete });
       }
@@ -9538,46 +8407,7 @@
           !selectedChannel && React.createElement('div', { style: { padding: '16px' } },
             React.createElement('button', { className: 'mobile-menu-btn', onClick: () => setMobileSidebarOpen(true), style: { display: 'none', alignItems: 'center', gap: '8px', padding: '10px 14px', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', color: 'var(--text-primary)', fontSize: '15px' } }, '☰ Team & Kanal wählen')
           ),
-          // v4.12.0: Tab-Leiste pro Team — Beiträge | Dateiablage (Links) | Termine
-          selectedTeam && React.createElement('div', { className: 'team-tabs', role: 'tablist', 'aria-label': 'Team-Bereiche' },
-            [['posts', '💬 Beiträge'], ['links', '📁 Dateiablage'], ['termine', '📅 Termine']].map(([key, label]) =>
-              React.createElement('button', {
-                key,
-                role: 'tab',
-                'aria-selected': teamTab === key ? 'true' : 'false',
-                'data-testid': 'team-tab-' + key,
-                className: 'team-tab' + (teamTab === key ? ' active' : ''),
-                onClick: () => setTeamTab(key)
-              }, label)
-            )
-          ),
-          // v4.12.0: Dateiablage-Links des Teams (kein eigener Datei-Speicher)
-          selectedTeam && teamTab === 'links' && React.createElement(React.Fragment, null,
-            React.createElement('div', { className: 'content-header' },
-              React.createElement('h1', null, '📁 Dateiablage — ' + selectedTeam.name)
-            ),
-            React.createElement('div', { className: 'content-body' },
-              React.createElement('p', { style: { fontSize: '13px', color: 'var(--text-muted)', margin: 0 } },
-                'Benannte Links zu gemeinsamen Ordnern (z. B. iServ oder Nextcloud). Die Dateien selbst bleiben dort — KRS Connect speichert nur die Verweise.'),
-              React.createElement(TeamLinksSection, {
-                team: selectedTeam, dataService, user,
-                isTeamAdmin: userTeamRole === 'admin' || user?.role === 'admin'
-              })
-            )
-          ),
-          // v4.12.0: Termin-Liste des Teams (bewusst kein Vollkalender)
-          selectedTeam && teamTab === 'termine' && React.createElement(React.Fragment, null,
-            React.createElement('div', { className: 'content-header' },
-              React.createElement('h1', null, '📅 Termine — ' + selectedTeam.name)
-            ),
-            React.createElement('div', { className: 'content-body' },
-              React.createElement(TeamTermineSection, {
-                team: selectedTeam, dataService, user,
-                isTeamAdmin: userTeamRole === 'admin' || user?.role === 'admin'
-              })
-            )
-          ),
-          teamTab === 'posts' && selectedChannel && React.createElement(React.Fragment, null,
+          selectedChannel && React.createElement(React.Fragment, null,
             React.createElement('div', { className: 'content-header', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
               React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
                 React.createElement('button', { className: 'mobile-menu-btn', onClick: () => setMobileSidebarOpen(true), style: { display: 'none', background: 'none', border: 'none', cursor: 'pointer', fontSize: '24px', color: 'var(--text-secondary)' } }, '\u2630'),
@@ -9790,7 +8620,7 @@
           // #12: Großer Beta-Feedback-Button — öffnet das Feedback-Board (für alle sichtbar)
           React.createElement('button', {
             className: 'beta-feedback-btn',
-            onClick: () => openModal('feedbackBoard'),
+            onClick: () => setShowFeedbackBoard(true),
             title: 'Feedback geben & alle Rückmeldungen ansehen'
           }, '📣 Feedback', React.createElement('span', { className: 'beta-tag' }, 'BETA')),
           React.createElement('div', { className: 'app-version' }, 'KRS Connect v' + window.KRS_VERSION + ' · Beta'),
@@ -9804,7 +8634,7 @@
               React.createElement('span', { className: 'online-count' }, onlineUsers.size || '–')
             ),
             // v4.10.0: Einstellungen (⚙️) bündelt Benachrichtigungen, Lesebestätigungen, Hilfe & „Was ist neu"
-            React.createElement('button', { className: 'feedback-trigger', onClick: () => openModal('settings'), title: 'Einstellungen', 'aria-label': 'Einstellungen öffnen' }, '⚙️'),
+            React.createElement('button', { className: 'feedback-trigger', onClick: () => setShowSettings(true), title: 'Einstellungen', 'aria-label': 'Einstellungen öffnen' }, '⚙️'),
             // Admin-Button (nur für Admins sichtbar, Phase 6) — 🛠️ statt ⚙️, kein Konflikt mit Einstellungen
             user?.role === 'admin' && React.createElement('button', { className: 'feedback-trigger', onClick: () => setShowAdmin(true), title: 'Administration', 'aria-label': 'Admin-Panel öffnen' }, '🛠️'),
             React.createElement('button', {
@@ -9883,14 +8713,9 @@
         view === 'teams' && openThread && React.createElement(ThreadPanel, { post: openThread, replies, dataService, user, onClose: () => setOpenThread(null), onReplyCreated: (r) => setReplies(prev => prev.some(x => x.id === r.id) ? prev : [...prev, r]) }),
         // Feedback Modal
         React.createElement(UpdateBanner, null),
-        topModal === 'feedback' && React.createElement(FeedbackModal, { user, dataService, onClose: backModal, canGoBack, onOpenBoard: () => openModal('feedbackBoard') }),
-        topModal === 'feedbackBoard' && React.createElement(FeedbackBoardModal, { dataService, isAdmin: user?.role === 'admin', onClose: backModal, canGoBack, onNewFeedback: () => openModal('feedback') }),
-        showFiles && React.createElement(FilesPlaceholderModal, {
-          onClose: () => setShowFiles(false),
-          // v4.12.0: Links des gewählten Teams direkt im Dateiablage-Modal
-          team: selectedTeam, dataService, user,
-          isTeamAdmin: userTeamRole === 'admin' || user?.role === 'admin'
-        }),
+        showFeedback && React.createElement(FeedbackModal, { user, dataService, onClose: () => setShowFeedback(false), onOpenBoard: () => setShowFeedbackBoard(true) }),
+        showFeedbackBoard && React.createElement(FeedbackBoardModal, { dataService, isAdmin: user?.role === 'admin', onClose: () => setShowFeedbackBoard(false), onNewFeedback: () => setShowFeedback(true) }),
+        showFiles && React.createElement(FilesPlaceholderModal, { onClose: () => setShowFiles(false) }),
         showBulkTeams && React.createElement(BulkDeleteTeamsModal, {
           teams, archivedTeams, dataService,
           onClose: () => setShowBulkTeams(false),
@@ -9910,21 +8735,19 @@
           }
         } }),
         // Hilfe-Panel mit Accordions
-        topModal === 'help' && React.createElement(HelpPanel, { onClose: backModal, canGoBack, onStartOnboarding: () => { try { localStorage.removeItem('krs_onboarding_done'); } catch(e) {} closeModals(); setShowOnboarding(true); } }),
+        showHelp && React.createElement(HelpPanel, { onClose: () => setShowHelp(false), onStartOnboarding: () => { try { localStorage.removeItem('krs_onboarding_done'); } catch(e) {} setShowOnboarding(true); } }),
         // Datenschutz Modal
-        topModal === 'privacy' && React.createElement(PrivacyModal, { onClose: backModal, canGoBack }),
+        showPrivacy && React.createElement(PrivacyModal, { onClose: () => setShowPrivacy(false) }),
         // Einstellungen-Panel (v4.10.0)
-        topModal === 'settings' && React.createElement(SettingsPanel, {
-          onClose: backModal,
-          canGoBack,
+        showSettings && React.createElement(SettingsPanel, {
+          onClose: () => setShowSettings(false),
           notificationsEnabled, notificationPermission,
           onToggleNotifications: toggleNotifications,
           readReceiptsEnabled,
           onToggleReadReceipts: toggleReadReceipts,
-          onOpenHelp: () => openModal('help'),
-          onOpenPrivacy: () => openModal('privacy'),
-          onOpenFeedback: () => openModal('feedbackBoard'),
-          onChangePassword: (dataService && !dataService.isDemo) ? handleChangePassword : null
+          onOpenHelp: () => setShowHelp(true),
+          onOpenPrivacy: () => setShowPrivacy(true),
+          onOpenFeedback: () => setShowFeedbackBoard(true)
         }),
         // Admin-Panel (Phase 6 — nur für Admins sichtbar)
         showAdmin && user?.role === 'admin' && React.createElement(AdminPanel, {

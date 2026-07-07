@@ -1,0 +1,1 @@
+{"action":"evaluate","args":{"code":"document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))"},"session":"krs-connect-v410-check"}

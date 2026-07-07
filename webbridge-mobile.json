@@ -1,0 +1,1 @@
+{"action":"cdp","args":{"method":"Emulation.setDeviceMetricsOverride","params":{"width":375,"height":812,"deviceScaleFactor":2,"mobile":true}},"session":"krs-connect-v410-check"}
