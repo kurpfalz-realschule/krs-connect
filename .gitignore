@@ -7,3 +7,8 @@ node_modules
 
 .tmp_app_check.mjs
 .tmp_*
+
+# Lern-Coach Backups (nicht deployen)
+*.pre-coach.bak
+*.backup-*
+.DS_Store

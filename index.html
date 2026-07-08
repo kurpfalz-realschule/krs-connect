@@ -9785,6 +9785,15 @@
               'aria-label': 'Dateiablage'
             },
               React.createElement('span', { dangerouslySetInnerHTML: { __html: Icons.files } })
+            ),
+            React.createElement('button', {
+              className: 'nav-item',
+              onClick: () => window.open('https://kurpfalz-realschule.github.io/krs-hub/notizen/', '_blank', 'noopener'),
+              title: 'Notizen & Aufgaben (persönlich)',
+              'aria-label': 'Notizen & Aufgaben',
+              'data-testid': 'nav-notizen'
+            },
+              React.createElement('span', { style: { fontSize: '20px', lineHeight: 1 } }, '📝')
             )
           ),
           // #12: Großer Beta-Feedback-Button — öffnet das Feedback-Board (für alle sichtbar)
@@ -9943,5 +9952,307 @@
       React.createElement(App)
     ));
   </script>
+<!-- KRSC-INJECT-START -->
+<!-- KRS LERN-COACH · Konfiguration Connect (vor der Engine einbinden) -->
+<script>
+window.KRS_COACH_CONFIG = {
+  app: 'connect',
+  title: 'Connect-Lernpfad',
+  subtitle: 'In 5 kleinen Schritten startklar',
+  steps: [
+    {
+      id: 'orient',
+      title: 'Ankommen & Orientieren',
+      why: 'Wenn du weißt, wo was ist, findest du dich sofort zurecht — wie beim ersten Rundgang in einem neuen Raum.',
+      do: 'Schau dir die <b>linke Leiste</b> an: <b>Teams &amp; Kanäle</b> für Gruppenthemen, <b>Chats</b> für Direktnachrichten, <b>Dateiablage</b> für Dokumente. Klick dich einmal durch.',
+      target: '[aria-label="Hauptnavigation"], .sidebar-nav, .sidebar',
+      hint: 'Das ist die linke Navigationsleiste. Von hier erreichst du alles: Teams, Chats und die Dateiablage.'
+    },
+    {
+      id: 'message',
+      title: 'Erste Nachricht schreiben',
+      why: 'Kurze Absprachen laufen hier statt über MS Teams — DSGVO-freundlich und auf einer Oberfläche.',
+      do: 'Öffne den Kanal <b>„Allgemein"</b>, schreib unten ins Eingabefeld einen kurzen Gruß und drücke <b>Enter</b> zum Senden. <br><i>Tipp: Umschalt+Enter macht einen Zeilenumbruch.</i>',
+      target: '[aria-label="Nachricht senden"]',
+      hint: 'Unten ist das Schreibfeld. Text eintippen und mit Enter (oder dem Pfeil) senden.'
+    },
+    {
+      id: 'react',
+      title: 'Reagieren & antworten',
+      why: 'Ein Emoji spart eine ganze Antwort — und in einem Thread bleibt die Diskussion beim Thema.',
+      do: 'Fahre über eine Nachricht und klicke auf <b>Reagieren</b> (😊), wähle ein Emoji. Antworte danach einmal direkt auf die Nachricht (Thread).',
+      target: '[data-testid="msg-react-btn"], [aria-label="Auf Nachricht reagieren"]',
+      hint: 'Wenn du über eine Nachricht fährst, erscheint der Reagieren-Button. Damit setzt du ein Emoji.'
+    },
+    {
+      id: 'team',
+      title: 'Team / Kanal anlegen',
+      why: 'Eigene Teams bündeln ein Thema (Fachschaft, Projekt, Klasse-XY-Orga) — jede/r sieht nur die eigenen Teams.',
+      do: 'Klicke bei <b>Teams &amp; Kanäle</b> auf <b>Neues Team erstellen</b>, gib einen Namen ein und lege es an.',
+      target: '[aria-label="Neues Team erstellen"]',
+      hint: 'Über „Neues Team erstellen" legst du einen eigenen Bereich an und benennst ihn.'
+    },
+    {
+      id: 'feedback',
+      title: 'Dringend verstehen & Feedback geben',
+      why: 'Die App wird von uns selbst weiterentwickelt — dein Feedback fließt direkt ein. Und „Dringend" erreicht alle sofort.',
+      do: '1) Merke dir: Mit <b>Dringend</b> erreichst du bei Bedarf alle auf einmal (bitte sparsam). <br>2) Öffne unten das <b>Feedback</b> und trag einen Wunsch oder eine Frage ein.',
+      target: '.feedback-trigger',
+      hint: 'Unten sitzt der Feedback-Button. Darüber gehen deine Ideen direkt an die Weiterentwicklung.'
+    }
+  ]
+};
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     KRS LERN-COACH  ·  isoliertes In-App-Lernprogramm (Learning by Doing)
+     Vollständig gekapselt: eigener DOM-Container, CSS-Präfix .krsc-,
+     localStorage-Key krs_coach_<app>. Liest/schreibt KEINEN App-State.
+     Konfiguration über window.KRS_COACH_CONFIG (VOR diesem Block setzen).
+     ═══════════════════════════════════════════════════════════════════════ -->
+<style id="krsc-style">
+  .krsc-fab{position:fixed;right:16px;bottom:16px;z-index:2147483000;
+    display:flex;align-items:center;gap:8px;height:48px;padding:0 18px;
+    border:none;border-radius:26px;cursor:pointer;font:600 15px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+    color:#fff;background:linear-gradient(135deg,#2563eb,#1d4ed8);
+    box-shadow:0 6px 20px rgba(37,99,235,.42);transition:transform .15s ease,box-shadow .15s ease}
+  .krsc-fab:hover{transform:translateY(-2px);box-shadow:0 10px 26px rgba(37,99,235,.5)}
+  .krsc-fab:focus-visible{outline:3px solid #93c5fd;outline-offset:2px}
+  .krsc-fab .krsc-badge{background:rgba(255,255,255,.25);border-radius:12px;padding:2px 8px;font-size:12px;font-weight:700}
+  .krsc-fab.krsc-done{background:linear-gradient(135deg,#16a34a,#15803d);box-shadow:0 6px 20px rgba(22,163,74,.42)}
+  @media(max-width:640px){.krsc-fab{bottom:78px;right:12px;height:44px;padding:0 14px;font-size:14px}}
+  @supports(padding:max(0px)){.krsc-fab{bottom:max(16px,env(safe-area-inset-bottom))}
+    @media(max-width:640px){.krsc-fab{bottom:max(78px,calc(env(safe-area-inset-bottom) + 70px))}}}
+
+  .krsc-overlay{position:fixed;inset:0;z-index:2147483200;background:rgba(15,23,42,.42);
+    backdrop-filter:blur(2px);display:none;opacity:0;transition:opacity .2s ease}
+  .krsc-overlay.krsc-open{display:block;opacity:1}
+
+  .krsc-panel{position:fixed;right:0;top:0;bottom:0;width:420px;max-width:100vw;z-index:2147483300;
+    background:#F8F9FC;box-shadow:-8px 0 40px rgba(15,23,42,.28);display:flex;flex-direction:column;
+    transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;color:#1e293b}
+  .krsc-panel.krsc-open{transform:translateX(0)}
+  @media(max-width:520px){.krsc-panel{width:100vw}}
+
+  .krsc-head{padding:18px 18px 14px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;flex:0 0 auto}
+  .krsc-head h2{margin:0;font-size:18px;font-weight:700;display:flex;align-items:center;gap:8px}
+  .krsc-head p{margin:4px 0 0;font-size:13px;opacity:.9}
+  .krsc-close{position:absolute;right:12px;top:12px;width:36px;height:36px;border:none;border-radius:10px;
+    background:rgba(255,255,255,.16);color:#fff;font-size:20px;cursor:pointer;line-height:36px}
+  .krsc-close:hover{background:rgba(255,255,255,.28)}
+
+  .krsc-progwrap{margin-top:12px}
+  .krsc-progbar{height:8px;border-radius:6px;background:rgba(255,255,255,.25);overflow:hidden}
+  .krsc-progfill{height:100%;background:#fff;border-radius:6px;width:0;transition:width .35s ease}
+  .krsc-progtxt{font-size:12px;margin-top:6px;opacity:.95}
+
+  .krsc-body{flex:1 1 auto;overflow-y:auto;padding:14px 16px 24px}
+  .krsc-step{background:#fff;border:1px solid #e2e8f0;border-radius:12px;margin-bottom:12px;overflow:hidden;
+    box-shadow:0 1px 2px rgba(15,23,42,.05)}
+  .krsc-step.krsc-active{border-color:#2563eb;box-shadow:0 4px 16px rgba(37,99,235,.16)}
+  .krsc-stephd{display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:none;background:none;
+    padding:14px;cursor:pointer;font:inherit;color:inherit}
+  .krsc-num{flex:0 0 auto;width:30px;height:30px;border-radius:50%;background:#eef2ff;color:#2563eb;
+    display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px}
+  .krsc-step.krsc-checked .krsc-num{background:#16a34a;color:#fff}
+  .krsc-steptitle{flex:1 1 auto;font-weight:600;font-size:15px}
+  .krsc-chev{flex:0 0 auto;color:#94a3b8;transition:transform .2s ease}
+  .krsc-step.krsc-active .krsc-chev{transform:rotate(90deg)}
+  .krsc-detail{display:none;padding:0 14px 16px 56px}
+  .krsc-step.krsc-active .krsc-detail{display:block}
+  .krsc-why{background:#f1f5ff;border-left:3px solid #2563eb;border-radius:0 8px 8px 0;padding:8px 12px;
+    font-size:13.5px;color:#334155;margin-bottom:12px}
+  .krsc-why b{color:#1d4ed8}
+  .krsc-do{font-size:14.5px;color:#1e293b;margin-bottom:14px}
+  .krsc-do ol{margin:6px 0 0;padding-left:20px}
+  .krsc-do li{margin:4px 0}
+  .krsc-actions{display:flex;flex-wrap:wrap;gap:8px}
+  .krsc-btn{min-height:44px;padding:0 16px;border-radius:10px;border:1px solid #cbd5e1;background:#fff;
+    color:#1e293b;font:600 14px/1 inherit;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+  .krsc-btn:hover{background:#f1f5f9}
+  .krsc-btn.krsc-primary{background:#2563eb;border-color:#2563eb;color:#fff}
+  .krsc-btn.krsc-primary:hover{background:#1d4ed8}
+  .krsc-btn.krsc-ok{background:#16a34a;border-color:#16a34a;color:#fff}
+  .krsc-btn:focus-visible{outline:3px solid #93c5fd;outline-offset:2px}
+
+  .krsc-foot{flex:0 0 auto;padding:12px 16px;border-top:1px solid #e2e8f0;background:#fff;
+    display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .krsc-link{background:none;border:none;color:#64748b;font:13px inherit;cursor:pointer;text-decoration:underline}
+  .krsc-link:hover{color:#2563eb}
+
+  .krsc-done-card{text-align:center;padding:28px 18px;background:#fff;border:1px solid #bbf7d0;border-radius:14px;
+    margin-bottom:12px}
+  .krsc-done-card .krsc-big{font-size:40px}
+  .krsc-done-card h3{margin:8px 0 4px;font-size:18px;color:#15803d}
+  .krsc-done-card p{margin:0;font-size:14px;color:#475569}
+
+  /* Highlight-Spotlight über echtes App-Element */
+  .krsc-spot{position:fixed;z-index:2147483100;border:3px solid #2563eb;border-radius:12px;
+    box-shadow:0 0 0 9999px rgba(15,23,42,.45);pointer-events:none;transition:all .2s ease}
+  .krsc-spot.krsc-pulse{animation:krsc-pulse 1.4s ease-in-out infinite}
+  @keyframes krsc-pulse{0%,100%{box-shadow:0 0 0 9999px rgba(15,23,42,.45),0 0 0 0 rgba(37,99,235,.5)}
+    50%{box-shadow:0 0 0 9999px rgba(15,23,42,.45),0 0 0 10px rgba(37,99,235,0)}}
+  .krsc-tip{position:fixed;z-index:2147483400;max-width:300px;background:#1e293b;color:#fff;padding:12px 14px;
+    border-radius:12px;font:14px/1.45 -apple-system,system-ui,sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+  .krsc-tip .krsc-tipbtn{margin-top:10px;background:#2563eb;border:none;color:#fff;border-radius:8px;
+    min-height:40px;padding:0 14px;font-weight:600;cursor:pointer;width:100%}
+  .krsc-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+</style>
+<script>
+(function(){
+  if (window.__krscLoaded) return; window.__krscLoaded = true;
+  var CFG = window.KRS_COACH_CONFIG || {};
+  var APP   = CFG.app   || 'app';
+  var TITLE = CFG.title || 'Lern-Coach';
+  var SUB   = CFG.subtitle || 'Learning by Doing — in deinem Tempo';
+  var STEPS = (CFG.steps||[]).slice();
+  var LSKEY = 'krs_coach_' + APP;
+
+  function load(){ try{return JSON.parse(localStorage.getItem(LSKEY))||{}}catch(e){return{}} }
+  function save(s){ try{localStorage.setItem(LSKEY, JSON.stringify(s))}catch(e){} }
+  var state = load();
+  state.done = state.done || {};
+  var active = typeof state.active==='number' ? state.active : 0;
+
+  // ── Root-Container (Shadow-frei, aber Namespace-isoliert) ──
+  var root = document.createElement('div');
+  root.id = 'krsc-root'; root.setAttribute('data-krsc','1');
+  document.body.appendChild(root);
+
+  function doneCount(){ var n=0; STEPS.forEach(function(s){ if(state.done[s.id]) n++; }); return n; }
+  function allDone(){ return doneCount()===STEPS.length && STEPS.length>0; }
+
+  // ── FAB ──
+  var fab = document.createElement('button');
+  fab.className='krsc-fab'; fab.type='button';
+  fab.setAttribute('aria-label','Lern-Coach öffnen');
+  root.appendChild(fab);
+  function renderFab(){
+    var n=doneCount();
+    // Einmal durch → FAB dauerhaft ausblenden (Fortschritt bleibt in localStorage).
+    // Wieder einblendbar per window.KRSCoach.reset() oder .open().
+    if(allDone()){ fab.style.display='none'; return; }
+    fab.style.display='';
+    fab.classList.remove('krsc-done');
+    fab.innerHTML = '<span>🎓</span><span>Lernen</span><span class="krsc-badge">'+n+'/'+STEPS.length+'</span>';
+  }
+
+  // ── Overlay + Panel ──
+  var overlay=document.createElement('div'); overlay.className='krsc-overlay'; root.appendChild(overlay);
+  var panel=document.createElement('div'); panel.className='krsc-panel'; panel.setAttribute('role','dialog');
+  panel.setAttribute('aria-label',TITLE); panel.setAttribute('aria-modal','true'); root.appendChild(panel);
+
+  var spot=null, tip=null;
+  function clearSpot(){ if(spot){spot.remove();spot=null;} if(tip){tip.remove();tip=null;} }
+
+  function esc(str){ return String(str==null?'':str); }
+
+  function render(){
+    var n=doneCount(), pct=STEPS.length?Math.round(n/STEPS.length*100):0;
+    var html=''
+      + '<div class="krsc-head">'
+      +   '<button class="krsc-close" type="button" aria-label="Schließen">×</button>'
+      +   '<h2>🎓 '+esc(TITLE)+'</h2>'
+      +   '<p>'+esc(SUB)+'</p>'
+      +   '<div class="krsc-progwrap"><div class="krsc-progbar"><div class="krsc-progfill" style="width:'+pct+'%"></div></div>'
+      +   '<div class="krsc-progtxt">'+n+' von '+STEPS.length+' Aufgaben erledigt</div></div>'
+      + '</div>'
+      + '<div class="krsc-body">';
+    if(allDone()){
+      html += '<div class="krsc-done-card"><div class="krsc-big">🎉</div>'
+        + '<h3>Stark — alles geschafft!</h3>'
+        + '<p>Du kennst jetzt die wichtigsten Handgriffe. Du kannst jederzeit wieder reinschauen.</p></div>';
+    }
+    STEPS.forEach(function(s,i){
+      var checked=!!state.done[s.id], isActive=(i===active);
+      html += '<div class="krsc-step'+(isActive?' krsc-active':'')+(checked?' krsc-checked':'')+'" data-i="'+i+'">'
+        + '<button class="krsc-stephd" type="button" aria-expanded="'+isActive+'">'
+        +   '<span class="krsc-num">'+(checked?'✓':(i+1))+'</span>'
+        +   '<span class="krsc-steptitle">'+esc(s.title)+'</span>'
+        +   '<span class="krsc-chev">▸</span>'
+        + '</button>'
+        + '<div class="krsc-detail">'
+        +   (s.why?'<div class="krsc-why"><b>Warum:</b> '+esc(s.why)+'</div>':'')
+        +   '<div class="krsc-do">'+(s.do||'')+'</div>'
+        +   '<div class="krsc-actions">'
+        +     (s.target?'<button class="krsc-btn krsc-primary krsc-show" type="button">👉 Zeig mir wo</button>':'')
+        +     '<button class="krsc-btn '+(checked?'':'krsc-ok')+' krsc-toggle" type="button">'
+        +        (checked?'↺ Nochmal':'✓ Erledigt')+'</button>'
+        +     (i<STEPS.length-1?'<button class="krsc-btn krsc-next" type="button">Weiter →</button>':'')
+        +   '</div>'
+        + '</div></div>';
+    });
+    html += '</div>'
+      + '<div class="krsc-foot">'
+      +   '<button class="krsc-link krsc-restart" type="button">↺ Von vorne</button>'
+      +   '<button class="krsc-btn krsc-primary krsc-later" type="button">Später fortsetzen</button>'
+      + '</div>';
+    panel.innerHTML=html;
+    var fill=panel.querySelector('.krsc-progfill'); if(fill) fill.style.width=pct+'%';
+
+    panel.querySelector('.krsc-close').onclick=closePanel;
+    panel.querySelector('.krsc-later').onclick=closePanel;
+    panel.querySelector('.krsc-restart').onclick=function(){ state.done={}; active=0; save(state); clearSpot(); render(); renderFab(); };
+    panel.querySelectorAll('.krsc-stephd').forEach(function(b){
+      b.onclick=function(){ var i=+this.parentNode.getAttribute('data-i'); active=(active===i?-1:i); save(state); clearSpot(); render(); };
+    });
+    panel.querySelectorAll('.krsc-toggle').forEach(function(b){
+      b.onclick=function(){ var i=+this.closest('.krsc-step').getAttribute('data-i'); var id=STEPS[i].id;
+        state.done[id]=!state.done[id]; if(state.done[id]&&i<STEPS.length-1)active=i+1; save(state); render(); renderFab(); };
+    });
+    panel.querySelectorAll('.krsc-next').forEach(function(b){
+      b.onclick=function(){ var i=+this.closest('.krsc-step').getAttribute('data-i'); active=Math.min(i+1,STEPS.length-1); save(state); clearSpot(); render(); };
+    });
+    panel.querySelectorAll('.krsc-show').forEach(function(b){
+      b.onclick=function(){ var i=+this.closest('.krsc-step').getAttribute('data-i'); showTarget(STEPS[i]); };
+    });
+  }
+
+  function showTarget(step){
+    clearSpot();
+    var el=null; try{ el=step.target?document.querySelector(step.target):null; }catch(e){}
+    if(!el){
+      // Fallback: Tooltip mittig mit Hinweistext
+      tip=document.createElement('div'); tip.className='krsc-tip';
+      tip.style.left='50%'; tip.style.top='50%'; tip.style.transform='translate(-50%,-50%)';
+      tip.innerHTML='<div>'+esc(step.hint||'Der passende Bereich ist gerade nicht sichtbar — folge kurz der Anleitung oben.')+'</div>'
+        +'<button class="krsc-tipbtn" type="button">Verstanden</button>';
+      root.appendChild(tip); tip.querySelector('.krsc-tipbtn').onclick=clearSpot;
+      return;
+    }
+    el.scrollIntoView({behavior:'smooth',block:'center'});
+    setTimeout(function(){
+      var r=el.getBoundingClientRect(), pad=6;
+      spot=document.createElement('div'); spot.className='krsc-spot krsc-pulse';
+      spot.style.left=(r.left-pad)+'px'; spot.style.top=(r.top-pad)+'px';
+      spot.style.width=(r.width+pad*2)+'px'; spot.style.height=(r.height+pad*2)+'px';
+      root.appendChild(spot);
+      tip=document.createElement('div'); tip.className='krsc-tip';
+      var tx=Math.min(r.left, window.innerWidth-320), ty=r.bottom+12;
+      if(ty>window.innerHeight-120) ty=Math.max(12,r.top-120);
+      tip.style.left=Math.max(12,tx)+'px'; tip.style.top=ty+'px';
+      tip.innerHTML='<div>'+esc(step.hint||'Hier ist die Stelle. Probier es ruhig aus!')+'</div>'
+        +'<button class="krsc-tipbtn" type="button">Alles klar</button>';
+      root.appendChild(tip); tip.querySelector('.krsc-tipbtn').onclick=clearSpot;
+    },320);
+  }
+
+  function openPanel(){ render(); overlay.classList.add('krsc-open'); panel.classList.add('krsc-open');
+    document.addEventListener('keydown',onKey); }
+  function closePanel(){ overlay.classList.remove('krsc-open'); panel.classList.remove('krsc-open');
+    clearSpot(); document.removeEventListener('keydown',onKey); }
+  function onKey(e){ if(e.key==='Escape'){ if(spot||tip){clearSpot();} else closePanel(); } }
+
+  fab.onclick=openPanel; overlay.onclick=closePanel;
+  renderFab();
+
+  // Öffentliche Mini-API (z.B. für „Coach starten"-Button in der App)
+  window.KRSCoach={ open:openPanel, close:closePanel, reset:function(){state.done={};active=0;save(state);renderFab();} };
+})();
+</script>
+<!-- ═══ Ende KRS LERN-COACH ═══ -->
+
+<!-- KRSC-INJECT-END -->
 </body>
 </html>
