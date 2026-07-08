@@ -4922,7 +4922,10 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.13.0';
+    window.KRS_VERSION = '4.14.0';
+    // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
+    // Playwright den Klick-Handler prüfen kann, ohne wirklich zu navigieren.
+    window.KRS_HUB_URL = 'https://kurpfalz-realschule.github.io/krs-hub/';
     // Recovery-Fallback: Reset-Link öffnet die App mit #...type=recovery im Hash.
     // Früh (synchron) merken, bevor supabase-js den Hash beim Init bereinigt.
     try {
@@ -8039,6 +8042,7 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.14.0', date: '08.07.2026', items: ['Neuer 🏠-Button oben in der Seitenleiste: bringt dich direkt zurück zum KRS Hub'] },
       { v: '4.13.0', date: '07.07.2026', items: ['Passwort selbst zurücksetzen: „Passwort vergessen?" auf dem Anmeldebildschirm schickt einen Link an deine Schul-E-Mail', 'Neues Passwort danach direkt in Connect setzen — kein altes Passwort nötig', 'Passwort ändern in den ⚙️ Einstellungen (eingeloggt, jederzeit)', 'Kommt keine Reset-Mail an, kann Norbert das Passwort weiterhin direkt zurücksetzen'] },
       { v: '4.12.1', date: '04.07.2026', items: ['Sicherheit: SVG-Dateien können nicht mehr hochgeladen oder als Bild eingebettet werden (Schutz vor eingebettetem Schadcode)'] },
       { v: '4.12.0', date: '02.07.2026', items: ['Dateiablage pro Team: benannte Links (z. B. iServ- oder Nextcloud-Ordner) direkt im Team anlegen und pflegen', 'Neuer Tab 📅 Termine pro Team: kommende Termine auf einen Blick, vergangene ausklappbar', 'Anlegen dürfen alle Team-Mitglieder; Bearbeiten/Löschen die Ersteller:in und Team-Admins'] },
@@ -9759,6 +9763,18 @@
         React.createElement('nav', { className: 'sidebar', 'aria-label': 'Hauptnavigation' },
           React.createElement('div', { className: 'sidebar-logo' }, React.createElement('img', { src: KRS_LOGO, alt: 'KRS', style: { width: '32px', height: '32px', objectFit: 'contain' } })),
           React.createElement('div', { className: 'sidebar-nav' },
+            // v4.14.0: Zurück zum KRS Hub — gleiche Origin wie Connect (kurpfalz-realschule.github.io),
+            // daher geteilte Supabase-Session; Navigation im selben Tab (kein neuer Tab wie bei Notizen,
+            // weil man hier die App verlässt statt ein Zusatzmodul danebenzustellen).
+            React.createElement('button', {
+              className: 'nav-item',
+              onClick: () => { window.location.href = window.KRS_HUB_URL; },
+              title: 'Zurück zum KRS Hub',
+              'aria-label': 'Zurück zum KRS Hub',
+              'data-testid': 'nav-hub'
+            },
+              React.createElement('span', { style: { fontSize: '20px', lineHeight: 1 } }, '🏠')
+            ),
             React.createElement('button', {
               className: 'nav-item' + (view === 'teams' ? ' active' : ''),
               onClick: () => setView('teams'),
