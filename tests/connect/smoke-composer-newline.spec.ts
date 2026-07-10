@@ -26,9 +26,10 @@ test.describe('Feedback #8 — Zeilenumbruch im Composer', () => {
     await expect(nlBtn).toBeVisible({ timeout: 4_000 });
     await nlBtn.click();
 
-    // Editor enthält jetzt einen Zeilenumbruch (<br> oder <div>-Block, je nach Browser)
+    // Editor enthält jetzt einen Zeilenumbruch — je nach Browser/Fallback
+    // <br>, <div>-Block oder \n (insertText-Fallback, white-space: pre-wrap)
     const html = await input.innerHTML();
-    expect(/<br|<div/i.test(html)).toBe(true);
+    expect(/<br|<div|\n/i.test(html)).toBe(true);
 
     // Hinweistext vorhanden (Desktop)
     await expect(page.locator('.chat-input-bar .composer-hint')).toHaveText(/Shift\+Enter/);

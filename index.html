@@ -4823,8 +4823,12 @@
                   sel.addRange(range);
                 } catch (err) {}
               }
-              try { document.execCommand('insertLineBreak'); }
-              catch (err) { try { document.execCommand('insertHTML', false, '<br><br>'); } catch (e2) {} }
+              // Rückgabewert prüfen: 'insertLineBreak' ist kein Standard-execCommand
+              // (Chromium liefert false statt einer Exception) → Fallback-Kette.
+              let ok = false;
+              try { ok = document.execCommand('insertLineBreak'); } catch (err) { ok = false; }
+              if (!ok) { try { ok = document.execCommand('insertHTML', false, '<br>'); } catch (err) { ok = false; } }
+              if (!ok) { try { document.execCommand('insertText', false, '\n'); } catch (err) {} }
               emitChange();
             }
           }, '↵ Neue Zeile'),

@@ -45,8 +45,11 @@ test.describe('v4.10.0 Einstellungen-Panel (Demo)', () => {
     // Nur oberstes Modal sichtbar → Einstellungen ist verdeckt/entfernt
     await expect(page.locator('.modal-overlay[aria-label="Einstellungen"]')).toHaveCount(0);
 
-    // „← Zurück" führt eine Ebene hoch — zurück zu den Einstellungen
-    const back = page.getByRole('button', { name: 'Zurück' }).first();
+    // „← Zurück" führt eine Ebene hoch — zurück zu den Einstellungen.
+    // WICHTIG: im Modal scopen + exact — seit v4.14 gibt es in der Sidebar
+    // den 🏠-Button „Zurück zum KRS Hub", den der ungescopte Substring-Match
+    // sonst zuerst trifft (liegt hinter dem Overlay → Klick-Timeout).
+    const back = page.locator('.modal-overlay').getByRole('button', { name: 'Zurück', exact: true }).first();
     await expect(back).toBeVisible({ timeout: 5_000 });
     await back.click();
     await expect(page.locator('.modal-overlay[aria-label="Einstellungen"]').first()).toBeVisible({ timeout: 5_000 });
