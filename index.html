@@ -83,6 +83,7 @@
     .app-layout {
       display: flex;
       height: 100vh;
+      height: 100dvh; /* Feedback #7: iOS Safari — 100vh ragt hinter die Leisten, unterste Sidebar-Buttons waren im Quermodus abgeschnitten */
       width: 100%;
       background: var(--bg-primary);
     }
@@ -122,7 +123,12 @@
       flex-direction: column;
       gap: 12px;
       flex: 1;
+      /* Feedback #7: Bei knapper Höhe (iPad quer) scrollbar statt abgeschnitten */
+      min-height: 0;
+      overflow-y: auto;
+      scrollbar-width: none;
     }
+    .sidebar-nav::-webkit-scrollbar { display: none; }
 
     .nav-item {
       width: 44px;
@@ -485,6 +491,12 @@
     .rich-editor ul, .rich-editor ol { margin: 6px 0; padding-left: 22px; }
     .rich-editor li { margin: 3px 0; }
     .rich-editor a { color: var(--accent); text-decoration: underline; }
+    /* Feedback #8: Zeilenumbruch-Hilfe unter dem Eingabefeld */
+    .composer-hint-row { display:flex; align-items:center; gap:8px; margin-top:2px; }
+    .composer-newline-btn { border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-secondary); border-radius:6px; cursor:pointer; font-size:11px; line-height:1; padding:4px 8px; min-height:26px; }
+    .composer-newline-btn:hover { background: var(--bg-tertiary); }
+    .composer-hint { font-size:11px; color:var(--text-muted); }
+    @media (hover: none) { .composer-hint { display:none; } } /* auf Touch zählt der Knopf, nicht der Shortcut */
     .rich-toolbar { display:flex; gap:4px; margin-bottom:6px; flex-wrap:wrap; }
     .rich-toolbar button { min-width:34px; min-height:34px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-secondary); border-radius:6px; cursor:pointer; font-size:14px; line-height:1; padding:0 8px; }
     .rich-toolbar button:hover { background: var(--bg-tertiary); }
@@ -1076,7 +1088,19 @@
     /* DM Bearbeiten/Löschen — am Desktop bei Hover, auf Touch (iPad) immer sichtbar */
     .chat-msg-actions { position: absolute; top: -12px; right: 6px; display: flex; gap: 2px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 14px; padding: 1px 2px; opacity: 0; transition: opacity .12s; box-shadow: 0 1px 4px var(--shadow); z-index: 2; }
     .chat-msg:hover .chat-msg-actions, .chat-msg-actions:focus-within { opacity: 1; }
-    @media (hover: none) { .chat-msg-actions { opacity: 1; } }
+    /* Feedback #6 (Stresstest 09.07.): Auf Touch-Geräten ✏️/🗑️ UNTER der
+       Nachricht anzeigen (statt schwebend über der Blase) — besser erreichbar. */
+    @media (hover: none) {
+      .chat-msg-actions {
+        position: static;
+        opacity: 1;
+        display: inline-flex;
+        margin-top: 4px;
+        box-shadow: none;
+        background: transparent;
+        border: none;
+      }
+    }
 
     .chat-input-bar { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); align-items: flex-end; }
     .chat-input-bar input { flex: 1; padding: 10px 14px; border-radius: 20px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); font-size: 14px; }
@@ -1121,8 +1145,18 @@
       .sidebar-bottom .feedback-trigger { padding: 4px; font-size: 16px; min-width: 36px; min-height: 36px; }
     }
 
+    /* Feedback #7 (Stresstest 09.07., iPad quer): bei knapper Höhe die linke
+       Icon-Leiste kompakter machen, damit alle Buttons erreichbar bleiben. */
+    @media (min-width: 769px) and (max-height: 760px) {
+      .sidebar { gap: 10px; padding: 8px 0; }
+      .sidebar-nav { gap: 6px; }
+      .sidebar-bottom { gap: 4px; }
+      .app-version { display: none; }
+      .beta-feedback-btn { padding: 4px 6px; font-size: 11px; }
+    }
+
     @media (max-width: 768px) {
-      .app-layout { flex-direction: column; height: 100vh; }
+      .app-layout { flex-direction: column; height: 100vh; height: 100dvh; }
       .sidebar { width: 100%; height: 56px; flex-direction: row; padding: 0 8px; gap: 4px; order: 2; border-top: 1px solid var(--border); border-right: none; }
       .sidebar-nav { flex-direction: row; flex: 1; justify-content: space-around; }
       .sidebar-nav button { font-size: 11px; padding: 6px 8px; }
@@ -1135,11 +1169,11 @@
       .sidebar-nav { flex: 1; }
       .sidebar-bottom .online-indicator { display: none; }
       .sidebar-bottom .feedback-trigger { display: inline-flex; }
-      .sidebar-content { position: fixed; top: 0; left: 0; width: 80vw; max-width: 300px; height: calc(100vh - 56px); z-index: 100; transform: translateX(-100%); transition: transform 0.25s ease; background: var(--bg-secondary); box-shadow: 2px 0 12px rgba(0,0,0,0.15); }
+      .sidebar-content { position: fixed; top: 0; left: 0; width: 80vw; max-width: 300px; height: calc(100vh - 56px); height: calc(100dvh - 56px); z-index: 100; transform: translateX(-100%); transition: transform 0.25s ease; background: var(--bg-secondary); box-shadow: 2px 0 12px rgba(0,0,0,0.15); }
       .sidebar-content.mobile-open { transform: translateX(0); }
       /* Teams + Kanäle teilen sich EINEN Drawer (sonst überlagern beide
          fixed-Spalten einander → es waren nur die Kanäle sichtbar). */
-      .team-drawer { display: flex; flex-direction: column; position: fixed; top: 0; left: 0; width: 80vw; max-width: 300px; height: calc(100vh - 56px); z-index: 100; transform: translateX(-100%); transition: transform 0.25s ease; background: var(--bg-secondary); box-shadow: 2px 0 12px rgba(0,0,0,0.15); overflow-y: auto; }
+      .team-drawer { display: flex; flex-direction: column; position: fixed; top: 0; left: 0; width: 80vw; max-width: 300px; height: calc(100vh - 56px); height: calc(100dvh - 56px); z-index: 100; transform: translateX(-100%); transition: transform 0.25s ease; background: var(--bg-secondary); box-shadow: 2px 0 12px rgba(0,0,0,0.15); overflow-y: auto; }
       .team-drawer.mobile-open { transform: translateX(0); }
       .team-drawer .sidebar-content { position: static; width: 100%; max-width: none; height: auto; transform: none; box-shadow: none; z-index: auto; flex: 0 0 auto; }
       .team-drawer .sidebar-content + .sidebar-content { border-top: 1px solid var(--border); }
@@ -1807,6 +1841,7 @@
       TOAST_DURATION: 4000,
       WIKI_LOAD_TIMEOUT: 8000,
       NOTIFICATION_AUTO_CLOSE: 8000,
+      CHAT_POLL_INTERVAL: 20000,                   // Polling-Fallback wenn Realtime hakt (Feedback #4)
       IMAGE_COMPRESS_THRESHOLD: 200 * 1024,        // 200 KB — darunter kein Compress
 
       // Umfragen
@@ -2071,6 +2106,8 @@
       { id: 3, user: MOCK_USERS[3], lastMessage: 'Hast du das Arbeitsblatt für Klasse 7b?', time: 'Gestern', unread: 0 },
       { id: 4, user: MOCK_USERS[5], lastMessage: 'Die Noten sind eingetragen 👍', time: 'Gestern', unread: 0 },
       { id: 5, user: MOCK_USERS[7], lastMessage: 'Treffen wir uns in der Pause?', time: 'Mo', unread: 0 },
+      // Feedback #3: Demo-Gruppenchat, damit Mitglieder-Verwaltung sichtbar/testbar ist
+      { id: 6, is_group: true, name: 'Musik-Fachschaft', members: [1, 2, 4], lastMessage: 'Probe am Donnerstag?', time: 'Mo', unread: 0 },
     ];
 
     const EMOJI_NAMES = {
@@ -2097,6 +2134,15 @@
       '🔵':'blau blue','🔄':'aktualisieren refresh reload','✨':'glitzer sparkle',
       '💥':'boom explosion','💛':'gelbes herz yellow heart','💚':'grünes herz green heart',
       '💙':'blaues herz blue heart','💜':'lila herz purple heart',
+      // Feedback #5 (Stresstest 09.07.): Natur & Tiere — inkl. Biene 🐝
+      '🐝':'biene bee honig','🦋':'schmetterling butterfly','🐞':'marienkäfer ladybug käfer',
+      '🐶':'hund dog','🐱':'katze cat','🐭':'maus mouse','🐰':'hase rabbit','🦊':'fuchs fox',
+      '🐻':'bär bear','🐼':'panda','🐨':'koala','🦁':'löwe lion','🐷':'schwein pig',
+      '🐸':'frosch frog','🐢':'schildkröte turtle','🦉':'eule owl','🐴':'pferd horse',
+      '🐦':'vogel bird','🐟':'fisch fish','🌸':'kirschblüte blossom blume','🌻':'sonnenblume sunflower',
+      '🌹':'rose blume','🌷':'tulpe tulip blume','🌳':'baum tree','🍀':'kleeblatt klee glück luck',
+      '🌈':'regenbogen rainbow','☀️':'sonne sun','🌙':'mond moon','⛄':'schneemann snowman',
+      '🌊':'welle wave meer','🍎':'apfel apple','🍕':'pizza','🎂':'kuchen torte cake','☕':'kaffee coffee',
     };
 
     const TEAM_COLORS = ['#7c6ff7', '#ec4899', '#3b82f6', '#f97316', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#a855f7'];
@@ -2105,6 +2151,7 @@
       'Häufig': ['👍', '❤️', '😂', '🎉', '👏', '🔥', '✅', '💪', '🙏', '😊', '👀', '💡', '📝', '🎵', '⭐'],
       'Smileys': ['😀', '😃', '😄', '😁', '😅', '🤣', '😊', '😇', '🙂', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛', '😜', '🤪', '😝', '🤗', '🤭', '🤫', '🤔', '🤐', '🤨', '😐', '😑', '😶'],
       'Gesten': ['👍', '👎', '👊', '✊', '🤛', '🤜', '👏', '🙌', '👐', '🤲', '🤝', '🙏', '✌️', '🤟', '🤘', '👌', '🤌', '👈', '👉', '👆', '👇', '☝️', '✋', '🤚', '🖐️', '🖖', '👋', '💪'],
+      'Natur': ['🐝', '🦋', '🐞', '🐶', '🐱', '🐭', '🐰', '🦊', '🐻', '🐼', '🐨', '🦁', '🐷', '🐸', '🐢', '🦉', '🐴', '🐦', '🐟', '🌸', '🌻', '🌹', '🌷', '🌳', '🍀', '🌈', '☀️', '🌙', '⛄', '🌊', '🍎', '🍕', '🎂', '☕'],
       'Objekte': ['📝', '📌', '📎', '📁', '📂', '📅', '📆', '📊', '📈', '📉', '💻', '🖥️', '📱', '☎️', '📧', '✉️', '📮', '🔔', '🔕', '📢', '🎵', '🎶', '🎤', '🎸', '🎹'],
       'Symbole': ['✅', '❌', '⭕', '❗', '❓', '⚠️', '🔴', '🟡', '🟢', '🔵', '⬛', '⬜', '◼️', '◻️', '▶️', '⏸️', '⏹️', '🔄', '✨', '💫', '💥', '🔥', '❤️', '💛', '💚', '💙', '💜'],
     };
@@ -3763,6 +3810,23 @@
         }
       }
 
+      // Feedback #3 (Stresstest 09.07.): Mitglieder nachträglich in einen
+      // Gruppenchat aufnehmen (vorher ging das nur beim Anlegen).
+      async addConversationMember(conversationId, userId) {
+        if (this.isDemo) return true;
+        try {
+          const { error } = await this.sb.from('conversation_members').insert({ conversation_id: conversationId, user_id: userId });
+          if (error) throw error;
+          return true;
+        } catch (err) {
+          console.error('addConversationMember error:', err);
+          const friendly = (err.code === '42501' || /row-level security/i.test(err.message || ''))
+            ? 'Keine Berechtigung: Mitglieder können nur von Chat-Mitgliedern hinzugefügt werden.'
+            : ('Mitglied konnte nicht hinzugefügt werden: ' + (err.message || 'Unbekannter Fehler'));
+          throw new Error(friendly);
+        }
+      }
+
       // === AUTH METHODS ===
 
       // Magic Link senden
@@ -4733,7 +4797,39 @@
             emitChange();
           },
           style: Object.assign({ minHeight: '60px' }, style || {})
-        })
+        }),
+        // Feedback #8 (Stresstest 09.07.): „Wie schreibe ich in eine neue Zeile?"
+        // Wenn Enter sendet (onEnter gesetzt): sichtbarer ↵-Knopf + Hinweis.
+        onEnter && React.createElement('div', { className: 'composer-hint-row' },
+          React.createElement('button', {
+            type: 'button',
+            className: 'composer-newline-btn',
+            title: 'Neue Zeile einfügen',
+            'aria-label': 'Neue Zeile einfügen',
+            'data-testid': 'composer-newline-btn',
+            onMouseDown: (e) => {
+              e.preventDefault();
+              const el = editorRef.current;
+              if (!el) return;
+              // Falls der Editor den Fokus nicht (mehr) hat: Cursor ans Ende setzen
+              if (document.activeElement !== el) {
+                el.focus();
+                try {
+                  const range = document.createRange();
+                  range.selectNodeContents(el);
+                  range.collapse(false);
+                  const sel = window.getSelection();
+                  sel.removeAllRanges();
+                  sel.addRange(range);
+                } catch (err) {}
+              }
+              try { document.execCommand('insertLineBreak'); }
+              catch (err) { try { document.execCommand('insertHTML', false, '<br><br>'); } catch (e2) {} }
+              emitChange();
+            }
+          }, '↵ Neue Zeile'),
+          React.createElement('span', { className: 'composer-hint' }, 'Enter = senden · Shift+Enter = neue Zeile')
+        )
       );
     }
 
@@ -4922,7 +5018,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.14.0';
+    window.KRS_VERSION = '4.15.0';
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
     // Playwright den Klick-Handler prüfen kann, ohne wirklich zu navigieren.
     window.KRS_HUB_URL = 'https://kurpfalz-realschule.github.io/krs-hub/';
@@ -6722,6 +6818,33 @@
       const [msgReactions, setMsgReactions] = useState(new Map()); // #11: Map<msgId,[{emoji,users,count}]>
       const [reactionPickerMsgId, setReactionPickerMsgId] = useState(null);
       const [chatDragActive, setChatDragActive] = useState(false); // Drag&Drop-Overlay im Chat
+      // Feedback #3 (Stresstest 09.07.): Gruppenmitglieder ansehen & hinzufügen
+      const [showGroupMembers, setShowGroupMembers] = useState(false);
+      const [groupMemberIds, setGroupMemberIds] = useState([]);
+      const [allUsersList, setAllUsersList] = useState([]);
+      const [memberSearch, setMemberSearch] = useState('');
+      useEffect(() => {
+        setGroupMemberIds((conversation && conversation.members) || []);
+        setShowGroupMembers(false);
+        setMemberSearch('');
+      }, [conversation?.id]);
+      useEffect(() => {
+        if (!showGroupMembers) return;
+        let cancelled = false;
+        dataService.getUsers().then(us => { if (!cancelled) setAllUsersList(us || []); }).catch(() => {});
+        return () => { cancelled = true; };
+      }, [showGroupMembers, dataService]);
+      const handleAddGroupMember = async (uid) => {
+        try {
+          await dataService.addConversationMember(conversation.id, uid);
+          setGroupMemberIds(prev => prev.some(id => String(id) === String(uid)) ? prev : [...prev, uid]);
+          if (setConversations) setConversations(prev => prev.map(c => c.id === conversation.id ? { ...c, members: [...(c.members || []).filter(id => String(id) !== String(uid)), uid] } : c));
+          setMemberSearch('');
+          showToast('Mitglied hinzugefügt', 'success');
+        } catch (err) {
+          showToast(err.message || 'Mitglied konnte nicht hinzugefügt werden', 'error');
+        }
+      };
       const messagesEndRef = useRef(null);
       const messagesTopRef = useRef(null); // (ungenutzt seit v4.10.2: Feed chronologisch, Scroll ans Ende)
       const chatFileRef = useRef(null);
@@ -6931,7 +7054,15 @@
           onBack && React.createElement('button', { className: 'back-btn', onClick: onBack, 'aria-label': 'Zurück', dangerouslySetInnerHTML: { __html: Icons.back } }),
           isGroupChat ? React.createElement('div', null,
             React.createElement('span', { className: 'chat-header-name' }, conversation.name || 'Gruppenchat'),
-            React.createElement('div', { style: { fontSize: '11px', color: 'var(--text-muted)', fontWeight: '500' } }, (conversation.members?.length || 0) + ' Mitglieder')
+            // Feedback #3: Mitgliederzahl ist jetzt klickbar → Mitglieder ansehen & hinzufügen
+            React.createElement('button', {
+              type: 'button',
+              'data-testid': 'group-members-btn',
+              onClick: () => setShowGroupMembers(true),
+              title: 'Mitglieder ansehen & hinzufügen',
+              'aria-label': 'Gruppenmitglieder verwalten',
+              style: { background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '11px', color: 'var(--accent)', fontWeight: '500', textDecoration: 'underline' }
+            }, (groupMemberIds.length || conversation.members?.length || 0) + ' Mitglieder · verwalten')
           ) : React.createElement(React.Fragment, null,
             React.createElement('div', { className: 'avatar-wrapper' },
               React.createElement(Avatar, { user: conversation.user || { display_name: 'Chat', avatar_color: '#999' }, size: 32 }),
@@ -7071,7 +7202,57 @@
             'aria-label': 'Nachricht senden',
             dangerouslySetInnerHTML: { __html: Icons.send }
           })
-        )
+        ),
+        // Feedback #3: Gruppenmitglieder-Modal (ansehen + hinzufügen)
+        showGroupMembers && isGroupChat && (() => {
+          const resolvedMembers = groupMemberIds.map(id =>
+            allUsersList.find(u => String(u.id) === String(id)) || { id, display_name: 'Lädt…', avatar_color: '#999' }
+          );
+          const candidates = allUsersList.filter(u =>
+            !groupMemberIds.some(id => String(id) === String(u.id)) &&
+            (memberSearch.trim() === '' ? false : (u.display_name || '').toLowerCase().includes(memberSearch.trim().toLowerCase()))
+          ).slice(0, 8);
+          return React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', onClick: () => setShowGroupMembers(false) },
+            React.createElement('div', { className: 'modal', 'data-testid': 'group-members-modal', onClick: e => e.stopPropagation(), style: { width: '420px' } },
+              React.createElement('div', { className: 'modal-header' },
+                React.createElement('h3', null, '👥 ' + (conversation.name || 'Gruppenchat')),
+                React.createElement('button', { onClick: () => setShowGroupMembers(false), 'aria-label': 'Schließen', style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color: 'var(--text-muted)', padding: '4px 8px', minWidth: '32px', minHeight: '32px' } }, '✕')
+              ),
+              React.createElement('div', { className: 'modal-body' },
+                React.createElement('h4', { style: { fontSize: '13px', fontWeight: '600', margin: '0 0 8px' } }, 'Mitglieder (' + resolvedMembers.length + ')'),
+                React.createElement('div', { style: { maxHeight: '220px', overflowY: 'auto', marginBottom: '16px' } },
+                  resolvedMembers.map(m => React.createElement('div', { key: m.id, className: 'member-item' },
+                    React.createElement(Avatar, { user: m, size: 28 }),
+                    React.createElement('div', { className: 'member-name', style: { flex: 1 } }, m.display_name),
+                    String(m.id) === String(currentUser.id) && React.createElement('span', { style: { fontSize: '11px', color: 'var(--text-muted)' } }, 'Du')
+                  ))
+                ),
+                React.createElement('h4', { style: { fontSize: '13px', fontWeight: '600', margin: '0 0 8px' } }, 'Mitglied hinzufügen'),
+                React.createElement('input', {
+                  type: 'text',
+                  className: 'form-input',
+                  placeholder: 'Namen suchen…',
+                  value: memberSearch,
+                  'data-testid': 'group-member-search',
+                  onChange: e => setMemberSearch(e.target.value),
+                  style: { marginBottom: '8px' }
+                }),
+                memberSearch.trim() !== '' && React.createElement('div', { style: { maxHeight: '180px', overflowY: 'auto' } },
+                  candidates.length > 0 ? candidates.map(u => React.createElement('div', { key: u.id, className: 'member-item' },
+                    React.createElement(Avatar, { user: u, size: 28 }),
+                    React.createElement('div', { className: 'member-name', style: { flex: 1 } }, u.display_name),
+                    React.createElement('button', {
+                      type: 'button',
+                      'data-testid': 'group-member-add',
+                      onClick: () => handleAddGroupMember(u.id),
+                      style: { background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', padding: '4px 10px', fontSize: '12px', minHeight: '30px' }
+                    }, '+ Hinzufügen')
+                  )) : React.createElement('div', { style: { fontSize: '12px', color: 'var(--text-muted)', padding: '6px 0' } }, 'Niemand gefunden.')
+                )
+              )
+            )
+          );
+        })()
       );
     }
 
@@ -8042,6 +8223,14 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.15.0', date: '10.07.2026', items: [
+        'Chat & Kanäle holen verpasste Nachrichten jetzt automatisch nach (Sicherheitsnetz, wenn das WLAN kurz hakt) — danke Patrick!',
+        'Gruppenchats: Klick auf die Mitgliederzahl zeigt alle Mitglieder und lässt neue hinzufügen — danke Werner!',
+        'Neue Zeile schreiben: ↵-Knopf unter dem Eingabefeld + Hinweis „Shift+Enter" — danke Caroline!',
+        'iPad quer: linke Leiste ist nicht mehr abgeschnitten und scrollt bei Bedarf — danke Steffen!',
+        'Auf Touch-Geräten stehen ✏️ Bearbeiten und 🗑️ Löschen jetzt unter der Nachricht — danke Katharina!',
+        'Emoji-Auswahl: neue Kategorie „Natur" — inklusive 🐝 Biene — danke Katharina!'
+      ] },
       { v: '4.14.0', date: '08.07.2026', items: ['Neuer 🏠-Button oben in der Seitenleiste: bringt dich direkt zurück zum KRS Hub'] },
       { v: '4.13.0', date: '07.07.2026', items: ['Passwort selbst zurücksetzen: „Passwort vergessen?" auf dem Anmeldebildschirm schickt einen Link an deine Schul-E-Mail', 'Neues Passwort danach direkt in Connect setzen — kein altes Passwort nötig', 'Passwort ändern in den ⚙️ Einstellungen (eingeloggt, jederzeit)', 'Kommt keine Reset-Mail an, kann Norbert das Passwort weiterhin direkt zurücksetzen'] },
       { v: '4.12.1', date: '04.07.2026', items: ['Sicherheit: SVG-Dateien können nicht mehr hochgeladen oder als Bild eingebettet werden (Schutz vor eingebettetem Schadcode)'] },
@@ -8927,7 +9116,34 @@
               return [newPost, ...prev];
             });
           });
-          return () => { cancelled = true; postsLoadingRef.current = false; unsub(); };
+          // Feedback #4 (Stresstest 09.07.): Polling-Fallback auch für Kanal-Posts —
+          // fängt verpasste Realtime-Events nach WLAN-Abbruch ab (Merge, kein Replace).
+          const mergeFreshPosts = (fresh) => {
+            if (cancelled || !fresh || postsLoadingRef.current) return;
+            setPosts(prev => {
+              const known = new Set(prev.map(p => p.id));
+              const neu = fresh.filter(p => !known.has(p.id));
+              if (neu.length === 0) return prev;
+              const merged = [...neu, ...prev];
+              const ts = p => new Date(p.created_at).getTime();
+              if (merged.every(p => !isNaN(ts(p)))) merged.sort((a, b) => ts(b) - ts(a));
+              return merged;
+            });
+          };
+          const refetchPosts = () => {
+            if (document.visibilityState !== 'visible') return;
+            dataService.getPosts(selectedChannel.id, PAGE_SIZE, 0).then(mergeFreshPosts).catch(() => {});
+          };
+          const postsPollIv = setInterval(refetchPosts, CONFIG.CHAT_POLL_INTERVAL || 20000);
+          const onVisiblePosts = () => { if (document.visibilityState === 'visible') refetchPosts(); };
+          document.addEventListener('visibilitychange', onVisiblePosts);
+          window.addEventListener('online', onVisiblePosts);
+          return () => {
+            cancelled = true; postsLoadingRef.current = false; unsub();
+            clearInterval(postsPollIv);
+            document.removeEventListener('visibilitychange', onVisiblePosts);
+            window.removeEventListener('online', onVisiblePosts);
+          };
         }
       }, [selectedChannel, dataService]);
 
@@ -8984,7 +9200,38 @@
               return [...prev, newMsg];
             });
           });
-          return () => { cancelled = true; unsub(); };
+          // Feedback #4 (Stresstest 09.07.): „Chat aktualisiert sich nicht live".
+          // Realtime-Websockets brechen im Schul-WLAN gern ab; verpasste Events
+          // holt dieses Sicherheitsnetz nach: sanftes Polling (nur sichtbarer Tab)
+          // + Refetch bei Tab-Rückkehr und Netz-Reconnect. Merge statt Replace,
+          // damit nachgeladene ältere Nachrichten (Pagination) erhalten bleiben.
+          const mergeFresh = (msgs) => {
+            if (cancelled || !msgs) return;
+            setChatMessages(prev => {
+              const known = new Set(prev.map(m => m.id));
+              const fresh = msgs.filter(m => !known.has(m.id));
+              if (fresh.length === 0) return prev;
+              const merged = [...prev, ...fresh];
+              // Nur sortieren, wenn alle Timestamps parsebar sind (Demo nutzt de-DE-Strings)
+              const ts = m => new Date(m.created_at).getTime();
+              if (merged.every(m => !isNaN(ts(m)))) merged.sort((a, b) => ts(a) - ts(b));
+              return merged;
+            });
+          };
+          const refetch = () => {
+            if (document.visibilityState !== 'visible') return;
+            dataService.getMessages(selectedConversation.id, PAGE_SIZE, 0).then(mergeFresh).catch(() => {});
+          };
+          const pollIv = setInterval(refetch, CONFIG.CHAT_POLL_INTERVAL || 20000);
+          const onVisible = () => { if (document.visibilityState === 'visible') refetch(); };
+          document.addEventListener('visibilitychange', onVisible);
+          window.addEventListener('online', onVisible);
+          return () => {
+            cancelled = true; unsub();
+            clearInterval(pollIv);
+            document.removeEventListener('visibilitychange', onVisible);
+            window.removeEventListener('online', onVisible);
+          };
         }
       }, [selectedConversation, dataService]);
 
