@@ -1968,11 +1968,11 @@
     // Demo-Store für Team-Dateiablage-Links (v4.12.0): { [teamId]: [link, ...] }
     let MOCK_TEAM_LINKS = {
       1: [
-        { id: 'tl1', team_id: 1, titel: 'iServ-Ordner Kollegium', url: 'https://krs.sh-schulen.de/iserv/file/-/Groups/Kollegium', beschreibung: 'Gemeinsame Dateien des Kollegiums', icon: '📁', created_by: 1, created_at: '2026-06-25T08:00:00.000Z', sort_order: 0 },
-        { id: 'tl2', team_id: 1, titel: 'Nextcloud Schulordner', url: 'https://cloud.krs-beispiel.de/s/kollegium', beschreibung: 'Pilot der eigenen Dateiablage', icon: '☁️', created_by: 2, created_at: '2026-06-26T10:15:00.000Z', sort_order: 1 }
+        { id: 'tl1', team_id: 1, titel: 'Nextcloud-Ordner Kollegium', url: 'https://cloud.krs-beispiel.de/s/kollegium', beschreibung: 'Gemeinsame Dateien des Kollegiums', icon: '📁', created_by: 1, created_at: '2026-06-25T08:00:00.000Z', sort_order: 0 },
+        { id: 'tl2', team_id: 1, titel: 'Nextcloud Schulordner', url: 'https://cloud.krs-beispiel.de/s/kollegium-archiv', beschreibung: 'Pilot der eigenen Dateiablage', icon: '☁️', created_by: 2, created_at: '2026-06-26T10:15:00.000Z', sort_order: 1 }
       ],
       2: [
-        { id: 'tl3', team_id: 2, titel: 'Noten & Arrangements (iServ)', url: 'https://krs.sh-schulen.de/iserv/file/-/Groups/Musik', beschreibung: 'Ablage der Fachschaft Musik', icon: '🎵', created_by: 1, created_at: '2026-06-27T12:00:00.000Z', sort_order: 0 }
+        { id: 'tl3', team_id: 2, titel: 'Noten & Arrangements (Nextcloud)', url: 'https://cloud.krs-beispiel.de/s/musik', beschreibung: 'Ablage der Fachschaft Musik', icon: '🎵', created_by: 1, created_at: '2026-06-27T12:00:00.000Z', sort_order: 0 }
       ]
     };
 
@@ -5022,10 +5022,23 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.15.0';
+    window.KRS_VERSION = '4.16.0';
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
     // Playwright den Klick-Handler prüfen kann, ohne wirklich zu navigieren.
     window.KRS_HUB_URL = 'https://kurpfalz-realschule.github.io/krs-hub/';
+    // v4.16.0: Erkennung, ob Connect im Hub-iframe eingebettet läuft (dann
+    // ergibt der 🏠-Button keinen Sinn — man ist ja schon im Hub). Als
+    // Test-Hook exponiert; ein bereits (z. B. per page.addInitScript) gesetzter
+    // Wert wird respektiert, da Playwright echtes iframe-Embedding nicht ohne
+    // Weiteres simulieren kann.
+    if (typeof window.__krsIsEmbedded !== 'boolean') {
+      try {
+        window.__krsIsEmbedded = window.self !== window.top;
+      } catch (e) {
+        // Cross-Origin-Zugriff auf window.top wirft — dann sicher von Embedding ausgehen.
+        window.__krsIsEmbedded = true;
+      }
+    }
     // Recovery-Fallback: Reset-Link öffnet die App mit #...type=recovery im Hash.
     // Früh (synchron) merken, bevor supabase-js den Hash beim Init bereinigt.
     try {
@@ -7420,11 +7433,11 @@
     // ============================================================
     const FEEDBACK_GAS_URL = 'https://script.google.com/macros/s/AKfycbwr9ZV9108jpkfN4nKboTuwMEgUhBOxW2c2ksWgazKNeSgiINL4G2ZNUMKeEzfaOj3H_g/exec';
 
-    // ── Dateiablage (v4.12.0) ─────────────────────────────────────────────
-    // Der Platzhalter aus v4.7.0 (iServ-Hinweis, Nextcloud folgt) bleibt —
-    // NEU: pro Team pflegbare, benannte Links (team_links). KEIN eigener
-    // Datei-Speicher; nur Verweise auf iServ-/Nextcloud-Ordner u. Ä.
-    const ISERV_FILES_URL = 'https://krs.sh-schulen.de';
+    // ── Dateiablage (v4.12.0, v4.16.0: Umstieg von iServ auf Nextcloud) ────
+    // Der Platzhalter aus v4.7.0 bleibt — pro Team pflegbare, benannte Links
+    // (team_links). KEIN eigener Datei-Speicher; nur Verweise auf die
+    // Nextcloud-/Team-Ordner u. Ä.
+    const NEXTCLOUD_FILES_URL = 'https://cloud.realschule-schriesheim.de';
 
     // Formular-Modal für Team-Links (neu anlegen & bearbeiten).
     // Stale-Closure-Regel: ALLE Feld-Handler nutzen funktionale Updates
@@ -7762,8 +7775,9 @@
       );
     }
 
-    // Dateiablage-Modal (Platzhalter aus v4.7.0, erweitert in v4.12.0):
-    // iServ-Hinweis bleibt; darunter erscheinen die Links des gewählten Teams.
+    // Dateiablage-Modal (Platzhalter aus v4.7.0, erweitert in v4.12.0,
+    // v4.16.0: Umstieg auf Nextcloud): Nextcloud-Hinweis; darunter
+    // erscheinen die Links des gewählten Teams.
     function FilesPlaceholderModal({ onClose, team, dataService, user, isTeamAdmin }) {
       React.useEffect(() => {
         const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -7781,18 +7795,16 @@
               style: { background: 'var(--accent-light)', color: 'var(--text-primary)', borderRadius: 'var(--radius)', padding: '14px 16px', fontSize: '14px', lineHeight: 1.5, marginBottom: '16px' }
             },
               React.createElement('strong', null, 'In Arbeit: '),
-              'Eine eigene Dateiablage (wie OneDrive) wird gerade mit ',
-              React.createElement('strong', null, 'Nextcloud'),
-              ' nachgerüstet. Dateien aus KRS Connect liegen dann an einem Ort, mit Versionen und Freigaben.'
+              'Eine eigene Dateiablage direkt in KRS Connect ist in Arbeit. Dateien liegen dann an einem Ort, mit Versionen und Freigaben.'
             ),
             React.createElement('p', { style: { fontSize: '14px', color: 'var(--text-secondary)', margin: '0 0 16px' } },
-              'Bis dahin nutzt bitte die ', React.createElement('strong', null, 'iServ-Dateiablage'), ' der Schule für gemeinsame Dateien.'
+              'Bis dahin nutzt bitte die ', React.createElement('strong', null, 'Nextcloud-Dateiablage'), ' der Schule für gemeinsame Dateien.'
             ),
             React.createElement('a', {
-              href: ISERV_FILES_URL, target: '_blank', rel: 'noopener noreferrer',
+              href: NEXTCLOUD_FILES_URL, target: '_blank', rel: 'noopener noreferrer',
               style: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', boxSizing: 'border-box', padding: '12px 16px', background: 'var(--accent)', color: '#fff', borderRadius: 'var(--radius)', fontSize: '15px', fontWeight: 600, textDecoration: 'none', minHeight: '48px' }
-            }, '🔗 iServ-Dateiablage öffnen'),
-            React.createElement('p', { style: { fontSize: '12px', color: 'var(--text-muted)', margin: '12px 0 0', textAlign: 'center' } }, 'Öffnet krs.sh-schulen.de in einem neuen Tab (Login mit deinem iServ-Zugang).'),
+            }, '🔗 Dateiablage (Nextcloud) öffnen'),
+            React.createElement('p', { style: { fontSize: '12px', color: 'var(--text-muted)', margin: '12px 0 0', textAlign: 'center' } }, 'Öffnet cloud.realschule-schriesheim.de in einem neuen Tab (Login mit deinem Schul-Zugang).'),
             // v4.12.0: Links des aktuell gewählten Teams direkt im Modal
             React.createElement('div', { style: { borderTop: '1px solid var(--border)', margin: '16px -20px 0', padding: '14px 20px 0' } },
               team && dataService
@@ -8227,6 +8239,10 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.16.0', date: '11.07.2026', items: [
+        'Dateiablage: Hinweis und Link zeigen jetzt auf die Nextcloud der Schule statt auf iServ',
+        '🏠-Button zurück zum Hub erscheint nicht mehr, wenn Connect im Hub eingebettet läuft'
+      ] },
       { v: '4.15.0', date: '10.07.2026', items: [
         'Chat & Kanäle holen verpasste Nachrichten jetzt automatisch nach (Sicherheitsnetz, wenn das WLAN kurz hakt) — danke Patrick!',
         'Gruppenchats: Klick auf die Mitgliederzahl zeigt alle Mitglieder und lässt neue hinzufügen — danke Werner!',
@@ -10017,7 +10033,8 @@
             // v4.14.0: Zurück zum KRS Hub — gleiche Origin wie Connect (kurpfalz-realschule.github.io),
             // daher geteilte Supabase-Session; Navigation im selben Tab (kein neuer Tab wie bei Notizen,
             // weil man hier die App verlässt statt ein Zusatzmodul danebenzustellen).
-            React.createElement('button', {
+            // v4.16.0: Läuft Connect im Hub-iframe, ist man schon im Hub — Button ausblenden.
+            !window.__krsIsEmbedded && React.createElement('button', {
               className: 'nav-item',
               onClick: () => { window.location.href = window.KRS_HUB_URL; },
               title: 'Zurück zum KRS Hub',
@@ -10048,7 +10065,7 @@
             React.createElement('button', {
               className: 'nav-item' + (showFiles ? ' active' : ''),
               onClick: () => setShowFiles(true),
-              title: 'Dateiablage (iServ – Nextcloud folgt)',
+              title: 'Dateiablage (Nextcloud)',
               'aria-label': 'Dateiablage'
             },
               React.createElement('span', { dangerouslySetInnerHTML: { __html: Icons.files } })

@@ -25,4 +25,21 @@ test.describe('KRS Connect — Hub-Link', () => {
     const hubUrl = await page.evaluate(() => (window as any).KRS_HUB_URL);
     expect(hubUrl).toBe('https://kurpfalz-realschule.github.io/krs-hub/');
   });
+
+  // v4.16.0: Im Hub-iframe eingebettet ergibt der 🏠-Button keinen Sinn
+  // (man ist ja schon im Hub). Da Playwright echtes cross-origin iframe-
+  // Embedding nicht ohne Weiteres simulieren kann, setzen wir den Test-Hook
+  // window.__krsIsEmbedded vor dem App-Start per addInitScript.
+  test('Im Hub-Embed (__krsIsEmbedded) ist der Hub-Button ausgeblendet', async ({ page }) => {
+    await page.addInitScript(() => {
+      (window as any).__krsIsEmbedded = true;
+      try { localStorage.setItem('krs_onboarding_done', '1'); } catch (e) {}
+    });
+    const params = new URLSearchParams({ forceMode: 'demo', forceUser: 'nk' });
+    await page.goto(`/index.html?${params.toString()}`);
+    await page.waitForFunction(() => typeof (window as any).KRS_VERSION === 'string', null, { timeout: 10_000 });
+
+    expect(await page.evaluate(() => (window as any).__krsIsEmbedded)).toBe(true);
+    await expect(page.getByTestId('nav-hub')).toHaveCount(0);
+  });
 });

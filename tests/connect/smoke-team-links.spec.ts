@@ -170,7 +170,7 @@ test.describe('Team-Links — UI (Demo)', () => {
     await expect(dialog).toContainText(/http:\/\/ oder https:\/\//);
   });
 
-  test('Dateiablage-Modal (Sidebar) zeigt weiterhin iServ-Hinweis und zusätzlich den Team-Links-Bereich', async ({ connectPage: page }) => {
+  test('Dateiablage-Modal (Sidebar) zeigt weiterhin Nextcloud-Hinweis und zusätzlich den Team-Links-Bereich', async ({ connectPage: page }) => {
     // Erst Team wählen, damit das Modal die Team-Links kennt
     const teamBtn = page.locator('.list-item', { hasText: 'Kollegium' }).first();
     if (await teamBtn.count() === 0) {
@@ -186,9 +186,9 @@ test.describe('Team-Links — UI (Demo)', () => {
 
     const dialog = page.locator('.modal-overlay[aria-label="Dateiablage"]').first();
     await expect(dialog).toBeVisible({ timeout: 5_000 });
-    // Bestehender Platzhalter (v4.7.0) bleibt erhalten …
+    // Bestehender Platzhalter (v4.7.0, v4.16.0: Nextcloud statt iServ) bleibt erhalten …
     await expect(dialog).toContainText(/Nextcloud/i);
-    await expect(dialog.locator('a[target="_blank"]').first()).toHaveAttribute('href', 'https://krs.sh-schulen.de');
+    await expect(dialog.locator('a[target="_blank"]').first()).toHaveAttribute('href', 'https://cloud.realschule-schriesheim.de');
     // … und der neue Team-Links-Bereich erscheint darunter
     await expect(dialog.locator('[data-testid="team-links-section"]').first()).toBeVisible({ timeout: 5_000 });
   });
