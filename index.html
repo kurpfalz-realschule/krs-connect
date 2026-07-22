@@ -28,7 +28,7 @@
       /* Text (mit Hub harmonisiert) */
       --text-primary: #1e293b;
       --text-secondary: #475569;
-      --text-muted: #64748b;
+      --text-muted: #525E70;
 
       /* Akzent — identisch zu Hub --primary für konsistentes Branding */
       --accent: #2563eb;
@@ -37,13 +37,13 @@
       --accent-soft: #dbeafe;
 
       /* Semantische Akzente (Connect-Spezifika) */
-      --accent-orange: #D4762C;   /* Pinned */
-      --accent-amber: #E8A832;    /* Highlight */
+      --accent-orange: #A8551A;   /* Pinned */
+      --accent-amber: #8A6206;    /* Highlight */
 
       /* Status-Farben (mit Hub harmonisiert) */
-      --success: #16a34a;
+      --success: #15803D;
       --success-light: #dcfce7;
-      --warning: #d97706;
+      --warning: #B45309;
       --warning-light: #fef3c7;
       --danger: #dc2626;
       --danger-bg: #fee2e2;
@@ -146,7 +146,7 @@
 
     .nav-item svg { width: 20px; height: 20px; }
     .nav-item:hover { color: var(--accent); background: var(--bg-hover); }
-    .nav-item.active { color: var(--accent); background: var(--accent-light); }
+    .nav-item.active { color: var(--accent); background: var(--accent-light); box-shadow: inset 3px 0 0 var(--accent); }
 
     .sidebar-bottom {
       display: flex;
@@ -235,7 +235,7 @@
     }
 
     .search-input::placeholder { color: var(--text-muted); }
-    .search-input:focus { outline: none; border-color: var(--accent); }
+    .search-input:focus { outline: 2px solid #1D4ED8; outline-offset: 2px; border-color: var(--accent); }
 
     .sidebar-list {
       flex: 1;
@@ -259,7 +259,7 @@
     }
 
     .list-item:hover { background: var(--bg-hover); }
-    .list-item.active { background: var(--accent-light); color: var(--accent); font-weight: 500; }
+    .list-item.active { background: var(--accent-light); color: var(--accent); font-weight: 600; }
     .list-item-icon { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
     .list-item-text { flex: 1; font-size: 13px; }
     .list-item-badge { font-size: 11px; background: var(--danger); color: white; padding: 2px 6px; border-radius: 10px; }
@@ -485,7 +485,8 @@
     .mention-tag-all { color: var(--danger); font-weight: 700; background: rgba(239,68,68,0.1); padding: 1px 6px; border-radius: 4px; }
 
     /* Rich-Text-Editor (contentEditable WYSIWYG) */
-    .rich-editor { display:block; width:100%; padding:8px 0; border:none; background:transparent; color:var(--text-primary); font-size:14px; min-height:60px; font-family:inherit; outline:none; white-space:pre-wrap; overflow-wrap:anywhere; }
+    .rich-editor { display:block; width:100%; padding:8px 0; border:none; background:transparent; color:var(--text-primary); font-size:14px; min-height:60px; font-family:inherit; white-space:pre-wrap; overflow-wrap:anywhere; }
+    .rich-editor:focus { outline: 2px solid #1D4ED8; outline-offset: 2px; }
     .rich-editor:empty::before { content: attr(data-placeholder); color: var(--text-muted); pointer-events:none; }
     .rich-editor p { margin: 6px 0; }
     .rich-editor ul, .rich-editor ol { margin: 6px 0; padding-left: 22px; }
@@ -642,7 +643,7 @@
       font-family: inherit;
     }
 
-    .compose-input:focus { outline: none; border-color: var(--accent); }
+    .compose-input:focus { outline: 2px solid #1D4ED8; outline-offset: 2px; border-color: var(--accent); }
 
     .compose-btn {
       width: 36px;
@@ -723,8 +724,8 @@
 
     /* Poll Creator */
     .poll-creator { background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px; margin-top: 8px; }
-    .poll-creator input { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-primary); color: var(--text-primary); font-size: 13px; outline: none; margin-bottom: 6px; box-sizing: border-box; }
-    .poll-creator input:focus { border-color: var(--accent); }
+    .poll-creator input { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-primary); color: var(--text-primary); font-size: 13px; margin-bottom: 6px; box-sizing: border-box; }
+    .poll-creator input:focus { outline: 2px solid #1D4ED8; outline-offset: 2px; border-color: var(--accent); }
     .poll-creator .poll-option-row { display: flex; gap: 6px; margin-bottom: 6px; }
     .poll-creator .poll-option-row input { flex: 1; margin-bottom: 0; }
     .poll-creator .poll-option-row button { flex-shrink: 0; width: 32px; height: 32px; border: none; background: none; cursor: pointer; color: var(--text-muted); font-size: 16px; border-radius: var(--radius); }
@@ -776,10 +777,9 @@
       background: var(--bg-primary);
       color: var(--text-primary);
       font-size: 14px;
-      outline: none;
       box-sizing: border-box;
     }
-    .channel-dialog input:focus { border-color: var(--accent); }
+    .channel-dialog input:focus { outline: 2px solid #1D4ED8; outline-offset: 2px; border-color: var(--accent); }
     .channel-dialog .dialog-actions {
       display: flex;
       gap: 8px;
@@ -839,7 +839,7 @@
       font-size: 13px;
     }
 
-    .emoji-picker-header input:focus { outline: none; border-color: var(--accent); }
+    .emoji-picker-header input:focus { outline: 2px solid #1D4ED8; outline-offset: 2px; border-color: var(--accent); }
 
     .emoji-grid {
       flex: 1;
@@ -936,7 +936,8 @@
     }
 
     .setup-screen input:focus {
-      outline: none;
+      outline: 2px solid #1D4ED8;
+      outline-offset: 2px;
       border-color: var(--accent);
     }
 
@@ -1007,7 +1008,7 @@
 
     .conversation-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 16px; border: none; background: none; cursor: pointer; text-align: left; transition: background var(--transition); border-bottom: 1px solid var(--border); }
     .conversation-item:hover { background: var(--bg-hover); }
-    .conversation-item.active { background: var(--accent-light); }
+    .conversation-item.active { background: var(--accent-light); box-shadow: inset 3px 0 0 var(--accent); }
     .conversation-info { flex: 1; min-width: 0; }
     .conversation-name { font-weight: 600; font-size: 14px; color: var(--text-primary); }
     .conversation-preview { font-size: 13px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
@@ -1044,7 +1045,7 @@
     .form-group { margin-bottom: 14px; }
     .form-label { display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; }
     .form-input { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-primary); color: var(--text-primary); font-size: 14px; box-sizing: border-box; }
-    .form-input:focus { outline: none; border-color: var(--accent); }
+    .form-input:focus { outline: 2px solid #1D4ED8; outline-offset: 2px; border-color: var(--accent); }
     .color-picker { display: flex; gap: 8px; flex-wrap: wrap; }
     .color-swatch { width: 32px; height: 32px; border-radius: 50%; border: 3px solid transparent; cursor: pointer; transition: all var(--transition); }
     .color-swatch.selected { border-color: var(--text-primary); transform: scale(1.1); }
@@ -1104,7 +1105,7 @@
 
     .chat-input-bar { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); align-items: flex-end; }
     .chat-input-bar input { flex: 1; padding: 10px 14px; border-radius: 20px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); font-size: 14px; }
-    .chat-input-bar input:focus { outline: none; border-color: var(--accent); }
+    .chat-input-bar input:focus { outline: 2px solid #1D4ED8; outline-offset: 2px; border-color: var(--accent); }
     .chat-send-btn { width: 40px; height: 40px; border-radius: 50%; background: var(--accent); color: white; border: none; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; transition: all var(--transition); flex-shrink: 0; }
     .chat-send-btn:hover { background: var(--accent-hover); }
     .chat-send-btn:disabled { background: var(--text-muted); cursor: not-allowed; }
@@ -1242,7 +1243,7 @@
     .feedback-star.active { color: #f59e0b; }
     .feedback-label { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; }
     .feedback-textarea { width: 100%; min-height: 100px; border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; font-size: 14px; font-family: inherit; resize: vertical; background: var(--bg-primary); color: var(--text-primary); }
-    .feedback-textarea:focus { outline: none; border-color: var(--accent); }
+    .feedback-textarea:focus { outline: 2px solid #1D4ED8; outline-offset: 2px; border-color: var(--accent); }
     .feedback-actions { display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end; }
     .feedback-btn { padding: 10px 20px; border-radius: var(--radius); border: none; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.15s; }
     .feedback-btn-cancel { background: var(--bg-tertiary); color: var(--text-primary); }
@@ -1357,6 +1358,14 @@
     }
     @keyframes slideDown { from { transform: translateY(-100%); } to { transform: translateY(0); } }
     body.offline-mode .app-layout { margin-top: 32px; height: calc(100vh - 32px); }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
 
   </style>
 </head>
@@ -4227,6 +4236,7 @@
       header.appendChild(h3); header.appendChild(actions);
 
       const iframe = document.createElement('iframe');
+      iframe.title = title;
       iframe.src = url; iframe.sandbox = 'allow-same-origin allow-popups allow-scripts';
       iframe.setAttribute('loading', 'lazy');
       const loadTimeout = setTimeout(() => { showWikiError(popup, url, title); }, CONFIG.WIKI_LOAD_TIMEOUT);
@@ -4863,7 +4873,7 @@
       return React.createElement('div', { className: 'emoji-picker-overlay', onClick: onClose },
         React.createElement('div', { className: 'emoji-picker', style: pickerStyle, onClick: e => e.stopPropagation() },
           React.createElement('div', { className: 'emoji-picker-header' },
-            React.createElement('input', { type: 'text', placeholder: 'Emoji suchen...', value: search, onChange: e => setSearch(e.target.value), autoFocus: true })
+            React.createElement('input', { type: 'text', placeholder: 'Emoji suchen...', 'aria-label': 'Emoji suchen...', value: search, onChange: e => setSearch(e.target.value), autoFocus: true })
           ),
           React.createElement('div', { className: 'emoji-grid' },
             Object.entries(filtered).map(([cat, emojis]) =>
@@ -5171,8 +5181,8 @@
         React.createElement('h1', null, '🔑 Neues Passwort setzen'),
         React.createElement('p', { style: { color: 'var(--text-secondary)', marginBottom: '20px', maxWidth: '360px', textAlign: 'center' } }, 'Bitte vergib ein neues Passwort für deinen Zugang (mindestens 8 Zeichen).'),
         React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', maxWidth: '320px', marginBottom: '16px' } },
-          React.createElement('input', { type: 'password', placeholder: 'Neues Passwort', value: pw, onChange: (e) => setPw(e.target.value), disabled: loading, autoComplete: 'new-password', style: inputStyle }),
-          React.createElement('input', { type: 'password', placeholder: 'Neues Passwort bestätigen', value: pw2, onChange: (e) => setPw2(e.target.value), onKeyDown: (e) => e.key === 'Enter' && submit(), disabled: loading, autoComplete: 'new-password', style: inputStyle }),
+          React.createElement('input', { type: 'password', placeholder: 'Neues Passwort', 'aria-label': 'Neues Passwort', value: pw, onChange: (e) => setPw(e.target.value), disabled: loading, autoComplete: 'new-password', style: inputStyle }),
+          React.createElement('input', { type: 'password', placeholder: 'Neues Passwort bestätigen', 'aria-label': 'Neues Passwort bestätigen', value: pw2, onChange: (e) => setPw2(e.target.value), onKeyDown: (e) => e.key === 'Enter' && submit(), disabled: loading, autoComplete: 'new-password', style: inputStyle }),
           React.createElement('button', { onClick: submit, disabled: loading || !pw || !pw2, style: { padding: '12px 40px', fontSize: '16px' } }, loading ? 'Speichern...' : '💾 Passwort speichern')
         ),
         error && React.createElement('p', { style: { color: 'var(--danger)', marginTop: '4px', fontSize: '13px', maxWidth: '320px', textAlign: 'center' } }, error)
@@ -5378,6 +5388,7 @@
           React.createElement('input', {
             type: 'email',
             placeholder: 'E-Mail-Adresse (Schul-Mail)',
+            'aria-label': 'E-Mail-Adresse (Schul-Mail)',
             value: email,
             onChange: (e) => setEmail(e.target.value),
             onKeyDown: (e) => e.key === 'Enter' && handleMagicLink(),
@@ -5388,6 +5399,7 @@
           React.createElement('input', {
             type: 'password',
             placeholder: 'Passwort',
+            'aria-label': 'Passwort',
             value: password,
             onChange: (e) => setPassword(e.target.value),
             onKeyDown: (e) => e.key === 'Enter' && handleMagicLink(),
@@ -5543,11 +5555,13 @@
           },
             React.createElement('input', {
               placeholder: 'Name',
+              'aria-label': 'Name',
               value: inviteName, onChange: e => setInviteName(e.target.value),
               style: { flex: '1', minWidth: '120px', padding: '8px 12px', fontSize: '13px', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }
             }),
             React.createElement('input', {
               placeholder: 'E-Mail (@realschule-schriesheim.de)',
+              'aria-label': 'E-Mail (@realschule-schriesheim.de)',
               value: inviteEmail, onChange: e => setInviteEmail(e.target.value),
               onKeyDown: e => e.key === 'Enter' && handleInvite(),
               style: { flex: '2', minWidth: '200px', padding: '8px 12px', fontSize: '13px', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }
@@ -5611,8 +5625,10 @@
                       React.createElement('div', { style: { fontSize: '12px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis' } }, u.email || '–')
                     ),
                     // Role Badge
-                    React.createElement('span', {
+                    React.createElement('button', {
+                      type: 'button',
                       style: {
+                        border: 'none', font: 'inherit',
                         fontSize: '11px', padding: '2px 8px', borderRadius: '4px',
                         background: u.role === 'admin' ? 'var(--accent-light)' : 'var(--bg-tertiary)',
                         color: u.role === 'admin' ? 'var(--accent)' : 'var(--text-muted)',
@@ -5700,11 +5716,11 @@
 
       return React.createElement('div', { className: 'poll-creator' },
         React.createElement('div', { style: { fontWeight: '600', fontSize: '13px', marginBottom: '8px', color: 'var(--text-primary)' } }, '📊 Umfrage erstellen'),
-        React.createElement('input', { placeholder: 'Frage eingeben...', value: question, onChange: e => setQuestion(e.target.value), autoFocus: true }),
+        React.createElement('input', { placeholder: 'Frage eingeben...', 'aria-label': 'Frage eingeben...', value: question, onChange: e => setQuestion(e.target.value), autoFocus: true }),
         React.createElement('div', { style: { fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px' } }, 'Optionen:'),
         options.map((opt, idx) =>
           React.createElement('div', { key: idx, className: 'poll-option-row' },
-            React.createElement('input', { placeholder: 'Option ' + (idx + 1), value: opt, onChange: e => updateOption(idx, e.target.value), onKeyDown: e => { if (e.key === 'Enter') { e.preventDefault(); if (idx === options.length - 1) addOption(); } } }),
+            React.createElement('input', { placeholder: 'Option ' + (idx + 1), 'aria-label': 'Option ' + (idx + 1), value: opt, onChange: e => updateOption(idx, e.target.value), onKeyDown: e => { if (e.key === 'Enter') { e.preventDefault(); if (idx === options.length - 1) addOption(); } } }),
             options.length > 2 && React.createElement('button', { type: 'button', onClick: () => removeOption(idx), title: 'Entfernen' }, '✕')
           )
         ),
@@ -6027,14 +6043,14 @@
           }, '✏️ Beitrag schreiben...'),
           // Expanded form (only when clicked)
           showPostForm && React.createElement('form', { onSubmit: handleCreatePost, style: { background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '14px' } },
-            React.createElement('input', { type: 'text', placeholder: 'Titel (optional)', value: newPostTitle, onChange: e => setNewPostTitle(e.target.value), style: { display: 'block', width: '100%', padding: '8px 0', marginBottom: '8px', border: 'none', borderBottom: '1px solid var(--border)', background: 'transparent', color: 'var(--text-primary)', fontSize: '15px', fontWeight: '600', outline: 'none' } }),
+            React.createElement('input', { type: 'text', placeholder: 'Titel (optional)', 'aria-label': 'Titel (optional)', value: newPostTitle, onChange: e => setNewPostTitle(e.target.value), style: { display: 'block', width: '100%', padding: '8px 0', marginBottom: '8px', border: 'none', borderBottom: '1px solid var(--border)', background: 'transparent', color: 'var(--text-primary)', fontSize: '15px', fontWeight: '600', outline: 'none' } }),
             React.createElement(MentionTextarea, { value: newPostContent, onChange: setNewPostContent, allUsers: allUsers, autoFocus: true }),
             // File preview area (multi-file grid)
             selectedFiles.length > 0 && React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' } },
               selectedFiles.map((sf, idx) =>
                 React.createElement('div', { key: idx, style: { position: 'relative', display: 'inline-block' } },
                   sf.preview
-                    ? React.createElement('img', { src: sf.preview, style: { width: '80px', height: '80px', objectFit: 'cover', borderRadius: 'var(--radius)', border: '1px solid var(--border)' } })
+                    ? React.createElement('img', { src: sf.preview, alt: sf.file.name, style: { width: '80px', height: '80px', objectFit: 'cover', borderRadius: 'var(--radius)', border: '1px solid var(--border)' } })
                     : React.createElement('div', { style: { width: '80px', height: '80px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', fontSize: '10px', color: 'var(--text-muted)', padding: '4px', textAlign: 'center', overflow: 'hidden' } },
                         React.createElement('span', { style: { fontSize: '20px', marginBottom: '2px' } }, '📎'),
                         React.createElement('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70px' } }, sf.file.name)
@@ -6143,7 +6159,7 @@
             ),
             isEditing
               ? React.createElement('div', { style: { padding: '8px 0' } },
-                  React.createElement('input', { type: 'text', value: editTitle, onChange: e => setEditTitle(e.target.value), placeholder: 'Titel (optional)', style: { display: 'block', width: '100%', padding: '6px 8px', marginBottom: '6px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: '14px', fontWeight: '600' } }),
+                  React.createElement('input', { type: 'text', value: editTitle, onChange: e => setEditTitle(e.target.value), placeholder: 'Titel (optional)', 'aria-label': 'Titel (optional)', style: { display: 'block', width: '100%', padding: '6px 8px', marginBottom: '6px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: '14px', fontWeight: '600' } }),
                   React.createElement(MentionTextarea, { value: editContent, onChange: setEditContent, allUsers: allUsers, style: { minHeight: '80px' } }),
                   React.createElement('div', { style: { display: 'flex', gap: '8px', marginTop: '8px' } },
                     React.createElement('button', { onClick: () => handleSaveEdit(post.id), style: { padding: '6px 14px', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: 'var(--radius)', cursor: 'pointer', fontSize: '13px' } }, 'Speichern'),
@@ -6289,7 +6305,7 @@
               replyFiles.length > 0 && React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px' } },
                 replyFiles.map((sf, idx) => React.createElement('div', { key: idx, style: { position: 'relative', display: 'inline-block' } },
                   sf.preview
-                    ? React.createElement('img', { src: sf.preview, style: { width: '56px', height: '56px', objectFit: 'cover', borderRadius: 'var(--radius)', border: '1px solid var(--border)' } })
+                    ? React.createElement('img', { src: sf.preview, alt: sf.file.name, style: { width: '56px', height: '56px', objectFit: 'cover', borderRadius: 'var(--radius)', border: '1px solid var(--border)' } })
                     : React.createElement('div', { style: { width: '56px', height: '56px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', fontSize: '9px', color: 'var(--text-muted)', padding: '2px', textAlign: 'center', overflow: 'hidden' } },
                         React.createElement('span', { style: { fontSize: '16px' } }, '📎'),
                         React.createElement('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '50px' } }, sf.file.name)),
@@ -6347,7 +6363,7 @@
         }
       };
 
-      return React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', onClick: onClose },
+      return React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Team erstellen', onClick: onClose },
         React.createElement('div', { className: 'modal', onClick: e => e.stopPropagation() },
           React.createElement('div', { className: 'modal-header' },
             React.createElement('h3', null, 'Team erstellen')
@@ -6355,8 +6371,9 @@
           React.createElement('form', { onSubmit: handleCreate, className: 'modal-body' },
             error && React.createElement('div', { style: { background: 'var(--danger-bg, #fee)', color: 'var(--danger, #c33)', padding: '10px 12px', borderRadius: 'var(--radius)', marginBottom: '15px', fontSize: '13px' } }, error),
             React.createElement('div', { className: 'form-group' },
-              React.createElement('label', { className: 'form-label' }, 'Team-Name'),
+              React.createElement('label', { className: 'form-label', htmlFor: 'krs-team-name' }, 'Team-Name'),
               React.createElement('input', {
+                id: 'krs-team-name',
                 type: 'text',
                 className: 'form-input',
                 placeholder: 'z.B. Musik Fachschaft',
@@ -6366,8 +6383,9 @@
               })
             ),
             React.createElement('div', { className: 'form-group' },
-              React.createElement('label', { className: 'form-label' }, 'Beschreibung (optional)'),
+              React.createElement('label', { className: 'form-label', htmlFor: 'krs-team-beschreibung' }, 'Beschreibung (optional)'),
               React.createElement('input', {
+                id: 'krs-team-beschreibung',
                 type: 'text',
                 className: 'form-input',
                 placeholder: 'Kurze Beschreibung...',
@@ -6376,8 +6394,9 @@
               })
             ),
             React.createElement('div', { className: 'form-group' },
-              React.createElement('label', { className: 'form-label' }, 'Icon (2 Zeichen)'),
+              React.createElement('label', { className: 'form-label', htmlFor: 'krs-team-icon' }, 'Icon (2 Zeichen)'),
               React.createElement('input', {
+                id: 'krs-team-icon',
                 type: 'text',
                 className: 'form-input',
                 placeholder: 'z.B. MU',
@@ -6429,7 +6448,7 @@
         else setSelected(prev => { const n = new Set(prev); okIds.forEach(i => n.delete(i)); return n; });
       };
 
-      return React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', onClick: onClose },
+      return React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': '🧹 Teams aufräumen', onClick: onClose },
         React.createElement('div', { className: 'modal', onClick: e => e.stopPropagation(), style: { width: '520px', maxWidth: '96vw', maxHeight: '88vh', display: 'flex', flexDirection: 'column' } },
           React.createElement('div', { className: 'modal-header' }, React.createElement('h3', null, '🧹 Teams aufräumen')),
           React.createElement('div', { className: 'modal-body', style: { overflowY: 'auto' } },
@@ -6440,7 +6459,7 @@
                   key: t.id,
                   style: { display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 6px', borderBottom: '1px solid var(--border)', cursor: 'pointer' }
                 },
-                  React.createElement('input', { type: 'checkbox', checked: selected.has(t.id), onChange: () => toggle(t.id), style: { width: '18px', height: '18px', cursor: 'pointer' } }),
+                  React.createElement('input', { type: 'checkbox', checked: selected.has(t.id), onChange: () => toggle(t.id), 'aria-label': t.name, style: { width: '18px', height: '18px', cursor: 'pointer' } }),
                   React.createElement('span', { style: { width: '28px', height: '28px', borderRadius: '8px', background: t.icon_color || 'var(--accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, flexShrink: 0 } }, (t.icon_text || (t.name || '?').substring(0, 2)).toUpperCase()),
                   React.createElement('span', { style: { flex: 1, fontSize: '14px' } }, t.name),
                   t._archived && React.createElement('span', { style: { fontSize: '11px', color: 'var(--text-muted)', background: 'var(--bg-tertiary)', padding: '2px 8px', borderRadius: '10px' } }, 'archiviert')
@@ -6532,7 +6551,7 @@
         }
       };
 
-      return React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', onClick: onClose },
+      return React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Mitgliederverwaltung', onClick: onClose },
         React.createElement('div', { className: 'modal', onClick: e => e.stopPropagation(), style: { width: '480px' } },
           React.createElement('div', { className: 'modal-header' },
             React.createElement('h3', null, 'Mitgliederverwaltung')
@@ -6583,6 +6602,7 @@
                 type: 'text',
                 className: 'form-input',
                 placeholder: 'Benutzer suchen...',
+                'aria-label': 'Benutzer suchen...',
                 value: searchTerm,
                 onChange: e => setSearchTerm(e.target.value),
                 style: { marginBottom: '10px' }
@@ -6709,6 +6729,7 @@
               key: 'search-input',
               type: 'text',
               placeholder: 'Kolleg:in suchen...',
+              'aria-label': 'Kolleg:in suchen...',
               value: chatSearch,
               onChange: e => setChatSearch(e.target.value),
               autoFocus: true,
@@ -6726,15 +6747,16 @@
               ))
           ]
         ),
-        showGroupChat && React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', onClick: () => setShowGroupChat(false) },
+        showGroupChat && React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Neuer Gruppenchat', onClick: () => setShowGroupChat(false) },
           React.createElement('div', { className: 'modal', onClick: e => e.stopPropagation() },
             React.createElement('div', { className: 'modal-header' },
               React.createElement('h3', null, 'Neuer Gruppenchat')
             ),
             React.createElement('form', { onSubmit: handleCreateGroup, className: 'modal-body' },
               React.createElement('div', { className: 'form-group' },
-                React.createElement('label', { className: 'form-label' }, 'Gruppennamen'),
+                React.createElement('label', { className: 'form-label', htmlFor: 'krs-gruppenname' }, 'Gruppennamen'),
                 React.createElement('input', {
+                  id: 'krs-gruppenname',
                   type: 'text',
                   className: 'form-input',
                   placeholder: 'z.B. Projektteam',
@@ -6751,7 +6773,8 @@
                       React.createElement('input', {
                         type: 'checkbox',
                         checked: selectedMembers.has(user.id),
-                        onChange: () => toggleMember(user.id)
+                        onChange: () => toggleMember(user.id),
+                        'aria-label': user.display_name
                       }),
                       React.createElement(Avatar, { user, size: 24 }),
                       React.createElement('span', null, user.display_name)
@@ -6775,6 +6798,7 @@
                 key: conv.id,
                 className: 'conversation-item' + (selectedId === conv.id ? ' active' : ''),
                 onClick: () => onSelect(conv),
+                'aria-current': selectedId === conv.id ? 'page' : undefined,
                 style: { flex: 1, minWidth: 0 }
               },
               conv.is_group ? React.createElement('div', { className: 'group-avatar', style: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '40px', height: '40px', borderRadius: '8px', background: 'var(--accent)', color: 'white', fontWeight: '600', fontSize: '18px' } }, '👥') : React.createElement('div', { className: 'avatar-wrapper' },
@@ -7171,7 +7195,7 @@
           chatFiles.map((sf, idx) =>
             React.createElement('div', { key: idx, style: { position: 'relative', display: 'inline-block' } },
               sf.preview
-                ? React.createElement('img', { src: sf.preview, style: { width: '60px', height: '60px', objectFit: 'cover', borderRadius: '8px' } })
+                ? React.createElement('img', { src: sf.preview, alt: sf.file.name, style: { width: '60px', height: '60px', objectFit: 'cover', borderRadius: '8px' } })
                 : React.createElement('div', { style: { width: '60px', height: '60px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-tertiary)', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '9px', color: 'var(--text-muted)', padding: '2px', textAlign: 'center' } },
                     React.createElement('span', { style: { fontSize: '16px' } }, '📎'),
                     React.createElement('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '54px' } }, sf.file.name)
@@ -7229,7 +7253,7 @@
             !groupMemberIds.some(id => String(id) === String(u.id)) &&
             (memberSearch.trim() === '' ? false : (u.display_name || '').toLowerCase().includes(memberSearch.trim().toLowerCase()))
           ).slice(0, 8);
-          return React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', onClick: () => setShowGroupMembers(false) },
+          return React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': '👥 ' + (conversation.name || 'Gruppenchat'), onClick: () => setShowGroupMembers(false) },
             React.createElement('div', { className: 'modal', 'data-testid': 'group-members-modal', onClick: e => e.stopPropagation(), style: { width: '420px' } },
               React.createElement('div', { className: 'modal-header' },
                 React.createElement('h3', null, '👥 ' + (conversation.name || 'Gruppenchat')),
@@ -7249,6 +7273,7 @@
                   type: 'text',
                   className: 'form-input',
                   placeholder: 'Namen suchen…',
+                  'aria-label': 'Namen suchen…',
                   value: memberSearch,
                   'data-testid': 'group-member-search',
                   onChange: e => setMemberSearch(e.target.value),
@@ -7356,6 +7381,7 @@
           React.createElement('input', {
             type: 'text',
             placeholder: 'Posts und Nachrichten durchsuchen...',
+            'aria-label': 'Posts und Nachrichten durchsuchen...',
             value: query,
             onChange: e => handleSearch(e.target.value),
             style: { width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box', outline: 'none' }
@@ -7471,6 +7497,7 @@
           React.createElement('input', {
             'data-testid': 'team-link-titel',
             placeholder: 'Titel (z. B. „iServ-Ordner Fachschaft")',
+            'aria-label': 'Titel (z. B. „iServ-Ordner Fachschaft")',
             value: form.titel, autoFocus: true, maxLength: 120,
             onChange: setField('titel'),
             onKeyDown: (e) => { if (e.key === 'Escape') onClose(); }
@@ -7478,6 +7505,7 @@
           React.createElement('input', {
             'data-testid': 'team-link-url',
             placeholder: 'https://… (nur http/https)',
+            'aria-label': 'https://… (nur http/https)',
             value: form.url, maxLength: 500, type: 'url', inputMode: 'url',
             onChange: setField('url'),
             onKeyDown: (e) => { if (e.key === 'Escape') onClose(); }
@@ -7486,6 +7514,7 @@
           React.createElement('input', {
             'data-testid': 'team-link-beschreibung',
             placeholder: 'Beschreibung (optional)',
+            'aria-label': 'Beschreibung (optional)',
             value: form.beschreibung, maxLength: 300,
             onChange: setField('beschreibung'),
             onKeyDown: (e) => { if (e.key === 'Escape') onClose(); }
@@ -7493,6 +7522,7 @@
           React.createElement('input', {
             'data-testid': 'team-link-icon',
             placeholder: 'Icon/Emoji (optional, z. B. 📁)',
+            'aria-label': 'Icon/Emoji (optional, z. B. 📁)',
             value: form.icon, maxLength: 8,
             onChange: setField('icon'),
             onKeyDown: (e) => { if (e.key === 'Escape') onClose(); }
@@ -7620,6 +7650,7 @@
           React.createElement('input', {
             'data-testid': 'team-termin-titel',
             placeholder: 'Titel (z. B. „Fachschaftssitzung")',
+            'aria-label': 'Titel (z. B. „Fachschaftssitzung")',
             value: form.titel, autoFocus: true, maxLength: 120,
             onChange: setField('titel'),
             onKeyDown: (e) => { if (e.key === 'Escape') onClose(); }
@@ -7641,6 +7672,7 @@
           React.createElement('input', {
             'data-testid': 'team-termin-ort',
             placeholder: 'Ort (optional)',
+            'aria-label': 'Ort (optional)',
             value: form.ort, maxLength: 120,
             onChange: setField('ort'),
             onKeyDown: (e) => { if (e.key === 'Escape') onClose(); }
@@ -7648,6 +7680,7 @@
           React.createElement('input', {
             'data-testid': 'team-termin-beschreibung',
             placeholder: 'Beschreibung (optional)',
+            'aria-label': 'Beschreibung (optional)',
             value: form.beschreibung, maxLength: 500,
             onChange: setField('beschreibung'),
             onKeyDown: (e) => { if (e.key === 'Escape') onClose(); }
@@ -7887,7 +7920,7 @@
         onClose();
       };
 
-      return React.createElement('div', { className: 'feedback-overlay', role: 'dialog', 'aria-modal': 'true', onClick: (ev) => { if (ev.target === ev.currentTarget) onClose(); } },
+      return React.createElement('div', { className: 'feedback-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': '📣 Feedback geben', onClick: (ev) => { if (ev.target === ev.currentTarget) onClose(); } },
         React.createElement('div', { className: 'feedback-modal' },
           React.createElement('div', { className: 'feedback-title' }, '📣', ' Feedback geben'),
 
@@ -7918,6 +7951,7 @@
           React.createElement('textarea', {
             className: 'feedback-textarea',
             placeholder: 'Was funktioniert gut? Was können wir verbessern? Wo hakt es?',
+            'aria-label': 'Was funktioniert gut? Was können wir verbessern? Wo hakt es?',
             value: message,
             onChange: (ev) => setMessage(ev.target.value),
             maxLength: 2000
@@ -7983,7 +8017,7 @@
       const filtered = (items || []).filter(it => filter === 'alle' || it.status === filter);
       const countBy = (s) => (items || []).filter(it => it.status === s).length;
 
-      return React.createElement('div', { className: 'feedback-overlay', role: 'dialog', 'aria-modal': 'true', onClick: (ev) => { if (ev.target === ev.currentTarget) onClose(); } },
+      return React.createElement('div', { className: 'feedback-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': '📋 Feedback-Board', onClick: (ev) => { if (ev.target === ev.currentTarget) onClose(); } },
         React.createElement('div', { className: 'feedback-modal fb-board-modal' },
           React.createElement('div', { className: 'feedback-title', style: { justifyContent: 'space-between' } },
             React.createElement('span', null, '📋 Feedback-Board ', React.createElement('span', { style: { fontSize: '11px', fontWeight: 800, background: 'var(--accent-orange,#f59e0b)', color: '#fff', padding: '2px 7px', borderRadius: '10px', verticalAlign: 'middle' } }, 'BETA')),
@@ -8021,6 +8055,7 @@
                         isAdmin && React.createElement('select', {
                           className: 'fb-status-select',
                           style: { marginLeft: 'auto' },
+                          'aria-label': 'Status ändern',
                           value: it.status,
                           disabled: savingId === it.id,
                           onChange: (ev) => handleStatus(it.id, ev.target.value)
@@ -8081,7 +8116,7 @@
 
       return React.createElement('div', {
         className: 'modal-overlay',
-        role: 'dialog', 'aria-modal': 'true',
+        role: 'dialog', 'aria-modal': 'true', 'aria-label': s.title,
         style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }
       },
         React.createElement('div', {
@@ -8149,7 +8184,7 @@
       }, [onClose]);
       return React.createElement('div', {
         className: 'modal-overlay',
-        role: 'dialog', 'aria-modal': 'true',
+        role: 'dialog', 'aria-modal': 'true', 'aria-label': '❓ Hilfe & Tipps',
         onClick: onClose,
         style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }
       },
@@ -8372,8 +8407,8 @@
               }, 'Ändern')
             ),
             pwOpen && React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px', maxWidth: '340px' } },
-              React.createElement('input', { type: 'password', placeholder: 'Neues Passwort (mind. 8 Zeichen)', value: pwNew, onChange: (e) => setPwNew(e.target.value), disabled: pwLoading, autoComplete: 'new-password', style: { padding: '10px 14px', fontSize: '14px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', outline: 'none' } }),
-              React.createElement('input', { type: 'password', placeholder: 'Neues Passwort bestätigen', value: pwNew2, onChange: (e) => setPwNew2(e.target.value), onKeyDown: (e) => e.key === 'Enter' && submitPwChange(), disabled: pwLoading, autoComplete: 'new-password', style: { padding: '10px 14px', fontSize: '14px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', outline: 'none' } }),
+              React.createElement('input', { type: 'password', placeholder: 'Neues Passwort (mind. 8 Zeichen)', 'aria-label': 'Neues Passwort (mind. 8 Zeichen)', value: pwNew, onChange: (e) => setPwNew(e.target.value), disabled: pwLoading, autoComplete: 'new-password', style: { padding: '10px 14px', fontSize: '14px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', outline: 'none' } }),
+              React.createElement('input', { type: 'password', placeholder: 'Neues Passwort bestätigen', 'aria-label': 'Neues Passwort bestätigen', value: pwNew2, onChange: (e) => setPwNew2(e.target.value), onKeyDown: (e) => e.key === 'Enter' && submitPwChange(), disabled: pwLoading, autoComplete: 'new-password', style: { padding: '10px 14px', fontSize: '14px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', outline: 'none' } }),
               React.createElement('div', { style: { display: 'flex', gap: '8px' } },
                 React.createElement('button', { onClick: submitPwChange, disabled: pwLoading || !pwNew || !pwNew2, style: { flex: 1, padding: '10px 14px', minHeight: '44px', borderRadius: 'var(--radius)', border: 'none', background: 'var(--accent)', color: '#fff', cursor: 'pointer', fontSize: '13px', fontWeight: 600 } }, pwLoading ? 'Speichern...' : '💾 Speichern'),
                 React.createElement('button', { onClick: () => { setPwOpen(false); setPwNew(''); setPwNew2(''); setPwError(''); }, disabled: pwLoading, style: { padding: '10px 14px', minHeight: '44px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '13px' } }, 'Abbrechen')
@@ -8413,7 +8448,7 @@
       }, [onClose]);
       return React.createElement('div', {
         className: 'modal-overlay',
-        role: 'dialog', 'aria-modal': 'true',
+        role: 'dialog', 'aria-modal': 'true', 'aria-label': '🔒 Datenschutzhinweis',
         onClick: onClose,
         style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }
       },
@@ -9704,6 +9739,7 @@
                     React.createElement('button', {
                       className: 'list-item' + (selectedTeam?.id === team.id ? ' active' : ''),
                       onClick: () => handleTeamSelect(team),
+                      'aria-current': selectedTeam?.id === team.id ? 'page' : undefined,
                       style: { display: 'flex', gap: '8px', alignItems: 'center', width: '100%' }
                     },
                       React.createElement('div', { style: { width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: team.icon_color, borderRadius: 'var(--radius)', color: 'white', fontSize: '12px', fontWeight: '600' } }, team.icon_text),
@@ -9792,7 +9828,8 @@
                   key: ch.id,
                   className: 'list-item' + (selectedChannel?.id === ch.id ? ' active' : ''),
                   onClick: () => handleChannelSelect(ch),
-                  onContextMenu: (e) => handleChannelContextMenu(e, ch)
+                  onContextMenu: (e) => handleChannelContextMenu(e, ch),
+                  'aria-current': selectedChannel?.id === ch.id ? 'page' : undefined
                 },
                   React.createElement('span', { style: { fontSize: '12px' } }, '#'),
                   React.createElement('span', { className: 'list-item-text' + (unreadCount > 0 ? ' channel-unread' : '') }, ch.name),
@@ -9943,12 +9980,13 @@
           onDelete: handleDeleteTeam
         }),
         // Channel erstellen Dialog
-        showCreateChannel && React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', onClick: () => setShowCreateChannel(false) },
+        showCreateChannel && React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Neuen Kanal erstellen', onClick: () => setShowCreateChannel(false) },
           React.createElement('div', { className: 'channel-dialog', onClick: e => e.stopPropagation() },
             React.createElement('h3', null, '# Neuen Kanal erstellen'),
             React.createElement('p', { style: { fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 12px 0' } }, 'Kanal wird in „' + (selectedTeam?.name || '') + '" erstellt.'),
             React.createElement('input', {
               id: 'new-channel-name',
+              'aria-label': 'Kanalname',
               placeholder: 'Kanalname (z.\u00a0B. „Vertretung")',
               autoFocus: true,
               onKeyDown: (e) => { if (e.key === 'Enter') { handleCreateChannel(e.target.value); } if (e.key === 'Escape') setShowCreateChannel(false); }
@@ -9960,12 +9998,13 @@
           )
         ),
         // Channel umbenennen Dialog
-        editingChannel && React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', onClick: () => setEditingChannel(null) },
+        editingChannel && React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Kanal umbenennen', onClick: () => setEditingChannel(null) },
           React.createElement('div', { className: 'channel-dialog', onClick: e => e.stopPropagation() },
             React.createElement('h3', null, '# Kanal umbenennen'),
             React.createElement('input', {
               id: 'rename-channel-input',
               defaultValue: editingChannel.name,
+              'aria-label': 'Kanalname',
               autoFocus: true,
               onKeyDown: (e) => { if (e.key === 'Enter') handleRenameChannel(editingChannel.id, e.target.value); if (e.key === 'Escape') setEditingChannel(null); }
             }),
@@ -9984,7 +10023,7 @@
           )
         ),
         // Nachricht weiterleiten Modal
-        showForwardModal && React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', onClick: () => setShowForwardModal(null) },
+        showForwardModal && React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': showForwardModal.__file ? '↪ Datei weiterleiten' : '↪ Nachricht weiterleiten', onClick: () => setShowForwardModal(null) },
           React.createElement('div', { className: 'channel-dialog', style: { width: '340px' }, onClick: e => e.stopPropagation() },
             React.createElement('h3', null, showForwardModal.__file ? '↪ Datei weiterleiten' : '↪ Nachricht weiterleiten'),
             showForwardModal.__file && React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)', margin: '0 0 10px 0', fontSize: '13px' } },
@@ -10047,7 +10086,8 @@
               className: 'nav-item' + (view === 'teams' ? ' active' : ''),
               onClick: () => setView('teams'),
               title: 'Teams & Kanäle',
-              'aria-label': 'Teams & Kanäle'
+              'aria-label': 'Teams & Kanäle',
+              'aria-current': view === 'teams' ? 'page' : undefined
             },
               React.createElement('span', { dangerouslySetInnerHTML: { __html: Icons.teams } }),
               unreadPostChannels.size > 0 && React.createElement('span', { className: 'nav-badge' }, Array.from(unreadPostChannels.values()).reduce((a, b) => a + b, 0))
@@ -10056,7 +10096,8 @@
               className: 'nav-item' + (view === 'chat' ? ' active' : ''),
               onClick: () => setView('chat'),
               title: 'Chats',
-              'aria-label': 'Chats'
+              'aria-label': 'Chats',
+              'aria-current': view === 'chat' ? 'page' : undefined
             },
               React.createElement('span', { dangerouslySetInnerHTML: { __html: Icons.chat } }),
               unreadChatCount > 0 && React.createElement('span', { className: 'nav-badge' }, unreadChatCount > 9 ? '9+' : unreadChatCount)
@@ -10066,7 +10107,8 @@
               className: 'nav-item' + (showFiles ? ' active' : ''),
               onClick: () => setShowFiles(true),
               title: 'Dateiablage (Nextcloud)',
-              'aria-label': 'Dateiablage'
+              'aria-label': 'Dateiablage',
+              'aria-current': showFiles ? 'page' : undefined
             },
               React.createElement('span', { dangerouslySetInnerHTML: { __html: Icons.files } })
             ),
