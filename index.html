@@ -33,7 +33,14 @@
       /* Akzent — identisch zu Hub --primary für konsistentes Branding */
       --accent: #2563eb;
       --accent-hover: #1d4ed8;
-      --accent-light: rgba(37, 99, 235, 0.10);
+      /* A3 (22.07.2026, C-B-16): von 0.10 auf 0.06 reduziert — bei 0.10 lag der
+         Text-Kontrast von --accent auf --accent-light bei nur 4.48:1 (axe:
+         color-contrast, serious), knapp unter der WCAG-AA-Schwelle 4.5:1. Bei
+         0.06 sind es 4.77:1 (Sicherheitsabstand). Betrifft alle "aktiv"-Zustände,
+         die --accent als Textfarbe auf --accent-light-Hintergrund nutzen
+         (.nav-item.active, .list-item.active, .conversation-item.active,
+         .reaction.own, .group-avatar, .member-add-btn u. a.). */
+      --accent-light: rgba(37, 99, 235, 0.06);
       --accent-soft: #dbeafe;
 
       /* Semantische Akzente (Connect-Spezifika) */
@@ -1923,29 +1930,36 @@
     // ============================================================
     // MOCK DATA (KRS-specific)
     // ============================================================
+    // A3 (22.07.2026, C-B-17): Avatar-/Icon-Farbpalette auf WCAG-AA-taugliche
+    // Töne umgestellt. axe (color-contrast, serious) fand mehrere Original-Töne
+    // mit < 4.5:1 gegen den fest codierten weißen Avatar-Text (u. a. #f97316
+    // 2.80:1, #f59e0b 2.15:1, #7c6ff7 3.84:1, #ef4444 3.76:1). Jeder Ton wurde in
+    // derselben Farbfamilie (gleicher Hue) so weit abgedunkelt, bis er ≥ 4.5:1
+    // gegen #fff erreicht (Ziel 4.6:1 mit Sicherheitsabstand) — siehe TEAM_COLORS
+    // unten für die vollständige Palette inkl. Vorher/Nachher-Kommentar.
     const MOCK_USERS = [
-      { id: 1, username: 'nk', display_name: 'Norbert K.', avatar_color: '#7c6ff7', role: 'admin' },
+      { id: 1, username: 'nk', display_name: 'Norbert K.', avatar_color: '#6c5df6', role: 'admin' },
       // S2: Demo-User anonymisiert — keine Initialen echter Lehrkräfte
-      { id: 2, username: 'lb', display_name: 'Lehrkraft B', avatar_color: '#f59e0b', role: 'admin' },
-      { id: 3, username: 'lc', display_name: 'Lehrkraft C', avatar_color: '#ec4899', role: 'admin' },
-      { id: 4, username: 'al', display_name: 'Anna L.', avatar_color: '#10b981', role: 'member' },
-      { id: 5, username: 'mk', display_name: 'Markus K.', avatar_color: '#3b82f6', role: 'member' },
-      { id: 6, username: 'sh', display_name: 'Sabine H.', avatar_color: '#ef4444', role: 'member' },
-      { id: 7, username: 'lw', display_name: 'Laura W.', avatar_color: '#8b5cf6', role: 'member' },
-      { id: 8, username: 'tr', display_name: 'Tim R.', avatar_color: '#06b6d4', role: 'member' },
+      { id: 2, username: 'lb', display_name: 'Lehrkraft B', avatar_color: '#a26907', role: 'admin' },
+      { id: 3, username: 'lc', display_name: 'Lehrkraft C', avatar_color: '#df177a', role: 'admin' },
+      { id: 4, username: 'al', display_name: 'Anna L.', avatar_color: '#0c855d', role: 'member' },
+      { id: 5, username: 'mk', display_name: 'Markus K.', avatar_color: '#1b6df5', role: 'member' },
+      { id: 6, username: 'sh', display_name: 'Sabine H.', avatar_color: '#e81414', role: 'member' },
+      { id: 7, username: 'lw', display_name: 'Laura W.', avatar_color: '#8553f5', role: 'member' },
+      { id: 8, username: 'tr', display_name: 'Tim R.', avatar_color: '#048096', role: 'member' },
     ];
 
     const MOCK_TEAMS = [
-      { id: 1, name: 'Kollegium', icon_text: 'KRS', icon_color: '#7c6ff7', category: 'Teams', description: 'Gesamtes Kollegium', members: 35 },
-      { id: 2, name: 'Musik Fachschaft', icon_text: '♪', icon_color: '#ec4899', category: 'Teams', description: 'Fachschaft Musik', members: 4 },
-      { id: 3, name: 'Informatik Fachschaft', icon_text: '</>', icon_color: '#3b82f6', category: 'Teams', description: 'Fachschaft Informatik', members: 3 },
-      { id: 4, name: 'Religion Fachschaft', icon_text: 'RF', icon_color: '#f97316', category: 'Teams', description: 'Fachschaft Religion', members: 5 },
-      { id: 5, name: 'Deutsch Fachschaft', icon_text: 'DF', icon_color: '#ef4444', category: 'Teams', description: 'Fachschaft Deutsch', members: 6 },
-      { id: 6, name: '7b / Lehrer:innen / 25-26', icon_text: '7B', icon_color: '#f59e0b', category: 'Kurse', description: 'Klassenteam 7b', members: 8 },
-      { id: 7, name: '8a / Lehrer:innen / 25-26', icon_text: '8L', icon_color: '#10b981', category: 'Kurse', description: 'Klassenteam 8a', members: 7 },
-      { id: 8, name: '9c / Lehrer:innen / 25-26', icon_text: '9C', icon_color: '#8b5cf6', category: 'Kurse', description: 'Klassenteam 9c', members: 9 },
-      { id: 9, name: '6c / Lehrer:innen / 25-26', icon_text: '5L', icon_color: '#a855f7', category: 'Kurse', description: 'Klassenteam 6c', members: 8 },
-      { id: 10, name: 'Gourmetküche', icon_text: 'G', icon_color: '#ef4444', category: 'Kurse', description: 'AG Kochen', members: 3 },
+      { id: 1, name: 'Kollegium', icon_text: 'KRS', icon_color: '#6c5df6', category: 'Teams', description: 'Gesamtes Kollegium', members: 35 },
+      { id: 2, name: 'Musik Fachschaft', icon_text: '♪', icon_color: '#df177a', category: 'Teams', description: 'Fachschaft Musik', members: 4 },
+      { id: 3, name: 'Informatik Fachschaft', icon_text: '</>', icon_color: '#1b6df5', category: 'Teams', description: 'Fachschaft Informatik', members: 3 },
+      { id: 4, name: 'Religion Fachschaft', icon_text: 'RF', icon_color: '#c35305', category: 'Teams', description: 'Fachschaft Religion', members: 5 },
+      { id: 5, name: 'Deutsch Fachschaft', icon_text: 'DF', icon_color: '#e81414', category: 'Teams', description: 'Fachschaft Deutsch', members: 6 },
+      { id: 6, name: '7b / Lehrer:innen / 25-26', icon_text: '7B', icon_color: '#a26907', category: 'Kurse', description: 'Klassenteam 7b', members: 8 },
+      { id: 7, name: '8a / Lehrer:innen / 25-26', icon_text: '8L', icon_color: '#0c855d', category: 'Kurse', description: 'Klassenteam 8a', members: 7 },
+      { id: 8, name: '9c / Lehrer:innen / 25-26', icon_text: '9C', icon_color: '#8553f5', category: 'Kurse', description: 'Klassenteam 9c', members: 9 },
+      { id: 9, name: '6c / Lehrer:innen / 25-26', icon_text: '5L', icon_color: '#9e42f6', category: 'Kurse', description: 'Klassenteam 6c', members: 8 },
+      { id: 10, name: 'Gourmetküche', icon_text: 'G', icon_color: '#e81414', category: 'Kurse', description: 'AG Kochen', members: 3 },
     ];
 
     // Demo-Store für Nachrichten-Reaktionen (#11): { [messageId]: [{emoji, users:[], count}] }
@@ -2162,7 +2176,13 @@
       '🌊':'welle wave meer','🍎':'apfel apple','🍕':'pizza','🎂':'kuchen torte cake','☕':'kaffee coffee',
     };
 
-    const TEAM_COLORS = ['#7c6ff7', '#ec4899', '#3b82f6', '#f97316', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#a855f7'];
+    // A3 (22.07.2026, C-B-17): jeder Ton auf ≥ 4.5:1 gegen weißen Text abgedunkelt
+    // (Original → Fix, Kontrast vorher/nachher): #7c6ff7→#6c5df6 (3.84→4.63),
+    // #ec4899→#df177a (3.53→4.62), #3b82f6→#1b6df5 (3.68→4.61), #f97316→#c35305
+    // (2.80→4.61), #ef4444→#e81414 (3.76→4.62), #10b981→#0c855d (2.54→4.64),
+    // #f59e0b→#a26907 (2.15→4.61), #8b5cf6→#8553f5 (4.23→4.61), #06b6d4→#048096
+    // (2.43→4.63), #a855f7→#9e42f6 (3.96→4.60).
+    const TEAM_COLORS = ['#6c5df6', '#df177a', '#1b6df5', '#c35305', '#e81414', '#0c855d', '#a26907', '#8553f5', '#048096', '#9e42f6'];
 
     const EMOJI_DATA = {
       'Häufig': ['👍', '❤️', '😂', '🎉', '👏', '🔥', '✅', '💪', '🙏', '😊', '👀', '💡', '📝', '🎵', '⭐'],
@@ -3407,7 +3427,7 @@
               convObj.name = conv.name || 'Gruppenchat';
             } else {
               const otherMember = members.find(m => m.user_id !== userId);
-              convObj.user = otherMember?.users || { display_name: 'Unbekannt', avatar_color: '#999' };
+              convObj.user = otherMember?.users || { display_name: 'Unbekannt', avatar_color: '#757575' };
             }
             return convObj;
           });
@@ -3618,7 +3638,7 @@
                     const { data: author } = await this.sb.from('users').select('*').eq('id', post.author_id).single();
                     post.author = author;
                   } catch (e) {
-                    post.author = { display_name: 'Unbekannt', avatar_color: '#999' };
+                    post.author = { display_name: 'Unbekannt', avatar_color: '#757575' };
                   }
                 }
                 onNewPost(post);
@@ -3646,7 +3666,7 @@
                     const { data: sender } = await this.sb.from('users').select('*').eq('id', msg.sender_id).single();
                     msg.sender = sender;
                   } catch (e) {
-                    msg.sender = { display_name: 'Unbekannt', avatar_color: '#999' };
+                    msg.sender = { display_name: 'Unbekannt', avatar_color: '#757575' };
                   }
                 }
                 onNewMessage(msg);
@@ -3674,7 +3694,7 @@
                     const { data: author } = await this.sb.from('users').select('*').eq('id', reply.author_id).single();
                     reply.author = author;
                   } catch (e) {
-                    reply.author = { display_name: 'Unbekannt', avatar_color: '#999' };
+                    reply.author = { display_name: 'Unbekannt', avatar_color: '#757575' };
                   }
                 }
                 onNewReply(reply);
@@ -4005,7 +4025,11 @@
       async inviteUser(email, displayName, role = 'member') {
         if (this.isDemo) return null;
         try {
-          const colors = ['#7c6ff7','#4ECDC4','#FF6B6B','#45B7D1','#96CEB4','#FFEAA7','#DDA0DD','#87CEEB'];
+          // A3 (22.07.2026, C-B-17): siehe TEAM_COLORS-Kommentar für die
+          // Kontrast-Nachweise; hier zusätzlich #4ECDC4→#25827c, #FF6B6B→#eb0000,
+          // #45B7D1→#257f94, #96CEB4→#3c8262, #FFEAA7→#937000, #DDA0DD→#b942b9,
+          // #87CEEB→#1c7da5 (alle ≥ 4.5:1 gegen #fff).
+          const colors = ['#6c5df6','#25827c','#eb0000','#257f94','#3c8262','#937000','#b942b9','#1c7da5'];
           const { data, error } = await this.sb.from('users').insert({
             email: email.toLowerCase(),
             display_name: displayName,
@@ -4596,7 +4620,8 @@
         const q = mentionQuery.toLowerCase();
         const specialEntries = [];
         if ('alle'.startsWith(q) || q === '') {
-          specialEntries.push({ id: '__all__', display_name: 'alle', avatar_color: '#D4762C', _isSpecial: true, _label: '@alle — Alle benachrichtigen' });
+          // A3 C-B-17: #D4762C war 3.27:1 gg. weißen Text, #af6124 ist 4.61:1.
+          specialEntries.push({ id: '__all__', display_name: 'alle', avatar_color: '#af6124', _isSpecial: true, _label: '@alle — Alle benachrichtigen' });
         }
         const userMatches = allUsers.filter(u => u.display_name?.toLowerCase().includes(q) || u.username?.toLowerCase().includes(q)).slice(0, 7);
         return [...specialEntries, ...userMatches];
@@ -6149,7 +6174,7 @@
           if (a.is_pinned !== b.is_pinned) return b.is_pinned ? 1 : -1;
           return 0;
         }).map(post => {
-          const author = post.author || { display_name: 'Unbekannt', avatar_color: '#999' };
+          const author = post.author || { display_name: 'Unbekannt', avatar_color: '#757575' };
           const replyCount = post.replies ?? post.reply_count ?? 0;
           const isOwner = user && (post.author_id === user.id || user.role === 'admin');
           const isEditing = editingPost === post.id;
@@ -6826,7 +6851,7 @@
                 style: { flex: 1, minWidth: 0 }
               },
               conv.is_group ? React.createElement('div', { className: 'group-avatar', style: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '40px', height: '40px', borderRadius: '8px', background: 'var(--accent)', color: 'white', fontWeight: '600', fontSize: '18px' } }, '👥') : React.createElement('div', { className: 'avatar-wrapper' },
-                React.createElement(Avatar, { user: conv.user || { display_name: '?', avatar_color: '#999' }, size: 40 }),
+                React.createElement(Avatar, { user: conv.user || { display_name: '?', avatar_color: '#757575' }, size: 40 }),
                 React.createElement('span', { className: 'avatar-status online-dot small' + (onlineUsers && onlineUsers.has(Number(conv.user?.id)) ? '' : ' offline') })
               ),
               React.createElement('div', { className: 'conversation-info' },
@@ -7130,7 +7155,7 @@
             }, (groupMemberIds.length || conversation.members?.length || 0) + ' Mitglieder · verwalten')
           ) : React.createElement(React.Fragment, null,
             React.createElement('div', { className: 'avatar-wrapper' },
-              React.createElement(Avatar, { user: conversation.user || { display_name: 'Chat', avatar_color: '#999' }, size: 32 }),
+              React.createElement(Avatar, { user: conversation.user || { display_name: 'Chat', avatar_color: '#757575' }, size: 32 }),
               React.createElement('span', { className: 'avatar-status online-dot small' + (onlineUsers && onlineUsers.has(Number(conversation.user?.id)) ? '' : ' offline') })
             ),
             React.createElement('div', null,
@@ -7271,7 +7296,7 @@
         // Feedback #3: Gruppenmitglieder-Modal (ansehen + hinzufügen)
         showGroupMembers && isGroupChat && (() => {
           const resolvedMembers = groupMemberIds.map(id =>
-            allUsersList.find(u => String(u.id) === String(id)) || { id, display_name: 'Lädt…', avatar_color: '#999' }
+            allUsersList.find(u => String(u.id) === String(id)) || { id, display_name: 'Lädt…', avatar_color: '#757575' }
           );
           const candidates = allUsersList.filter(u =>
             !groupMemberIds.some(id => String(id) === String(u.id)) &&
@@ -7436,7 +7461,7 @@
             displayResults.posts.length > 0 && React.createElement('div', null,
               React.createElement('h3', { style: { fontSize: '14px', color: 'var(--text-muted)', fontWeight: '600', marginBottom: '8px' } }, 'Posts (' + displayResults.posts.length + ')'),
               displayResults.posts.map(post => {
-                const author = post.author || { display_name: 'Unbekannt', avatar_color: '#999' };
+                const author = post.author || { display_name: 'Unbekannt', avatar_color: '#757575' };
                 return React.createElement('div', { key: post.id, className: 'post-card', style: { marginBottom: '8px' } },
                   React.createElement('div', { className: 'post-header' },
                     React.createElement(Avatar, { user: author, size: 32 }),
@@ -7453,7 +7478,7 @@
             displayResults.messages.length > 0 && React.createElement('div', { style: { marginTop: '16px' } },
               React.createElement('h3', { style: { fontSize: '14px', color: 'var(--text-muted)', fontWeight: '600', marginBottom: '8px' } }, 'Nachrichten (' + displayResults.messages.length + ')'),
               displayResults.messages.map(msg => {
-                const sender = msg.sender || { display_name: 'Unbekannt', avatar_color: '#999' };
+                const sender = msg.sender || { display_name: 'Unbekannt', avatar_color: '#757575' };
                 return React.createElement('div', { key: msg.id, style: { padding: '10px 14px', background: 'var(--bg-secondary)', borderRadius: '8px', marginBottom: '6px', border: '1px solid var(--border)' } },
                   React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' } },
                     React.createElement(Avatar, { user: sender, size: 24 }),
@@ -8962,7 +8987,7 @@
           kuerzel: hubUser.kuerzel,
           name: hubUser.lehrkraft_name,
           display_name: hubUser.display_name || hubUser.lehrkraft_name || 'Lehrkraft',
-          avatar_color: hubUser.avatar_color || '#7c6ff7',
+          avatar_color: hubUser.avatar_color || '#6c5df6', // A3 C-B-17: #7c6ff7 war 3.84:1, jetzt 4.63:1
           role: hubUser.role || 'member'
         };
       }, []);
@@ -10203,7 +10228,7 @@
               onClick: () => setShowProfile(prev => !prev),
               title: 'Profil',
               style: { background: 'none', border: 'none', cursor: 'pointer', padding: '2px', borderRadius: '50%' }
-            }, React.createElement(Avatar, { user: user || { display_name: '?', avatar_color: '#999' }, size: 28 })),
+            }, React.createElement(Avatar, { user: user || { display_name: '?', avatar_color: '#757575' }, size: 28 })),
             React.createElement('button', { className: 'icon-btn', onClick: handleLogout, title: 'Abmelden', 'aria-label': 'Abmelden', dangerouslySetInnerHTML: { __html: Icons.logout } })
           ),
           // Online Users Panel (Popup)
@@ -10356,7 +10381,15 @@
     return !!(el && (el.offsetWidth || el.offsetHeight || el.getClientRects().length));
   }
   function openDialogs() {
-    return Array.prototype.filter.call(document.querySelectorAll('[role="dialog"]'), isVisible);
+    return Array.prototype.filter.call(document.querySelectorAll('[role="dialog"]'), function (d) {
+      if (!isVisible(d)) return false;
+      // Der Lern-Coach (krsc-*) hält sein Panel dauerhaft im DOM (nur per transform
+      // ausgeblendet → offsetWidth > 0) und managt Fokus/Escape selbst. Nicht fangen,
+      // sonst würde der Trap das Coach-Panel beim Laden fokussieren.
+      if (d.className && String(d.className).indexOf('krsc') !== -1) return false;
+      if (d.closest && d.closest('[class*="krsc-"]')) return false;
+      return true;
+    });
   }
   function focusables(container) {
     return Array.prototype.filter.call(container.querySelectorAll(FOCUSABLE), function (el) {
