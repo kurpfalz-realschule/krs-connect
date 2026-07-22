@@ -3,7 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KRS Connect</title>
+  <!-- Tenant-Konfiguration (TENANT-SPEC.md): MUSS das erste Script sein, synchron,
+       vor jedem anderen Code — setzt window.TENANT/window.T, Branding-CSS-Variablen,
+       CSP (Report-Only) und den Framing-Schutz, bevor irgendetwas anderes lädt. -->
+  <script src="tenant.js"></script>
+  <script>
+    // 2.2: HTML-Fallback bleibt neutral, falls ein Fork tenant.js nicht lädt —
+    // sobald tenant.js da ist, überschreibt dieses Script den Titel sofort.
+    try { document.title = (window.T ? window.T('app.name', 'Wird geladen…') : 'Wird geladen…'); } catch (e) {}
+  </script>
+  <title>Wird geladen…</title>
   <style>
     /* ═══════════════════════════════════════════════════
        KRS Connect — Design Tokens (v4.0.0)
@@ -196,7 +205,7 @@
       padding: 0 6px;
       border-radius: 10px;
       background: var(--accent);
-      color: #fff;
+      color: var(--accent-text, #fff);
       font-size: 11px;
       font-weight: 700;
       display: inline-flex;
@@ -810,7 +819,7 @@
     }
     .channel-dialog .dialog-actions .btn-primary {
       background: var(--accent);
-      color: white;
+      color: var(--accent-text, #fff);
       border: none;
     }
     .channel-dialog .dialog-actions .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -960,7 +969,7 @@
       padding: 10px 30px;
       margin-top: 20px;
       background: var(--accent);
-      color: white;
+      color: var(--accent-text, #fff);
       border: none;
       border-radius: var(--radius);
       cursor: pointer;
@@ -1011,7 +1020,7 @@
     .conversation-list { display: flex; flex-direction: column; height: 100%; }
     .conversation-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border); }
     .conversation-header h2 { margin: 0; font-size: 16px; }
-    .new-chat-btn { width: 32px; height: 32px; border-radius: var(--radius); background: var(--accent); color: white; border: none; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; transition: all var(--transition); }
+    .new-chat-btn { width: 32px; height: 32px; border-radius: var(--radius); background: var(--accent); color: var(--accent-text, #fff); border: none; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; transition: all var(--transition); }
     .new-chat-btn:hover { background: var(--accent-hover); }
 
     .new-chat-picker { padding: 8px 12px; border-bottom: 1px solid var(--border); max-height: 300px; overflow-y: auto; }
@@ -1072,8 +1081,8 @@
     .member-remove { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; border-radius: 4px; font-size: 16px; }
     .member-remove:hover { color: var(--danger); background: rgba(239,68,68,0.1); }
     .member-add-btn { background: var(--accent-light); color: var(--accent); border: none; padding: 4px 10px; border-radius: var(--radius); cursor: pointer; font-size: 12px; font-weight: 600; }
-    .member-add-btn:hover { background: var(--accent); color: white; }
-    .btn-primary { padding: 8px 20px; background: var(--accent); color: white; border: none; border-radius: var(--radius); cursor: pointer; font-size: 14px; font-weight: 500; }
+    .member-add-btn:hover { background: var(--accent); color: var(--accent-text, #fff); }
+    .btn-primary { padding: 8px 20px; background: var(--accent); color: var(--accent-text, #fff); border: none; border-radius: var(--radius); cursor: pointer; font-size: 14px; font-weight: 500; }
     .btn-primary:hover { background: var(--accent-hover); }
     .btn-primary:disabled { background: var(--text-muted); cursor: not-allowed; }
     .btn-secondary { padding: 8px 20px; background: var(--bg-tertiary); color: var(--text-primary); border: none; border-radius: var(--radius); cursor: pointer; font-size: 14px; }
@@ -1091,12 +1100,12 @@
 
     .chat-messages { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 6px; position: relative; }
     .chat-messages.drag-active { outline: 2px dashed var(--accent); outline-offset: -8px; background: var(--accent-light); }
-    .chat-drop-overlay { position: sticky; top: 0; z-index: 5; align-self: center; margin: 4px auto 8px; padding: 8px 16px; background: var(--accent); color: #fff; border-radius: 999px; font-size: 13px; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,0.18); pointer-events: none; }
+    .chat-drop-overlay { position: sticky; top: 0; z-index: 5; align-self: center; margin: 4px auto 8px; padding: 8px 16px; background: var(--accent); color: var(--accent-text, #fff); border-radius: 999px; font-size: 13px; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,0.18); pointer-events: none; }
     .chat-msg { display: flex; gap: 8px; max-width: 75%; }
     .chat-msg.own { align-self: flex-end; flex-direction: row-reverse; }
     .chat-msg.other { align-self: flex-start; }
     .chat-bubble { padding: 10px 14px; border-radius: 16px; background: var(--bg-tertiary); word-break: break-word; }
-    .chat-bubble.own { background: var(--accent); color: white; border-bottom-right-radius: 4px; }
+    .chat-bubble.own { background: var(--accent); color: var(--accent-text, #fff); border-bottom-right-radius: 4px; }
     .chat-bubble.other { border-bottom-left-radius: 4px; }
     .chat-text { font-size: 14px; line-height: 1.5; }
     .chat-time { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
@@ -1121,7 +1130,7 @@
     .chat-input-bar { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); align-items: flex-end; }
     .chat-input-bar input { flex: 1; padding: 10px 14px; border-radius: 20px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); font-size: 14px; }
     .chat-input-bar input:focus { outline: 2px solid #1D4ED8; outline-offset: 2px; border-color: var(--accent); }
-    .chat-send-btn { width: 40px; height: 40px; border-radius: 50%; background: var(--accent); color: white; border: none; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; transition: all var(--transition); flex-shrink: 0; }
+    .chat-send-btn { width: 40px; height: 40px; border-radius: 50%; background: var(--accent); color: var(--accent-text, #fff); border: none; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; transition: all var(--transition); flex-shrink: 0; }
     .chat-send-btn:hover { background: var(--accent-hover); }
     .chat-send-btn:disabled { background: var(--text-muted); cursor: not-allowed; }
     .chat-image-btn svg { width: 22px; height: 22px; }
@@ -1251,7 +1260,7 @@
     .feedback-categories { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
     .feedback-cat { padding: 10px 16px; min-height: 44px; border-radius: 22px; border: 1px solid var(--border); background: var(--bg-primary); cursor: pointer; font-size: 14px; transition: all 0.15s; display: flex; align-items: center; gap: 6px; }
     .feedback-cat:hover { border-color: var(--accent); }
-    .feedback-cat.active { background: var(--accent); color: white; border-color: var(--accent); }
+    .feedback-cat.active { background: var(--accent); color: var(--accent-text, #fff); border-color: var(--accent); }
     .feedback-stars { display: flex; gap: 4px; margin-bottom: 16px; }
     .feedback-star { font-size: 32px; cursor: pointer; background: none; border: none; padding: 4px; min-width: 44px; min-height: 44px; transition: transform 0.15s; color: var(--text-muted); }
     .feedback-star:hover { transform: scale(1.2); }
@@ -1263,7 +1272,7 @@
     .feedback-btn { padding: 10px 20px; border-radius: var(--radius); border: none; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.15s; }
     .feedback-btn-cancel { background: var(--bg-tertiary); color: var(--text-primary); }
     .feedback-btn-cancel:hover { background: var(--bg-hover); }
-    .feedback-btn-send { background: var(--accent); color: white; min-width: 120px; }
+    .feedback-btn-send { background: var(--accent); color: var(--accent-text, #fff); min-width: 120px; }
     .feedback-btn-send:hover { background: var(--accent-hover); }
     .feedback-btn-send:disabled { opacity: 0.5; cursor: not-allowed; }
     .feedback-trigger { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 4px; font-size: 18px; min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; transition: color 0.15s; }
@@ -1278,7 +1287,7 @@
     .fb-board-modal { width: 720px; max-width: 96vw; max-height: 90vh; display: flex; flex-direction: column; }
     .fb-board-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 16px; }
     .fb-board-filter { padding: 6px 12px; min-height: 36px; border-radius: 18px; border: 1px solid var(--border); background: var(--bg-primary); cursor: pointer; font-size: 13px; }
-    .fb-board-filter.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .fb-board-filter.active { background: var(--accent); color: var(--accent-text, #fff); border-color: var(--accent); }
     .fb-board-list { overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 4px; }
     .fb-item { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; background: var(--bg-primary); }
     .fb-item-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
@@ -1385,7 +1394,7 @@
   </style>
 </head>
 <body>
-  <div id="app"><div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#5A5F72"><div style="width:40px;height:40px;border:3px solid #E2E4E8;border-top-color:#5B7B94;border-radius:50%;animation:spin 0.8s linear infinite"></div><div>KRS Connect wird geladen...</div><style>@keyframes spin{to{transform:rotate(360deg)}}</style></div></div>
+  <div id="app"><div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#5A5F72"><div style="width:40px;height:40px;border:3px solid #E2E4E8;border-top-color:#5B7B94;border-radius:50%;animation:spin 0.8s linear infinite"></div><div>Wird geladen...</div><style>@keyframes spin{to{transform:rotate(360deg)}}</style></div></div>
 
   <!-- Phase 7.8: CDN Preload für schnelleren Initial Load -->
   <link rel="preload" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" as="script">
@@ -1438,7 +1447,7 @@
     if (!window.React || !window.ReactDOM) {
       console.error('KRITISCH: React konnte von keinem CDN geladen werden.');
       var _el = document.getElementById('app');
-      if (_el) _el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:12px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#5A5F72;text-align:center;padding:24px"><div style="font-size:32px">📡</div><div style="font-weight:600">KRS Connect konnte nicht laden</div><div style="font-size:14px;max-width:320px">Bitte Internetverbindung prüfen und die Seite neu laden (auf dem iPad: Seite nach unten ziehen zum Aktualisieren).</div></div>';
+      if (_el) _el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:12px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#5A5F72;text-align:center;padding:24px"><div style="font-size:32px">📡</div><div style="font-weight:600">' + (window.T ? window.T('app.name', 'Die App') : 'Die App') + ' konnte nicht laden</div><div style="font-size:14px;max-width:320px">Bitte Internetverbindung prüfen und die Seite neu laden (auf dem iPad: Seite nach unten ziehen zum Aktualisieren).</div></div>';
     }
   </script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js"></script>
@@ -4077,7 +4086,9 @@
     }
 
     // ============================================================
-    const KRS_LOGO = 'data:image/png;base64,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';
+    const PRODUCT_LOGO_FALLBACK = 'data:image/png;base64,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';
+    // T('branding.logoUrl') leer ⇒ Fallback auf das eingebaute Produkt-Logo (TENANT-SPEC 2.5/3.4).
+    const APP_LOGO = (window.T ? window.T('branding.logoUrl', PRODUCT_LOGO_FALLBACK) : PRODUCT_LOGO_FALLBACK);
 
     // ICONS (string format for easier rendering)
     // ============================================================
@@ -4929,14 +4940,17 @@
       );
     }
 
-    // Supabase-Konfiguration (fest eingebaut)
-    const SUPABASE_URL = 'https://ooejsfixxiuobrpqgfqm.supabase.co';
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9vZWpzZml4eGl1b2JycHFnZnFtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwMjQ5MDYsImV4cCI6MjA4OTYwMDkwNn0.GbAv-sB4B8nNE3IPfiYIjbkMKs0Aq03c_-TUcmFY_5s';
+    // Supabase-Konfiguration — aus tenant.js (TENANT-SPEC.md 3.4). Werte kommen
+    // NICHT mehr fest verdrahtet, sondern über T() aus window.TENANT (per-Schule-Konfig).
+    const SUPABASE_URL = window.T ? window.T('supabase.url', '') : '';
+    const SUPABASE_ANON_KEY = window.T ? window.T('supabase.anonKey', '') : '';
 
-    // Erlaubte Email-Domains für Login (Phase 6 Auth-Whitelist)
-    const ALLOWED_EMAIL_DOMAINS = ['realschule-schriesheim.de'];
-    // Zusätzlich erlaubte Admin-Emails (für Norbert's Gmail etc.)
-    const ALLOWED_ADMIN_EMAILS = ['kotzan@gmail.com'];
+    // Erlaubte Email-Domains für Login — Client-Check ist nur UX (echte Sicherheitsgrenze
+    // ist serverseitig, s. TENANT-SPEC.md 4.5, geplant für S4).
+    const ALLOWED_EMAIL_DOMAINS = window.T ? window.T('schule.emailDomains', []) : [];
+    // Zusätzlich erlaubte Admin-Emails außerhalb der Domain. Sicherheitsrelevanter
+    // Fallback ist bewusst [] (nie true/alle) — TENANT-SPEC.md 3.6, Regel 1.
+    const ALLOWED_ADMIN_EMAILS = window.T ? window.T('schule.adminEmails', []) : [];
 
     // Singleton Supabase-Client (vermeidet mehrfache Instanziierung)
     let _supabaseClientSingleton = null;
@@ -5075,7 +5089,10 @@
     window.KRS_VERSION = '4.16.0';
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
     // Playwright den Klick-Handler prüfen kann, ohne wirklich zu navigieren.
-    window.KRS_HUB_URL = 'https://kurpfalz-realschule.github.io/krs-hub/';
+    // Aus tenant.js (TENANT-SPEC.md 2.4) — leer, wenn hub.enabled:false.
+    window.KRS_HUB_URL = window.T ? window.T('hub.url', '') : '';
+    window.KRS_HUB_NOTIZEN_URL = window.T ? window.T('hub.notizenUrl', '') : '';
+    window.__KRS_HUB_ENABLED = !!(window.T && window.T('hub.enabled', false) === true);
     // v4.16.0: Erkennung, ob Connect im Hub-iframe eingebettet läuft (dann
     // ergibt der 🏠-Button keinen Sinn — man ist ja schon im Hub). Als
     // Test-Hook exponiert; ein bereits (z. B. per page.addInitScript) gesetzter
@@ -5204,7 +5221,7 @@
         }
       };
 
-      const logo = React.createElement('img', { src: KRS_LOGO, alt: 'KRS Logo', style: { width: '80px', height: '80px', objectFit: 'contain', marginBottom: '12px' } });
+      const logo = React.createElement('img', { src: APP_LOGO, alt: (window.T ? window.T('app.name', 'Logo') : 'Logo'), style: { width: '80px', height: '80px', objectFit: 'contain', marginBottom: '12px' } });
       const inputStyle = { padding: '12px 16px', fontSize: '15px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', outline: 'none', textAlign: 'center' };
 
       if (done) {
@@ -5294,7 +5311,7 @@
         }
         const domain = trimmedEmail.split('@')[1];
         if (!ALLOWED_EMAIL_DOMAINS.includes(domain) && !ALLOWED_ADMIN_EMAILS.includes(trimmedEmail)) {
-          setError('Bitte verwende deine Schul-E-Mail-Adresse (@realschule-schriesheim.de).');
+          setError('Bitte verwende deine Schul-E-Mail-Adresse (@' + (ALLOWED_EMAIL_DOMAINS[0] || '') + ').');
           return;
         }
         setLoading(true); setError('');
@@ -5331,7 +5348,7 @@
         const isAllowedDomain = ALLOWED_EMAIL_DOMAINS.includes(domain);
         const isAllowedAdmin = ALLOWED_ADMIN_EMAILS.includes(trimmedEmail);
         if (!isAllowedDomain && !isAllowedAdmin) {
-          setError('Bitte verwende deine Schul-E-Mail-Adresse (@realschule-schriesheim.de).');
+          setError('Bitte verwende deine Schul-E-Mail-Adresse (@' + (ALLOWED_EMAIL_DOMAINS[0] || '') + ').');
           return;
         }
         if (!password) {
@@ -5381,8 +5398,8 @@
 
       if (checkingSession) {
         return React.createElement('div', { className: 'setup-screen' },
-          React.createElement('img', { src: KRS_LOGO, alt: 'KRS Logo', style: { width: '80px', height: '80px', objectFit: 'contain', marginBottom: '12px' } }),
-          React.createElement('h1', null, 'KRS Connect'),
+          React.createElement('img', { src: APP_LOGO, alt: (window.T ? window.T('app.name', 'Logo') : 'Logo'), style: { width: '80px', height: '80px', objectFit: 'contain', marginBottom: '12px' } }),
+          React.createElement('h1', null, window.T ? window.T('app.name', 'Die App') : 'Die App'),
           React.createElement('p', { style: { color: 'var(--text-secondary)' } }, 'Anmeldung wird geprüft...')
         );
       }
@@ -5390,7 +5407,7 @@
       // Reset-Mail wurde angefordert → neutrale Bestätigung.
       if (resetSent) {
         return React.createElement('div', { className: 'setup-screen' },
-          React.createElement('img', { src: KRS_LOGO, alt: 'KRS Logo', style: { width: '80px', height: '80px', objectFit: 'contain', marginBottom: '12px' } }),
+          React.createElement('img', { src: APP_LOGO, alt: (window.T ? window.T('app.name', 'Logo') : 'Logo'), style: { width: '80px', height: '80px', objectFit: 'contain', marginBottom: '12px' } }),
           React.createElement('h1', null, '📧 E-Mail prüfen!'),
           React.createElement('p', { style: { color: 'var(--text-secondary)', marginBottom: '8px', maxWidth: '400px', textAlign: 'center', lineHeight: '1.5' } },
             'Falls für ', React.createElement('strong', null, email), ' ein Zugang besteht, wurde ein Link zum Zurücksetzen des Passworts gesendet.'),
@@ -5405,7 +5422,7 @@
 
       if (magicLinkSent) {
         return React.createElement('div', { className: 'setup-screen' },
-          React.createElement('img', { src: KRS_LOGO, alt: 'KRS Logo', style: { width: '80px', height: '80px', objectFit: 'contain', marginBottom: '12px' } }),
+          React.createElement('img', { src: APP_LOGO, alt: (window.T ? window.T('app.name', 'Logo') : 'Logo'), style: { width: '80px', height: '80px', objectFit: 'contain', marginBottom: '12px' } }),
           React.createElement('h1', null, '📧 E-Mail prüfen!'),
           React.createElement('p', { style: { color: 'var(--text-secondary)', marginBottom: '8px', maxWidth: '400px', textAlign: 'center', lineHeight: '1.5' } },
             'Ein Anmeldelink wurde an ', React.createElement('strong', null, email), ' gesendet.'),
@@ -5419,9 +5436,9 @@
       }
 
       return React.createElement('div', { className: 'setup-screen' },
-        React.createElement('img', { src: KRS_LOGO, alt: 'KRS Logo', style: { width: '80px', height: '80px', objectFit: 'contain', marginBottom: '12px' } }),
-        React.createElement('h1', null, 'KRS Connect'),
-        React.createElement('p', { style: { color: 'var(--text-secondary)', marginBottom: '24px' } }, 'Kommunikationsplattform der Kurpfalz-Realschule Schriesheim'),
+        React.createElement('img', { src: APP_LOGO, alt: (window.T ? window.T('app.name', 'Logo') : 'Logo'), style: { width: '80px', height: '80px', objectFit: 'contain', marginBottom: '12px' } }),
+        React.createElement('h1', null, window.T ? window.T('app.name', 'Die App') : 'Die App'),
+        React.createElement('p', { style: { color: 'var(--text-secondary)', marginBottom: '24px' } }, window.T ? window.T('schule.nameLang', '') : ''),
 
         // E-Mail + Passwort Login
         React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', maxWidth: '320px', marginBottom: '16px' } },
@@ -5609,8 +5626,8 @@
               style: { flex: '1', minWidth: '120px', padding: '8px 12px', fontSize: '13px', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }
             }),
             React.createElement('input', {
-              placeholder: 'E-Mail (@realschule-schriesheim.de)',
-              'aria-label': 'E-Mail (@realschule-schriesheim.de)',
+              placeholder: 'E-Mail (@' + (ALLOWED_EMAIL_DOMAINS[0] || '') + ')',
+              'aria-label': 'E-Mail (@' + (ALLOWED_EMAIL_DOMAINS[0] || '') + ')',
               value: inviteEmail, onChange: e => setInviteEmail(e.target.value),
               onKeyDown: e => e.key === 'Enter' && handleInvite(),
               style: { flex: '2', minWidth: '200px', padding: '8px 12px', fontSize: '13px', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }
@@ -7506,13 +7523,16 @@
     // ============================================================
     // FEEDBACK MODAL
     // ============================================================
-    const FEEDBACK_GAS_URL = 'https://script.google.com/macros/s/AKfycbwr9ZV9108jpkfN4nKboTuwMEgUhBOxW2c2ksWgazKNeSgiINL4G2ZNUMKeEzfaOj3H_g/exec';
+    // leer ⇒ Feedback-Button ausgeblendet (TENANT-SPEC.md 2.4/Sprint-S2-Punkt 8) —
+    // sonst würde eine Fremdschule ungewollt in Norberts Google-Sheet schreiben.
+    const FEEDBACK_GAS_URL = window.T ? window.T('feedback.gasUrl', '') : '';
+    window.__krsFeedbackGasUrl = FEEDBACK_GAS_URL; // Test-Hook: smoke-tenant prüft leer ⇒ kein Fremd-Sheet
 
     // ── Dateiablage (v4.12.0, v4.16.0: Umstieg von iServ auf Nextcloud) ────
     // Der Platzhalter aus v4.7.0 bleibt — pro Team pflegbare, benannte Links
     // (team_links). KEIN eigener Datei-Speicher; nur Verweise auf die
-    // Nextcloud-/Team-Ordner u. Ä.
-    const NEXTCLOUD_FILES_URL = 'https://cloud.realschule-schriesheim.de';
+    // Nextcloud-/Team-Ordner u. Ä. Leer ⇒ Karte ausgeblendet (Sprint-S2-Punkt 8).
+    const NEXTCLOUD_FILES_URL = window.T ? window.T('links.nextcloudUrl', '') : '';
 
     // Formular-Modal für Team-Links (neu anlegen & bearbeiten).
     // Stale-Closure-Regel: ALLE Feld-Handler nutzen funktionale Updates
@@ -7877,7 +7897,7 @@
               style: { background: 'var(--accent-light)', color: 'var(--text-primary)', borderRadius: 'var(--radius)', padding: '14px 16px', fontSize: '14px', lineHeight: 1.5, marginBottom: '16px' }
             },
               React.createElement('strong', null, 'In Arbeit: '),
-              'Eine eigene Dateiablage direkt in KRS Connect ist in Arbeit. Dateien liegen dann an einem Ort, mit Versionen und Freigaben.'
+              'Eine eigene Dateiablage direkt in ' + (window.T ? window.T('app.name', 'der App') : 'der App') + ' ist in Arbeit. Dateien liegen dann an einem Ort, mit Versionen und Freigaben.'
             ),
             React.createElement('p', { style: { fontSize: '14px', color: 'var(--text-secondary)', margin: '0 0 16px' } },
               'Bis dahin nutzt bitte die ', React.createElement('strong', null, 'Nextcloud-Dateiablage'), ' der Schule für gemeinsame Dateien.'
@@ -7886,7 +7906,7 @@
               href: NEXTCLOUD_FILES_URL, target: '_blank', rel: 'noopener noreferrer',
               style: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', boxSizing: 'border-box', padding: '12px 16px', background: 'var(--accent)', color: '#fff', borderRadius: 'var(--radius)', fontSize: '15px', fontWeight: 600, textDecoration: 'none', minHeight: '48px' }
             }, '🔗 Dateiablage (Nextcloud) öffnen'),
-            React.createElement('p', { style: { fontSize: '12px', color: 'var(--text-muted)', margin: '12px 0 0', textAlign: 'center' } }, 'Öffnet cloud.realschule-schriesheim.de in einem neuen Tab (Login mit deinem Schul-Zugang).'),
+            React.createElement('p', { style: { fontSize: '12px', color: 'var(--text-muted)', margin: '12px 0 0', textAlign: 'center' } }, 'Öffnet ' + (function () { try { return new URL(NEXTCLOUD_FILES_URL).host; } catch (e) { return NEXTCLOUD_FILES_URL; } })() + ' in einem neuen Tab (Login mit deinem Schul-Zugang).'),
             // v4.12.0: Links des aktuell gewählten Teams direkt im Modal
             React.createElement('div', { style: { borderTop: '1px solid var(--border)', margin: '16px -20px 0', padding: '14px 20px 0' } },
               team && dataService
@@ -7984,7 +8004,7 @@
             )
           ),
 
-          React.createElement('div', { className: 'feedback-label' }, 'Wie gefällt dir KRS Connect? (optional)'),
+          React.createElement('div', { className: 'feedback-label' }, 'Wie gefällt dir ' + (window.T ? window.T('app.name', 'die App') : 'die App') + '? (optional)'),
           React.createElement('div', { className: 'feedback-stars' },
             [1, 2, 3, 4, 5].map(star =>
               React.createElement('button', {
@@ -8130,8 +8150,8 @@
       const steps = [
         {
           icon: '👋',
-          title: 'Willkommen bei KRS Connect!',
-          text: 'KRS Connect ist unsere schulinterne Kommunikationsplattform — speziell für das Kollegium der Kurpfalz-Realschule Schriesheim.',
+          title: 'Willkommen bei ' + (window.T ? window.T('app.name', 'der App') : 'der App') + '!',
+          text: (window.T ? window.T('app.name', 'Die App') : 'Die App') + ' ist unsere schulinterne Kommunikationsplattform — speziell für das Kollegium der ' + (window.T ? window.T('schule.nameLang', '') : '') + '.',
           detail: 'Hier findest du alle wichtigen Infos, kannst mit Kolleg:innen chatten und bleibst immer auf dem Laufenden.'
         },
         {
@@ -8274,7 +8294,7 @@
               React.createElement('p', { style: { margin: '4px 0' } }, 'Klicke unten auf die Lupe (🔍) um nach Beiträgen und Nachrichten zu suchen. Du kannst nach Autor, Kanal und Datum filtern.')
             ),
             React.createElement(Accordion, { title: 'Datenschutz & Sicherheit', icon: '🔒' },
-              React.createElement('p', { style: { margin: '4px 0' } }, 'KRS Connect ist DSGVO-konform. Alle Daten werden in der EU (Frankfurt) gespeichert. Klicke auf 🔒 für den vollständigen Datenschutzhinweis.'),
+              React.createElement('p', { style: { margin: '4px 0' } }, (window.T ? window.T('app.name', 'Die App') : 'Die App') + ' ist DSGVO-konform. Alle Daten werden in ' + (window.T ? window.T('supabase.region', 'einer unbekannten Region') : 'einer unbekannten Region') + ' gespeichert. Klicke auf 🔒 für den vollständigen Datenschutzhinweis.'),
               React.createElement(WikiLink, { url: 'https://de.m.wikipedia.org/wiki/Datenschutz-Grundverordnung', title: 'DSGVO', label: 'Was ist die DSGVO?' })
             )
           ),
@@ -8511,20 +8531,25 @@
           ),
           React.createElement('div', { style: { fontSize: '14px', lineHeight: '1.6', color: 'var(--text-secondary)' } },
             React.createElement(Accordion, { title: 'Verantwortlicher', icon: '🏫', defaultOpen: true },
-              React.createElement('p', { style: { margin: '4px 0' } }, 'Kurpfalz-Realschule Schriesheim, vertreten durch die Schulleitung.'),
-              React.createElement('p', { style: { margin: '4px 0' } }, 'Kontakt: sekretariat@realschule-schriesheim.de'),
+              React.createElement('p', { style: { margin: '4px 0' } }, window.T ? window.T('recht.verantwortlich', '') : ''),
+              React.createElement('p', { style: { margin: '4px 0' } }, 'Kontakt: ' + (window.T ? window.T('recht.kontaktEmail', '') : '')),
               React.createElement(WikiLink, { url: 'https://de.m.wikipedia.org/wiki/Datenschutz-Grundverordnung', title: 'DSGVO', label: 'Was ist die DSGVO?' })
             ),
             React.createElement(Accordion, { title: 'Zweck der Datenverarbeitung', icon: '📋' },
-              React.createElement('p', { style: { margin: '4px 0' } }, 'KRS Connect dient der internen Kommunikation des Kollegiums. Verarbeitet werden: Name, E-Mail-Adresse, verfasste Nachrichten und hochgeladene Dateien.')
+              React.createElement('p', { style: { margin: '4px 0' } }, (window.T ? window.T('app.name', 'Die App') : 'Die App') + ' dient der internen Kommunikation des Kollegiums. Verarbeitet werden: Name, E-Mail-Adresse, verfasste Nachrichten und hochgeladene Dateien.')
             ),
             React.createElement(Accordion, { title: 'Rechtsgrundlage', icon: '⚖️' },
-              React.createElement('p', { style: { margin: '4px 0' } }, 'Die Verarbeitung erfolgt auf Grundlage von Art. 6 Abs. 1 lit. e DSGVO (öffentliches Interesse/Bildungsauftrag) sowie der einschlägigen Regelungen des LDSG BW.'),
+              React.createElement('p', { style: { margin: '4px 0' } }, 'Die Verarbeitung erfolgt auf Grundlage von Art. 6 Abs. 1 lit. e DSGVO (öffentliches Interesse/Bildungsauftrag) sowie der einschlägigen Regelungen des ' + (window.T ? window.T('recht.landesgesetz', 'LDSG BW') : 'LDSG BW') + '.'),
               React.createElement(WikiLink, { url: 'https://de.m.wikipedia.org/wiki/Landesdatenschutzgesetz_(Baden-W%C3%BCrttemberg)', title: 'LDSG BW', label: 'Landesdatenschutzgesetz BW' })
             ),
             React.createElement(Accordion, { title: 'Hosting & Auftragsverarbeitung', icon: '☁️' },
-              React.createElement('p', { style: { margin: '4px 0' } }, 'Die Daten werden bei Supabase Inc. (EU-Region Frankfurt) gehostet. Ein Auftragsverarbeitungsvertrag (AVV) gemäß Art. 28 DSGVO liegt vor.'),
-              React.createElement('p', { style: { margin: '4px 0' } }, 'Die Webseite wird über GitHub Pages (Microsoft/GitHub Inc.) bereitgestellt.'),
+              React.createElement('p', { style: { margin: '4px 0' } },
+                'Die Daten werden bei Supabase Inc. (' + (window.T ? window.T('supabase.region', 'unbekannte Region') : 'unbekannte Region') + ') gehostet. ' +
+                ((window.T && window.T('recht.avvVorhanden', false) === true)
+                  ? 'Ein Auftragsverarbeitungsvertrag (AVV) gemäß Art. 28 DSGVO liegt vor.'
+                  : '⚠️ Ein Auftragsverarbeitungsvertrag (AVV) gemäß Art. 28 DSGVO muss vor Inbetriebnahme abgeschlossen werden.')
+              ),
+              React.createElement('p', { style: { margin: '4px 0' } }, (window.T ? window.T('recht.hosting', '') : '') || '⚠️ Hosting-Angabe fehlt in der Konfiguration.'),
               React.createElement('div', { style: { display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '6px' } },
                 React.createElement(WikiLink, { url: 'https://de.m.wikipedia.org/wiki/Supabase', title: 'Supabase', label: 'Was ist Supabase?' }),
                 React.createElement(WikiLink, { url: 'https://de.m.wikipedia.org/wiki/GitHub', title: 'GitHub', label: 'Was ist GitHub?' })
@@ -8685,7 +8710,7 @@
         try {
           const n = new Notification(title, {
             body: (body || '').substring(0, 150),
-            icon: KRS_LOGO, badge: KRS_LOGO,
+            icon: APP_LOGO, badge: APP_LOGO,
             tag: 'krs-' + Date.now(),
             renotify: true
           });
@@ -8766,7 +8791,31 @@
       console.warn('Memo-Wrap fehlgeschlagen (Browser evtl. strict):', e.message);
     }
 
+    // TENANT-SPEC.md 3.3/3.6: Konfig-Screen bei fehlender/fehlerhafter tenant.js.
+    // Zeigt bewusst NICHTS Internes (kein TENANT-Dump, kein Key, kein Stacktrace) —
+    // dieser Screen ist auf jedem fehlkonfigurierten Fork von außen erreichbar.
+    function TenantConfigScreen() {
+      return React.createElement('div', { className: 'setup-screen' },
+        React.createElement('div', { style: { fontSize: '32px', marginBottom: '8px' } }, '⚙️'),
+        React.createElement('h1', null, 'Konfiguration fehlt'),
+        React.createElement('p', { style: { color: 'var(--text-secondary)', maxWidth: '420px', textAlign: 'center', lineHeight: '1.5' } },
+          'Diese Installation hat keine gültige tenant.js. Bitte die Einrichtungs-Anleitung ',
+          '(tenant.example.js) befolgen, bevor die App genutzt werden kann.'
+        )
+      );
+    }
+
     function App() {
+      // Start-Guard (TENANT-SPEC.md Sprint-S2-Punkt 3): läuft vor jedem createClient.
+      // ?forceMode=demo (E2E-Tests, Live-Demo) überspringt den Guard komplett — dort
+      // wird nie ein echter Supabase-Client instanziiert. Sonst: fehlende Pflichtfelder
+      // ⇒ Konfig-Screen, kein createClient, kein stiller Demo-Fallback.
+      if (!window.__KRS_FORCE_DEMO) {
+        const tenantCheck = window.validateTenantConfig ? window.validateTenantConfig() : { ok: false };
+        if (!tenantCheck.ok) {
+          return React.createElement(TenantConfigScreen);
+        }
+      }
       const [setupComplete, setSetupComplete] = useState(false);
       const [supabaseClient, setSupabaseClient] = useState(null);
       const [isDemo, setIsDemo] = useState(true);
@@ -8995,9 +9044,15 @@
       }, []);
 
       useEffect(() => {
+        // TENANT-SPEC.md 2.1/3.6: bei hub.enabled:false Listener gar nicht registrieren,
+        // nichts an parent posten. Origin-Prüfung als exakte Array-Mitgliedschaft
+        // (nicht includes()/Substring — sonst akzeptiert https://evil-…github.io.angreifer.tld).
+        if (!window.__KRS_HUB_ENABLED) return;
+        const allowedOrigins = (window.T && window.T('hub.allowedOrigins', [])) || [];
         const isInHub = window.parent !== window;
         const handleHubAuth = async (event) => {
-          if (!event.origin.includes('kurpfalz-realschule.github.io') && event.origin !== window.location.origin) return;
+          if (!allowedOrigins.includes(event.origin) && event.origin !== window.location.origin) return;
+          if (event.source !== window.parent) return;
           if (event.data?.type === 'KRS_HUB_AUTH' && event.data?.hub_verified) {
             // BETA (Login-Modell A): Connect läuft im Hub LIVE und nutzt den
             // EIGENEN E-Mail/Passwort-Login → ECHTE Daten. Der frühere Zwang
@@ -9009,8 +9064,8 @@
           }
         };
         window.addEventListener('message', handleHubAuth);
-        if (isInHub) {
-          window.parent.postMessage({ type: 'KRS_HUB_REQUEST_AUTH', moduleId: 'connect' }, '*');
+        if (isInHub && allowedOrigins[0]) {
+          window.parent.postMessage({ type: 'KRS_HUB_REQUEST_AUTH', moduleId: 'connect' }, allowedOrigins[0]);
         }
         return () => window.removeEventListener('message', handleHubAuth);
       }, []);
@@ -9406,7 +9461,7 @@
                 if (notificationsEnabled && notificationPermission === 'granted') {
                   const n = new Notification(notifTitle, {
                     body: (newPost.title || htmlToText(newPost.content) || 'Neuer Beitrag').substring(0, 150),
-                    icon: KRS_LOGO, badge: KRS_LOGO, tag: 'krs-urgent-' + newPost.id, renotify: true, requireInteraction: isUrgentPost
+                    icon: APP_LOGO, badge: APP_LOGO, tag: 'krs-urgent-' + newPost.id, renotify: true, requireInteraction: isUrgentPost
                   });
                   n.onclick = () => { window.focus(); n.close(); };
                   if (!isUrgentPost) setTimeout(() => n.close(), CONFIG.NOTIFICATION_AUTO_CLOSE);
@@ -9429,7 +9484,8 @@
       // Tab-Titel mit Unread-Count aktualisieren
       useEffect(() => {
         const totalUnread = unreadChatCount + Array.from(unreadPostChannels.values()).reduce((a, b) => a + b, 0);
-        document.title = totalUnread > 0 ? `(${totalUnread}) KRS Connect` : 'KRS Connect';
+        { const __an = window.T ? window.T('app.name', 'Die App') : 'Die App';
+          document.title = totalUnread > 0 ? `(${totalUnread}) ${__an}` : __an; }
       }, [unreadChatCount, unreadPostChannels]);
 
       // Auto-request notification permission on first load
@@ -9926,7 +9982,7 @@
             ),
             React.createElement('div', { className: 'content-body' },
               React.createElement('p', { style: { fontSize: '13px', color: 'var(--text-muted)', margin: 0 } },
-                'Benannte Links zu gemeinsamen Ordnern (z. B. iServ oder Nextcloud). Die Dateien selbst bleiben dort — KRS Connect speichert nur die Verweise.'),
+                'Benannte Links zu gemeinsamen Ordnern (z. B. iServ oder Nextcloud). Die Dateien selbst bleiben dort — ' + (window.T ? window.T('app.name', 'die App') : 'die App') + ' speichert nur die Verweise.'),
               React.createElement(TeamLinksSection, {
                 team: selectedTeam, dataService, user,
                 isTeamAdmin: userTeamRole === 'admin' || user?.role === 'admin'
@@ -10151,13 +10207,14 @@
         React.createElement('a', { href: '#main', className: 'skip-link' }, 'Zum Inhalt springen'),
         // Sidebar mit View-Switcher
         React.createElement('nav', { className: 'sidebar', 'aria-label': 'Hauptnavigation' },
-          React.createElement('div', { className: 'sidebar-logo' }, React.createElement('img', { src: KRS_LOGO, alt: 'KRS', style: { width: '32px', height: '32px', objectFit: 'contain' } })),
+          React.createElement('div', { className: 'sidebar-logo' }, React.createElement('img', { src: APP_LOGO, alt: (window.T ? window.T('schule.nameKurz', 'Logo') : 'Logo'), style: { width: '32px', height: '32px', objectFit: 'contain' } })),
           React.createElement('div', { className: 'sidebar-nav' },
             // v4.14.0: Zurück zum KRS Hub — gleiche Origin wie Connect (kurpfalz-realschule.github.io),
             // daher geteilte Supabase-Session; Navigation im selben Tab (kein neuer Tab wie bei Notizen,
             // weil man hier die App verlässt statt ein Zusatzmodul danebenzustellen).
             // v4.16.0: Läuft Connect im Hub-iframe, ist man schon im Hub — Button ausblenden.
-            !window.__krsIsEmbedded && React.createElement('button', {
+            // TENANT-SPEC.md Sprint-S2-Punkt 8: nur rendern wenn hub.enabled (Fremdschulen haben keinen Hub).
+            window.__KRS_HUB_ENABLED && !window.__krsIsEmbedded && React.createElement('button', {
               className: 'nav-item',
               onClick: () => { window.location.href = window.KRS_HUB_URL; },
               title: 'Zurück zum KRS Hub',
@@ -10187,7 +10244,8 @@
               unreadChatCount > 0 && React.createElement('span', { className: 'nav-badge' }, unreadChatCount > 9 ? '9+' : unreadChatCount)
             ),
             // v4.10.0: Suche & Gespeichert sind in die Ansichten gewandert (🔍 neben Überschrift, 🔖 oben in der Chat-Spalte)
-            React.createElement('button', {
+            // TENANT-SPEC.md Sprint-S2-Punkt 8: nur rendern, wenn links.nextcloudUrl gesetzt ist.
+            !!NEXTCLOUD_FILES_URL && React.createElement('button', {
               className: 'nav-item' + (showFiles ? ' active' : ''),
               onClick: () => setShowFiles(true),
               title: 'Dateiablage (Nextcloud)',
@@ -10196,9 +10254,11 @@
             },
               React.createElement('span', { dangerouslySetInnerHTML: { __html: Icons.files } })
             ),
-            React.createElement('button', {
+            // TENANT-SPEC.md 2.4/Sprint-S2-Punkt 8: URL jetzt aus hub.notizenUrl (vorher inline),
+            // Button nur bei hub.enabled (das Notizen-Modul lebt im KRS-Hub).
+            window.__KRS_HUB_ENABLED && React.createElement('button', {
               className: 'nav-item',
-              onClick: () => window.open('https://kurpfalz-realschule.github.io/krs-hub/notizen/', '_blank', 'noopener'),
+              onClick: () => window.open(window.KRS_HUB_NOTIZEN_URL, '_blank', 'noopener'),
               title: 'Notizen & Aufgaben (persönlich)',
               'aria-label': 'Notizen & Aufgaben',
               'data-testid': 'nav-notizen'
@@ -10212,7 +10272,7 @@
             onClick: () => openModal('feedbackBoard'),
             title: 'Feedback geben & alle Rückmeldungen ansehen'
           }, '📣 Feedback', React.createElement('span', { className: 'beta-tag' }, 'BETA')),
-          React.createElement('div', { className: 'app-version' }, 'KRS Connect v' + window.KRS_VERSION + ' · Beta'),
+          React.createElement('div', { className: 'app-version' }, (window.T ? window.T('app.name', 'Die App') : 'Die App') + ' v' + window.KRS_VERSION + ' · Beta'),
           React.createElement('div', { className: 'sidebar-bottom' },
             React.createElement('button', {
               className: 'online-indicator',
