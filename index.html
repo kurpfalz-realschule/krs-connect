@@ -70,6 +70,14 @@
       border-radius: var(--radius);
     }
     button:focus:not(:focus-visible) { outline: none; }
+    /* Skip-Link „Zum Inhalt springen" (WCAG 2.4.1) — sichtbar nur bei Fokus */
+    .skip-link {
+      position: absolute; left: 8px; top: -48px; z-index: 9999;
+      padding: 10px 16px; background: #1D4ED8; color: #fff;
+      border-radius: var(--radius); font-size: 14px; font-weight: 600;
+      text-decoration: none; transition: top 0.15s ease;
+    }
+    .skip-link:focus { top: 8px; outline: 2px solid #fff; outline-offset: 2px; }
 
     body {
       background: var(--bg-primary);
@@ -4870,10 +4878,17 @@
         ? { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }
         : { bottom: position?.bottom || '60px', right: position?.right || '24px' };
 
-      return React.createElement('div', { className: 'emoji-picker-overlay', onClick: onClose },
-        React.createElement('div', { className: 'emoji-picker', style: pickerStyle, onClick: e => e.stopPropagation() },
-          React.createElement('div', { className: 'emoji-picker-header' },
-            React.createElement('input', { type: 'text', placeholder: 'Emoji suchen...', 'aria-label': 'Emoji suchen...', value: search, onChange: e => setSearch(e.target.value), autoFocus: true })
+      return React.createElement('div', {
+          className: 'emoji-picker-overlay', onClick: onClose,
+          onKeyDown: (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose(); } }
+        },
+        React.createElement('div', {
+            className: 'emoji-picker', style: pickerStyle, onClick: e => e.stopPropagation(),
+            role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Emoji auswählen'
+          },
+          React.createElement('div', { className: 'emoji-picker-header', style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+            React.createElement('input', { type: 'text', placeholder: 'Emoji suchen...', 'aria-label': 'Emoji suchen...', value: search, onChange: e => setSearch(e.target.value), autoFocus: true, style: { flex: 1, minWidth: 0 } }),
+            React.createElement('button', { type: 'button', className: 'emoji-picker-close', 'aria-label': 'Emoji-Auswahl schließen', title: 'Schließen', onClick: onClose, style: { flexShrink: 0, width: '32px', height: '32px', minWidth: '32px', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '18px', color: 'var(--text-muted)', borderRadius: 'var(--radius)' } }, '✕')
           ),
           React.createElement('div', { className: 'emoji-grid' },
             Object.entries(filtered).map(([cat, emojis]) =>
@@ -5185,7 +5200,7 @@
           React.createElement('input', { type: 'password', placeholder: 'Neues Passwort bestätigen', 'aria-label': 'Neues Passwort bestätigen', value: pw2, onChange: (e) => setPw2(e.target.value), onKeyDown: (e) => e.key === 'Enter' && submit(), disabled: loading, autoComplete: 'new-password', style: inputStyle }),
           React.createElement('button', { onClick: submit, disabled: loading || !pw || !pw2, style: { padding: '12px 40px', fontSize: '16px' } }, loading ? 'Speichern...' : '💾 Passwort speichern')
         ),
-        error && React.createElement('p', { style: { color: 'var(--danger)', marginTop: '4px', fontSize: '13px', maxWidth: '320px', textAlign: 'center' } }, error)
+        error && React.createElement('p', { role: 'alert', 'aria-live': 'assertive', style: { color: 'var(--danger)', marginTop: '4px', fontSize: '13px', maxWidth: '320px', textAlign: 'center' } }, error)
       );
     }
 
@@ -5389,6 +5404,9 @@
             type: 'email',
             placeholder: 'E-Mail-Adresse (Schul-Mail)',
             'aria-label': 'E-Mail-Adresse (Schul-Mail)',
+            'aria-required': 'true',
+            'aria-invalid': error ? 'true' : undefined,
+            'aria-describedby': error ? 'login-error' : undefined,
             value: email,
             onChange: (e) => setEmail(e.target.value),
             onKeyDown: (e) => e.key === 'Enter' && handleMagicLink(),
@@ -5400,6 +5418,9 @@
             type: 'password',
             placeholder: 'Passwort',
             'aria-label': 'Passwort',
+            'aria-required': 'true',
+            'aria-invalid': error ? 'true' : undefined,
+            'aria-describedby': error ? 'login-error' : undefined,
             value: password,
             onChange: (e) => setPassword(e.target.value),
             onKeyDown: (e) => e.key === 'Enter' && handleMagicLink(),
@@ -5429,7 +5450,10 @@
           disabled: loading,
           style: { padding: '8px 24px', fontSize: '13px', background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border)' }
         }, 'Demo-Modus'),
-        error && React.createElement('p', { style: { color: 'var(--danger)', marginTop: '10px', fontSize: '13px', maxWidth: '320px', textAlign: 'center' } }, error)
+        React.createElement('p', {
+          id: 'login-error', role: 'alert', 'aria-live': 'assertive',
+          style: { color: 'var(--danger)', marginTop: error ? '10px' : 0, fontSize: '13px', maxWidth: '320px', textAlign: 'center', minHeight: 0 }
+        }, error || '')
       );
     }
 
@@ -6369,7 +6393,7 @@
             React.createElement('h3', null, 'Team erstellen')
           ),
           React.createElement('form', { onSubmit: handleCreate, className: 'modal-body' },
-            error && React.createElement('div', { style: { background: 'var(--danger-bg, #fee)', color: 'var(--danger, #c33)', padding: '10px 12px', borderRadius: 'var(--radius)', marginBottom: '15px', fontSize: '13px' } }, error),
+            error && React.createElement('div', { role: 'alert', 'aria-live': 'assertive', style: { background: 'var(--danger-bg, #fee)', color: 'var(--danger, #c33)', padding: '10px 12px', borderRadius: 'var(--radius)', marginBottom: '15px', fontSize: '13px' } }, error),
             React.createElement('div', { className: 'form-group' },
               React.createElement('label', { className: 'form-label', htmlFor: 'krs-team-name' }, 'Team-Name'),
               React.createElement('input', {
@@ -6557,7 +6581,7 @@
             React.createElement('h3', null, 'Mitgliederverwaltung')
           ),
           React.createElement('div', { className: 'modal-body' },
-            error && React.createElement('div', { style: { background: 'var(--danger-bg, #fee)', color: 'var(--danger, #c33)', padding: '10px 12px', borderRadius: 'var(--radius)', marginBottom: '15px', fontSize: '13px' } }, error),
+            error && React.createElement('div', { role: 'alert', 'aria-live': 'assertive', style: { background: 'var(--danger-bg, #fee)', color: 'var(--danger, #c33)', padding: '10px 12px', borderRadius: 'var(--radius)', marginBottom: '15px', fontSize: '13px' } }, error),
             React.createElement('div', { style: { marginBottom: '20px' } },
               loading ? React.createElement(SkeletonMembers, { count: 4 }) : (() => {
                 const admins = members.filter(m => m.role === 'admin');
@@ -8851,7 +8875,13 @@
         e.preventDefault();
         e.stopPropagation();
         if (user?.role !== 'admin') return;
-        setChannelContextMenu({ channel: ch, x: e.clientX, y: e.clientY });
+        // Maus: Cursorposition. Tastatur (ContextMenu-Taste/Shift+F10): am Element ausrichten.
+        let x = e.clientX, y = e.clientY;
+        if (!x && !y && e.currentTarget && e.currentTarget.getBoundingClientRect) {
+          const r = e.currentTarget.getBoundingClientRect();
+          x = r.right - 8; y = r.bottom - 4;
+        }
+        setChannelContextMenu({ channel: ch, x, y, trigger: e.currentTarget });
       }, [user]);
 
       // Forward post to another channel or DM
@@ -9829,6 +9859,9 @@
                   className: 'list-item' + (selectedChannel?.id === ch.id ? ' active' : ''),
                   onClick: () => handleChannelSelect(ch),
                   onContextMenu: (e) => handleChannelContextMenu(e, ch),
+                  // Tastatur-Äquivalent zum Rechtsklick (WCAG 2.1.1): Kontextmenü-Taste / Shift+F10
+                  onKeyDown: (e) => { if (user?.role === 'admin' && (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10'))) handleChannelContextMenu(e, ch); },
+                  'aria-haspopup': user?.role === 'admin' ? 'menu' : undefined,
                   'aria-current': selectedChannel?.id === ch.id ? 'page' : undefined
                 },
                   React.createElement('span', { style: { fontSize: '12px' } }, '#'),
@@ -10014,14 +10047,36 @@
             )
           )
         ),
-        // Channel Kontextmenü
-        channelContextMenu && React.createElement(React.Fragment, null,
-          React.createElement('div', { style: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 599 }, onClick: () => setChannelContextMenu(null) }),
-          React.createElement('div', { className: 'channel-context-menu', style: { left: channelContextMenu.x, top: channelContextMenu.y } },
-            React.createElement('button', { onClick: () => { setEditingChannel(channelContextMenu.channel); setChannelContextMenu(null); } }, '✏️', ' Umbenennen'),
-            !channelContextMenu.channel.is_default && React.createElement('button', { className: 'danger', onClick: () => { if (confirm('Kanal „' + channelContextMenu.channel.name + '" wirklich löschen? Alle Beiträge gehen verloren.')) handleDeleteChannel(channelContextMenu.channel); else setChannelContextMenu(null); } }, '🗑', ' Löschen')
-          )
-        ),
+        // Channel Kontextmenü — als echtes Tastatur-Menü (WCAG 2.1.1 / 4.1.2)
+        channelContextMenu && (() => {
+          const closeMenu = () => {
+            const t = channelContextMenu.trigger;
+            setChannelContextMenu(null);
+            if (t && document.contains(t)) setTimeout(() => { try { t.focus(); } catch (e) {} }, 0);
+          };
+          const onMenuKey = (e) => {
+            const items = Array.prototype.slice.call(e.currentTarget.querySelectorAll('[role="menuitem"]'));
+            if (!items.length) return;
+            const i = items.indexOf(document.activeElement);
+            if (e.key === 'Escape') { e.preventDefault(); closeMenu(); }
+            else if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+            else if (e.key === 'Home') { e.preventDefault(); items[0].focus(); }
+            else if (e.key === 'End') { e.preventDefault(); items[items.length - 1].focus(); }
+            else if (e.key === 'Tab') { e.preventDefault(); closeMenu(); }
+          };
+          return React.createElement(React.Fragment, null,
+            React.createElement('div', { style: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 599 }, onClick: closeMenu }),
+            React.createElement('div', {
+                className: 'channel-context-menu', style: { left: channelContextMenu.x, top: channelContextMenu.y },
+                role: 'menu', 'aria-label': 'Kanal-Aktionen', onKeyDown: onMenuKey,
+                ref: (el) => { if (el) { const first = el.querySelector('[role="menuitem"]'); if (first) requestAnimationFrame(() => { try { first.focus(); } catch (e) {} }); } }
+              },
+              React.createElement('button', { role: 'menuitem', onClick: () => { setEditingChannel(channelContextMenu.channel); setChannelContextMenu(null); } }, '✏️', ' Umbenennen'),
+              !channelContextMenu.channel.is_default && React.createElement('button', { role: 'menuitem', className: 'danger', onClick: () => { if (confirm('Kanal „' + channelContextMenu.channel.name + '" wirklich löschen? Alle Beiträge gehen verloren.')) handleDeleteChannel(channelContextMenu.channel); else setChannelContextMenu(null); } }, '🗑', ' Löschen')
+            )
+          );
+        })(),
         // Nachricht weiterleiten Modal
         showForwardModal && React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': showForwardModal.__file ? '↪ Datei weiterleiten' : '↪ Nachricht weiterleiten', onClick: () => setShowForwardModal(null) },
           React.createElement('div', { className: 'channel-dialog', style: { width: '340px' }, onClick: e => e.stopPropagation() },
@@ -10065,6 +10120,8 @@
         ),
         // Main app layout
         React.createElement('div', { className: 'app-layout', role: 'application' },
+        // Skip-Link „Zum Inhalt springen" (WCAG 2.4.1) — erstes fokussierbares Element
+        React.createElement('a', { href: '#main', className: 'skip-link' }, 'Zum Inhalt springen'),
         // Sidebar mit View-Switcher
         React.createElement('nav', { className: 'sidebar', 'aria-label': 'Hauptnavigation' },
           React.createElement('div', { className: 'sidebar-logo' }, React.createElement('img', { src: KRS_LOGO, alt: 'KRS', style: { width: '32px', height: '32px', objectFit: 'contain' } })),
@@ -10183,7 +10240,7 @@
           // Profile Panel
           showProfile && user && React.createElement(ProfileModal, { user, onClose: () => setShowProfile(false), onAvatarUpload: handleAvatarUpload, onLogout: () => { setShowProfile(false); handleLogout(); } }),
         // Main content: Teams oder Chat
-        React.createElement('div', { className: 'main' },
+        React.createElement('main', { id: 'main', className: 'main', tabIndex: -1 },
           view === 'teams' ? React.createElement(ErrorBoundary, { fallbackMessage: 'Der Teams-Bereich hatte einen Fehler.' }, teamsView)
             : view === 'chat' ? React.createElement(ErrorBoundary, { fallbackMessage: 'Der Chat-Bereich hatte einen Fehler.' }, chatView)
             : view === 'saved' ? React.createElement('div', { style: { flex: 1, display: 'flex', flexDirection: 'column' } },
@@ -10278,6 +10335,99 @@
       React.createElement(App)
     ));
   </script>
+<!-- A2b · Barrierefreiheit: globaler Focus-Trap + Fokus-Return (WCAG 2.1.2 / 2.4.3) -->
+<script>
+/* Fängt Tab/Shift+Tab zyklisch im obersten [role="dialog"], neutralisiert den
+   Hintergrund (inert + aria-hidden) und gibt den Fokus beim Schließen an das
+   auslösende Element zurück. Rein DOM-basiert (liest den Live-Zustand statt
+   React-State zu schließen) → stale-closure-frei. Escape schließt weiterhin über
+   die vorhandenen Handler der Dialoge; dieser Manager verändert keinen App-State. */
+(function () {
+  'use strict';
+  var FOCUSABLE = 'a[href],area[href],input:not([disabled]):not([type="hidden"]),' +
+    'select:not([disabled]),textarea:not([disabled]),button:not([disabled]),' +
+    'iframe,audio[controls],video[controls],[contenteditable="true"],[tabindex]:not([tabindex="-1"])';
+  var triggerEl = null;          // Element, das den untersten Dialog geöffnet hat
+  var lastOutsideFocus = null;   // zuletzt fokussiertes Element außerhalb aller Dialoge
+  var activeTrap = null;         // aktuell oberster Dialog
+  var neutralized = [];          // neutralisierte Hintergrund-Geschwister (für Restore)
+
+  function isVisible(el) {
+    return !!(el && (el.offsetWidth || el.offsetHeight || el.getClientRects().length));
+  }
+  function openDialogs() {
+    return Array.prototype.filter.call(document.querySelectorAll('[role="dialog"]'), isVisible);
+  }
+  function focusables(container) {
+    return Array.prototype.filter.call(container.querySelectorAll(FOCUSABLE), function (el) {
+      return isVisible(el) && el.getAttribute('aria-hidden') !== 'true';
+    });
+  }
+  function neutralizeBackground(dialog) {
+    var parent = dialog.parentNode;
+    if (!parent || !parent.children) return;
+    Array.prototype.forEach.call(parent.children, function (sib) {
+      if (sib === dialog) return;
+      if (sib.getAttribute && sib.getAttribute('role') === 'dialog') return; // andere Dialoge in Ruhe lassen
+      neutralized.push({ el: sib, ariaHidden: sib.getAttribute('aria-hidden'), hadInert: sib.hasAttribute('inert') });
+      sib.setAttribute('aria-hidden', 'true');
+      try { sib.inert = true; } catch (e) {}
+      sib.setAttribute('inert', '');
+    });
+  }
+  function restoreBackground() {
+    neutralized.forEach(function (n) {
+      if (n.ariaHidden === null) n.el.removeAttribute('aria-hidden');
+      else n.el.setAttribute('aria-hidden', n.ariaHidden);
+      if (!n.hadInert) { try { n.el.inert = false; } catch (e) {} n.el.removeAttribute('inert'); }
+    });
+    neutralized = [];
+  }
+  function focusInto(dialog) {
+    if (dialog.contains(document.activeElement)) return; // Dialog hat sich selbst fokussiert (autoFocus)
+    var f = focusables(dialog);
+    var target = f[0] || dialog;
+    if (target === dialog && !dialog.hasAttribute('tabindex')) dialog.setAttribute('tabindex', '-1');
+    try { target.focus(); } catch (e) {}
+  }
+  function reconcile() {
+    var open = openDialogs();
+    var top = open.length ? open[open.length - 1] : null;
+    if (top === activeTrap) return;
+    restoreBackground();
+    if (top === null) {                 // alle Dialoge zu → Fokus zurückgeben
+      activeTrap = null;
+      var t = triggerEl; triggerEl = null;
+      if (t && document.contains(t)) { try { t.focus(); } catch (e) {} }
+      return;
+    }
+    if (activeTrap === null) {           // Öffnen aus Zustand ohne Dialog → Auslöser merken
+      triggerEl = (lastOutsideFocus && document.contains(lastOutsideFocus)) ? lastOutsideFocus : document.activeElement;
+    }
+    activeTrap = top;
+    neutralizeBackground(top);
+    focusInto(top);
+  }
+  document.addEventListener('focusin', function (e) {
+    var t = e.target;
+    if (!activeTrap && t && t.closest && !t.closest('[role="dialog"]')) lastOutsideFocus = t;
+  }, true);
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Tab' || !activeTrap || !document.contains(activeTrap)) return;
+    var f = focusables(activeTrap);
+    if (!f.length) { e.preventDefault(); try { activeTrap.focus(); } catch (er) {} return; }
+    var first = f[0], last = f[f.length - 1], a = document.activeElement, inside = activeTrap.contains(a);
+    if (e.shiftKey) { if (!inside || a === first) { e.preventDefault(); last.focus(); } }
+    else { if (!inside || a === last) { e.preventDefault(); first.focus(); } }
+  }, true);
+  function start() {
+    new MutationObserver(function () { reconcile(); }).observe(document.body, { childList: true, subtree: true });
+    reconcile();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+  window.__krsFocusTrap = { reconcile: reconcile, get active() { return activeTrap; } };
+})();
+</script>
 <!-- KRSC-INJECT-START -->
 <!-- KRS LERN-COACH · Konfiguration Connect (vor der Engine einbinden) -->
 <script>
