@@ -147,32 +147,12 @@
     }
   } catch (e) { /* Framing-Schutz darf die App nie zum Absturz bringen */ }
 
-  // ── 3.7 Content-Security-Policy (Report-Only) ───────────────────────────
-  try {
-    const su = window.TENANT.supabase && window.TENANT.supabase.url;
-    const fb = window.TENANT.feedback && window.TENANT.feedback.gasUrl;
-    const connectSrc = ["'self'"];
-    if (su) {
-      connectSrc.push(su);
-      try { connectSrc.push('wss://' + new URL(su).host); } catch (e) {}
-    }
-    if (fb) connectSrc.push(fb);
-    // KEIN frame-ancestors hier: das <meta http-equiv="CSP">-Element unterstützt
-    // frame-ancestors/sandbox/report-uri nicht (Web-Plattform-Grenze) — ein Browser
-    // verwirft dann die GESAMTE Policy und loggt eine Konsolen-Warnung. Framing-Schutz
-    // läuft stattdessen über die window.top-Prüfung weiter unten (3.8).
-    const csp = [
-      "script-src https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com 'unsafe-inline'",
-      "connect-src " + connectSrc.join(' '),
-      "img-src 'self' data: blob:",
-      "object-src 'none'",
-      "base-uri 'none'",
-    ].join('; ');
-    const meta = document.createElement('meta');
-    meta.setAttribute('http-equiv', 'Content-Security-Policy-Report-Only');
-    meta.setAttribute('content', csp);
-    document.head.appendChild(meta);
-  } catch (e) { /* CSP ist Report-Only — darf die App nie blockieren */ }
+  // ── 3.7 Content-Security-Policy — ZURÜCKGESTELLT (echter Befund, 22.07.2026) ──
+  // Browser lehnen JEDE per <meta> gelieferte "Content-Security-Policy-Report-Only"
+  // grundsätzlich ab (nicht direktivenspezifisch) — bestätigt im CI-Gate. Nur die
+  // ENFORCED-Variante ist per <meta> zulässig, aber ohne Report-Only-Beobachtungsphase
+  // riskant; GitHub Pages kann zudem keine eigenen HTTP-Header setzen. Verschoben auf
+  // S4 (dort ohnehin Hosting-Fragen im Fokus). Der Framing-Schutz oben bleibt wirksam.
 
   // ── 3.6 validateTenantConfig() — läuft vor createClient ─────────────────
   window.validateTenantConfig = function () {

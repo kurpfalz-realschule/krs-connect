@@ -137,32 +137,21 @@
     // Hub-Auth-Listener (index.html, exakter Array-Vergleich, s. TENANT-SPEC 2.1/3.6).
   } catch (e) { /* Framing-Schutz darf die App nie zum Absturz bringen */ }
 
-  // ── 3.7 Content-Security-Policy (Report-Only, s. TENANT-SPEC 3.7) ──────
-  try {
-    const su = window.TENANT.supabase && window.TENANT.supabase.url;
-    const fb = window.TENANT.feedback && window.TENANT.feedback.gasUrl;
-    const connectSrc = ["'self'"];
-    if (su) {
-      connectSrc.push(su);
-      try { connectSrc.push('wss://' + new URL(su).host); } catch (e) {}
-    }
-    if (fb) connectSrc.push(fb);
-    // KEIN frame-ancestors hier: das <meta http-equiv="CSP">-Element unterstützt
-    // frame-ancestors/sandbox/report-uri nicht (Web-Plattform-Grenze) — ein Browser
-    // verwirft dann die GESAMTE Policy und loggt eine Konsolen-Warnung. Framing-Schutz
-    // läuft stattdessen über die window.top-Prüfung weiter unten (3.8).
-    const csp = [
-      "script-src https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com 'unsafe-inline'",
-      "connect-src " + connectSrc.join(' '),
-      "img-src 'self' data: blob:",
-      "object-src 'none'",
-      "base-uri 'none'",
-    ].join('; ');
-    const meta = document.createElement('meta');
-    meta.setAttribute('http-equiv', 'Content-Security-Policy-Report-Only');
-    meta.setAttribute('content', csp);
-    document.head.appendChild(meta);
-  } catch (e) { /* CSP ist Report-Only — darf die App nie blockieren */ }
+  // ── 3.7 Content-Security-Policy — ZURÜCKGESTELLT (echter Befund, 22.07.2026) ──
+  // TENANT-SPEC 3.7 wollte die CSP zunächst als Report-Only per <meta> ausliefern.
+  // Das ist technisch nicht möglich: Browser lehnen JEDE per <meta> gelieferte
+  // "Content-Security-Policy-Report-Only" grundsätzlich ab (nicht nur einzelne
+  // Direktiven wie frame-ancestors) — bestätigt durch Run #60/#61 im CI-Gate
+  // (Konsolen-Warnung "...was delivered via a <meta> element, which is disallowed").
+  // Nur die ENFORCED-Variante ("Content-Security-Policy") ist per <meta> zulässig,
+  // aber ohne vorherige Report-Only-Beobachtungsphase riskiert eine zu enge Policy,
+  // die App sofort unbenutzbar zu machen (genau das, wovor 3.7 warnt). Da GitHub
+  // Pages zudem keine eigenen HTTP-Response-Header setzen kann (kein Server dahinter),
+  // ist eine echte Report-Only-Phase hier ohne einen vorgeschalteten Edge-Dienst
+  // (z. B. Cloudflare Worker) nicht sauber umsetzbar.
+  // Entscheidung: CSP-Auslieferung auf S4 verschoben (dort ohnehin Hosting-Fragen im
+  // Fokus). Der Framing-Schutz oben (window.top-Prüfung, TENANT-SPEC 3.8) bleibt die
+  // wirksame Schutzmaßnahme gegen Clickjacking und ist von diesem Befund unabhängig.
 
   // ── 3.6 validateTenant() — Sicherheits-Härtung, läuft vor createClient ──
   // Rückgabe: { ok: true } oder { ok: false, reason: '<generischer Text ohne Interna>' }

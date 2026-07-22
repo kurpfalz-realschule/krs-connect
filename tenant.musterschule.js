@@ -126,27 +126,9 @@
     }
   } catch (e) {}
 
-  // ── CSP (Report-Only) ──
-  try {
-    const su = window.TENANT.supabase && window.TENANT.supabase.url;
-    const fb = window.TENANT.feedback && window.TENANT.feedback.gasUrl;
-    const connectSrc = ["'self'"];
-    if (su) { connectSrc.push(su); try { connectSrc.push('wss://' + new URL(su).host); } catch (e) {} }
-    if (fb) connectSrc.push(fb);
-    const csp = [
-      "script-src https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com 'unsafe-inline'",
-      "connect-src " + connectSrc.join(' '),
-      "img-src 'self' data: blob:",
-      "object-src 'none'",
-      "base-uri 'none'",
-      // KEIN frame-ancestors: <meta>-CSP unterstützt das nicht (Browser verwirft sonst
-      // die ganze Policy + Konsolen-Warnung). Framing-Schutz läuft über window.top oben.
-    ].join('; ');
-    const meta = document.createElement('meta');
-    meta.setAttribute('http-equiv', 'Content-Security-Policy-Report-Only');
-    meta.setAttribute('content', csp);
-    document.head.appendChild(meta);
-  } catch (e) {}
+  // ── CSP zurückgestellt (s. tenant.js für Begründung: <meta>-Report-Only wird von
+  //    Browsern grundsätzlich verworfen, GitHub Pages kann keine HTTP-Header setzen,
+  //    verschoben auf S4). Framing-Schutz oben bleibt wirksam. ──
 
   // ── validateTenantConfig() — im Demo-Modus wird sie nie aufgerufen (forceMode=demo
   // überspringt den Guard komplett, s. TENANT-SPEC 3.3), aber der Vollständigkeit
