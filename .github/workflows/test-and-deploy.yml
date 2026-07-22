@@ -78,6 +78,14 @@ jobs:
           else
             cp index.html _site/
           fi
+          # tenant.js ist PFLICHT (TENANT-SPEC.md Sprint S2): index.html lädt es als
+          # erstes Script per <script src="tenant.js"> — fehlt es im Deploy-Verzeichnis,
+          # zeigt die Live-Seite für alle Nutzer:innen den Konfig-Screen statt des Logins.
+          if [ -f tenant.js ]; then
+            cp tenant.js _site/
+          else
+            echo "::error::tenant.js fehlt im Repo — Deploy würde die Live-Seite unbenutzbar machen." && exit 1
+          fi
           # Optionale Assets
           for f in logo*.png manifest.json sw.js favicon.ico; do
             [ -f "$f" ] && cp "$f" _site/ || true
