@@ -8,7 +8,7 @@ import { test, expect, openConnect } from '../fixtures/connect';
  */
 test.describe('#11 Nachrichten-Reaktionen — DataService (Demo)', () => {
   test('toggle setzt/entfernt Reaktion, mehrere User zählen korrekt', async ({ page }) => {
-    await openConnect(page, { user: 'nk' });
+    await openConnect(page, { user: 'la' });
     const r = await page.evaluate(async () => {
       const DS = (window as any).DataService;
       const ds = new DS(null);

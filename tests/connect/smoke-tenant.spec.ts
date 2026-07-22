@@ -39,7 +39,7 @@ async function useBrokenTenant(page: import('@playwright/test').Page) {
 test.describe('Tenant-Mechanik (Demo, tenant.musterschule.js per Route-Swap)', () => {
   test('TENANT.app.name erscheint im document.title', async ({ page }) => {
     await useMusterschuleTenant(page);
-    const params = new URLSearchParams({ forceMode: 'demo', forceUser: 'nk' });
+    const params = new URLSearchParams({ forceMode: 'demo', forceUser: 'la' });
     await page.addInitScript(() => { try { localStorage.setItem('krs_onboarding_done', '1'); } catch (e) {} });
     await page.goto(`/index.html?${params.toString()}`);
     await page.waitForFunction(() => typeof (window as any).KRS_VERSION === 'string', null, { timeout: 10_000 });
@@ -48,7 +48,7 @@ test.describe('Tenant-Mechanik (Demo, tenant.musterschule.js per Route-Swap)', (
 
   test('hub.enabled:false ⇒ kein 🏠-Button und kein Notizen-Button', async ({ page }) => {
     await useMusterschuleTenant(page);
-    const params = new URLSearchParams({ forceMode: 'demo', forceUser: 'nk' });
+    const params = new URLSearchParams({ forceMode: 'demo', forceUser: 'la' });
     await page.addInitScript(() => { try { localStorage.setItem('krs_onboarding_done', '1'); } catch (e) {} });
     await page.goto(`/index.html?${params.toString()}`);
     await expect(page.locator('.app-layout, nav.sidebar').first()).toBeVisible({ timeout: 10_000 });
@@ -60,7 +60,7 @@ test.describe('Tenant-Mechanik (Demo, tenant.musterschule.js per Route-Swap)', (
 
   test('links.nextcloudUrl leer ⇒ keine Dateiablage-Karte in der Sidebar', async ({ page }) => {
     await useMusterschuleTenant(page);
-    const params = new URLSearchParams({ forceMode: 'demo', forceUser: 'nk' });
+    const params = new URLSearchParams({ forceMode: 'demo', forceUser: 'la' });
     await page.addInitScript(() => { try { localStorage.setItem('krs_onboarding_done', '1'); } catch (e) {} });
     await page.goto(`/index.html?${params.toString()}`);
     await expect(page.locator('.app-layout, nav.sidebar').first()).toBeVisible({ timeout: 10_000 });
@@ -69,7 +69,7 @@ test.describe('Tenant-Mechanik (Demo, tenant.musterschule.js per Route-Swap)', (
 
   test('feedback.gasUrl leer ⇒ FEEDBACK_GAS_URL ist leer (kein Fremd-Sheet-Schreiben)', async ({ page }) => {
     await useMusterschuleTenant(page);
-    const params = new URLSearchParams({ forceMode: 'demo', forceUser: 'nk' });
+    const params = new URLSearchParams({ forceMode: 'demo', forceUser: 'la' });
     await page.addInitScript(() => { try { localStorage.setItem('krs_onboarding_done', '1'); } catch (e) {} });
     await page.goto(`/index.html?${params.toString()}`);
     await page.waitForFunction(() => typeof (window as any).KRS_VERSION === 'string', null, { timeout: 10_000 });
@@ -78,7 +78,7 @@ test.describe('Tenant-Mechanik (Demo, tenant.musterschule.js per Route-Swap)', (
 
   test('Accent aus tenant.js landet in --accent', async ({ page }) => {
     await useMusterschuleTenant(page);
-    const params = new URLSearchParams({ forceMode: 'demo', forceUser: 'nk' });
+    const params = new URLSearchParams({ forceMode: 'demo', forceUser: 'la' });
     await page.addInitScript(() => { try { localStorage.setItem('krs_onboarding_done', '1'); } catch (e) {} });
     await page.goto(`/index.html?${params.toString()}`);
     await page.waitForFunction(() => typeof (window as any).KRS_VERSION === 'string', null, { timeout: 10_000 });

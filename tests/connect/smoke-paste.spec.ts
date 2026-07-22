@@ -33,7 +33,7 @@ async function pasteHtml(page: any, html: string, plain: string) {
 test.describe('Paste-Formatierung im Beitrags-Editor (WYSIWYG)', () => {
 
   test('HTML-Paste übernimmt Fett-Formatierung', async ({ page }) => {
-    await openConnect(page, { user: 'nk' });
+    await openConnect(page, { user: 'la' });
     const editor = await openPostEditor(page);
     if (!editor) { test.skip(true, 'Kein Beitrags-Editor sichtbar — UI-Variante'); return; }
 
@@ -45,7 +45,7 @@ test.describe('Paste-Formatierung im Beitrags-Editor (WYSIWYG)', () => {
   });
 
   test('HTML-Paste übernimmt Links', async ({ page }) => {
-    await openConnect(page, { user: 'nk' });
+    await openConnect(page, { user: 'la' });
     const editor = await openPostEditor(page);
     if (!editor) { test.skip(true, 'Kein Beitrags-Editor'); return; }
 
@@ -57,7 +57,7 @@ test.describe('Paste-Formatierung im Beitrags-Editor (WYSIWYG)', () => {
   });
 
   test('Plaintext-Paste bleibt einfacher Text', async ({ page }) => {
-    await openConnect(page, { user: 'nk' });
+    await openConnect(page, { user: 'la' });
     const editor = await openPostEditor(page);
     if (!editor) { test.skip(true, 'Kein Beitrags-Editor'); return; }
 
@@ -67,7 +67,7 @@ test.describe('Paste-Formatierung im Beitrags-Editor (WYSIWYG)', () => {
   });
 
   test('Word/Outlook-Paste wird zu sauberem HTML bereinigt', async ({ page }) => {
-    await openConnect(page, { user: 'nk' });
+    await openConnect(page, { user: 'la' });
     const editor = await openPostEditor(page);
     if (!editor) { test.skip(true, 'Kein Beitrags-Editor'); return; }
 
@@ -110,7 +110,7 @@ test.describe('Chat: WYSIWYG-Eingabe + Bild-Paste', () => {
   }
 
   test('Chat-Eingabe ist ein WYSIWYG-Feld (contentEditable)', async ({ page }) => {
-    await openConnect(page, { user: 'nk' });
+    await openConnect(page, { user: 'la' });
     if (!await openFirstChat(page)) { test.skip(true, 'Kein Chat sichtbar — Demo-Variante'); return; }
 
     const editor = page.locator('.chat-input-bar .rich-editor').first();
@@ -120,7 +120,7 @@ test.describe('Chat: WYSIWYG-Eingabe + Bild-Paste', () => {
   });
 
   test('Bild-Paste im Chat hängt Datei an (Toast)', async ({ page }) => {
-    await openConnect(page, { user: 'nk' });
+    await openConnect(page, { user: 'la' });
     if (!await openFirstChat(page)) { test.skip(true, 'Kein Chat sichtbar — Demo-Variante'); return; }
 
     const editor = page.locator('.chat-input-bar .rich-editor').first();

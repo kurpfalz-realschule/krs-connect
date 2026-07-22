@@ -13,7 +13,7 @@ import { test, expect, openConnect } from '../fixtures/connect';
  */
 test.describe('KRS Connect — Hub-Link', () => {
   test('Sidebar zeigt Hub-Eintrag ganz oben', async ({ page }) => {
-    await openConnect(page, { user: 'nk' });
+    await openConnect(page, { user: 'la' });
     const nav = page.getByTestId('nav-hub');
     await expect(nav).toBeVisible({ timeout: 8_000 });
     await expect(nav).toHaveAttribute('aria-label', 'Zurück zum KRS Hub');
@@ -21,7 +21,7 @@ test.describe('KRS Connect — Hub-Link', () => {
   });
 
   test('Hub-URL-Konstante zeigt auf krs-hub (Origin-Check)', async ({ page }) => {
-    await openConnect(page, { user: 'nk' });
+    await openConnect(page, { user: 'la' });
     const hubUrl = await page.evaluate(() => (window as any).KRS_HUB_URL);
     expect(hubUrl).toBe('https://kurpfalz-realschule.github.io/krs-hub/');
   });
@@ -35,7 +35,7 @@ test.describe('KRS Connect — Hub-Link', () => {
       (window as any).__krsIsEmbedded = true;
       try { localStorage.setItem('krs_onboarding_done', '1'); } catch (e) {}
     });
-    const params = new URLSearchParams({ forceMode: 'demo', forceUser: 'nk' });
+    const params = new URLSearchParams({ forceMode: 'demo', forceUser: 'la' });
     await page.goto(`/index.html?${params.toString()}`);
     await page.waitForFunction(() => typeof (window as any).KRS_VERSION === 'string', null, { timeout: 10_000 });
 

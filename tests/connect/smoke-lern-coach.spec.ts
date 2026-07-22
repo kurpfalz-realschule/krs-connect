@@ -10,7 +10,7 @@ import { test, expect, openConnect } from '../fixtures/connect';
  */
 test.describe('KRS Connect — Lern-Coach Overlay', () => {
   test('FAB ist sichtbar und API vorhanden', async ({ page }) => {
-    await openConnect(page, { user: 'nk' });
+    await openConnect(page, { user: 'la' });
     const fab = page.locator('.krsc-fab');
     await expect(fab).toBeVisible({ timeout: 8_000 });
     const hasApi = await page.evaluate(() => typeof (window as any).KRSCoach === 'object');
@@ -18,7 +18,7 @@ test.describe('KRS Connect — Lern-Coach Overlay', () => {
   });
 
   test('Öffnen zeigt Panel mit 5 Schritten', async ({ page }) => {
-    await openConnect(page, { user: 'nk' });
+    await openConnect(page, { user: 'la' });
     await page.locator('.krsc-fab').click();
     await expect(page.locator('.krsc-panel.krsc-open')).toBeVisible({ timeout: 5_000 });
     await expect(page.locator('.krsc-step')).toHaveCount(5);
@@ -27,7 +27,7 @@ test.describe('KRS Connect — Lern-Coach Overlay', () => {
   });
 
   test('Fortschritt wird gemerkt (localStorage)', async ({ page }) => {
-    await openConnect(page, { user: 'nk' });
+    await openConnect(page, { user: 'la' });
     await page.locator('.krsc-fab').click();
     await expect(page.locator('.krsc-panel.krsc-open')).toBeVisible();
     // ersten Schritt als erledigt markieren
@@ -42,7 +42,7 @@ test.describe('KRS Connect — Lern-Coach Overlay', () => {
   });
 
   test('Schließen per ESC funktioniert', async ({ page }) => {
-    await openConnect(page, { user: 'nk' });
+    await openConnect(page, { user: 'la' });
     await page.locator('.krsc-fab').click();
     await expect(page.locator('.krsc-panel.krsc-open')).toBeVisible();
     await page.keyboard.press('Escape');
@@ -50,7 +50,7 @@ test.describe('KRS Connect — Lern-Coach Overlay', () => {
   });
 
   test('FAB blendet sich aus, wenn alle Schritte erledigt', async ({ page }) => {
-    await openConnect(page, { user: 'nk' });
+    await openConnect(page, { user: 'la' });
     await page.locator('.krsc-fab').click();
     await expect(page.locator('.krsc-panel.krsc-open')).toBeVisible();
     // alle Schritte als erledigt markieren

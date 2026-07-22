@@ -44,9 +44,9 @@ test.describe('KRS Connect im Hub — Live-Login (Modell A)', () => {
         type: 'KRS_HUB_AUTH',
         hub_verified: true,
         user: {
-          kuerzel: 'nk',
-          display_name: 'Norbert K.',
-          lehrkraft_name: 'Norbert Kotzan',
+          kuerzel: 'la',
+          display_name: 'Lehrkraft A',
+          lehrkraft_name: 'Test Lehrkraft',
           role: 'admin',
         },
       }, '*');

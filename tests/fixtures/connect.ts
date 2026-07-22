@@ -55,7 +55,7 @@ export async function selectUser(page: Page, kuerzel: string) {
  */
 export const test = base.extend<{ connectPage: Page }>({
   connectPage: async ({ page }, use) => {
-    await openConnect(page, { user: 'nk' }); // Norbert K. als Standard-Demo-User
+    await openConnect(page, { user: 'la' }); // Lehrkraft A (anonyme Demo-Persona) als Standard-Demo-User
     await use(page);
   },
 });

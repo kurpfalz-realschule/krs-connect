@@ -12,7 +12,7 @@ import { test, expect, openConnect } from '../fixtures/connect.ts';
 test.describe('Paste/Render: Farben & Bilder bleiben erhalten', () => {
 
   test.beforeEach(async ({ page }) => {
-    await openConnect(page, { user: 'nk' });
+    await openConnect(page, { user: 'la' });
     // DOMPurify muss geladen sein, sonst degradieren die Funktionen auf Plaintext
     await page.waitForFunction(
       () => !!(window as any).DOMPurify

@@ -62,13 +62,13 @@ async function runAxe(page: import('@playwright/test').Page, kontext: string) {
 
 test.describe('KRS Connect — WCAG 2.1 AA (axe-core)', () => {
   test('Startansicht hat keine kritischen axe-Verstöße', async ({ page }) => {
-    await openConnect(page, { user: 'nk' });
+    await openConnect(page, { user: 'la' });
     await waitForAppReady(page);
     await runAxe(page, 'connect/start');
   });
 
   test('Feedback-Modal ist axe-sauber (Rolle/Name/Kontrast)', async ({ page }) => {
-    await openConnect(page, { user: 'nk' });
+    await openConnect(page, { user: 'la' });
     await waitForAppReady(page);
 
     const trigger = page
@@ -85,7 +85,7 @@ test.describe('KRS Connect — WCAG 2.1 AA (axe-core)', () => {
   });
 
   test('Beitrag-/Eingabeformular ist axe-sauber (Labels/Fehler)', async ({ page }) => {
-    await openConnect(page, { user: 'nk' });
+    await openConnect(page, { user: 'la' });
     await waitForAppReady(page);
 
     const input = page
@@ -104,7 +104,7 @@ test.describe('KRS Connect — WCAG 2.1 AA (axe-core)', () => {
   // war bisher nicht separat axe-geprüft — deckt die in A2b offen gelassene
   // Frage nach vollständiger axe-"region"-Abdeckung im mehrspaltigen Layout ab.
   test('Chat-Ansicht (zweite Mehrspalten-Struktur) ist axe-sauber', async ({ page }) => {
-    await openConnect(page, { user: 'nk' });
+    await openConnect(page, { user: 'la' });
     await waitForAppReady(page);
 
     const chatNav = page.locator('button[aria-label="Chats"]').first();

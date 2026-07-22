@@ -13,7 +13,7 @@ import { test, expect, openConnect } from '../fixtures/connect';
  */
 test.describe('#9 Team anlegen — DataService (Demo)', () => {
   test('createTeam legt Team + Default-Kanal an und taucht in getTeams auf', async ({ page }) => {
-    await openConnect(page, { user: 'nk' });
+    await openConnect(page, { user: 'la' });
 
     const r = await page.evaluate(async () => {
       const DS = (window as any).DataService;

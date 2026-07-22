@@ -1947,8 +1947,10 @@
     // gegen #fff erreicht (Ziel 4.6:1 mit Sicherheitsabstand) — siehe TEAM_COLORS
     // unten für die vollständige Palette inkl. Vorher/Nachher-Kommentar.
     const MOCK_USERS = [
-      { id: 1, username: 'nk', display_name: 'Norbert K.', avatar_color: '#6c5df6', role: 'admin' },
-      // S2: Demo-User anonymisiert — keine Initialen echter Lehrkräfte
+      // S2b: Demo-Personas vollständig anonymisiert — keine echte Person, auch nicht
+      // Norbert (TENANT-SPEC.md 5b/R6). username 'nk' → 'la', damit ein Fork keine
+      // reale Identität mit ausliefert; Test-Fixture + alle Specs wurden mitmigriert.
+      { id: 1, username: 'la', display_name: 'Lehrkraft A', avatar_color: '#6c5df6', role: 'admin' },
       { id: 2, username: 'lb', display_name: 'Lehrkraft B', avatar_color: '#a26907', role: 'admin' },
       { id: 3, username: 'lc', display_name: 'Lehrkraft C', avatar_color: '#df177a', role: 'admin' },
       { id: 4, username: 'al', display_name: 'Anna L.', avatar_color: '#0c855d', role: 'member' },
@@ -1959,7 +1961,7 @@
     ];
 
     const MOCK_TEAMS = [
-      { id: 1, name: 'Kollegium', icon_text: 'KRS', icon_color: '#6c5df6', category: 'Teams', description: 'Gesamtes Kollegium', members: 35 },
+      { id: 1, name: 'Kollegium', icon_text: (window.T ? window.T('schule.nameKurz', 'KRS') : 'KRS'), icon_color: '#6c5df6', category: 'Teams', description: 'Gesamtes Kollegium', members: 35 },
       { id: 2, name: 'Musik Fachschaft', icon_text: '♪', icon_color: '#df177a', category: 'Teams', description: 'Fachschaft Musik', members: 4 },
       { id: 3, name: 'Informatik Fachschaft', icon_text: '</>', icon_color: '#1b6df5', category: 'Teams', description: 'Fachschaft Informatik', members: 3 },
       { id: 4, name: 'Religion Fachschaft', icon_text: 'RF', icon_color: '#c35305', category: 'Teams', description: 'Fachschaft Religion', members: 5 },
@@ -1968,7 +1970,7 @@
       { id: 7, name: '8a / Lehrer:innen / 25-26', icon_text: '8L', icon_color: '#0c855d', category: 'Kurse', description: 'Klassenteam 8a', members: 7 },
       { id: 8, name: '9c / Lehrer:innen / 25-26', icon_text: '9C', icon_color: '#8553f5', category: 'Kurse', description: 'Klassenteam 9c', members: 9 },
       { id: 9, name: '6c / Lehrer:innen / 25-26', icon_text: '5L', icon_color: '#9e42f6', category: 'Kurse', description: 'Klassenteam 6c', members: 8 },
-      { id: 10, name: 'Gourmetküche', icon_text: 'G', icon_color: '#e81414', category: 'Kurse', description: 'AG Kochen', members: 3 },
+      { id: 10, name: 'Koch-AG', icon_text: 'G', icon_color: '#e81414', category: 'Kurse', description: 'AG Kochen', members: 3 },
     ];
 
     // Demo-Store für Nachrichten-Reaktionen (#11): { [messageId]: [{emoji, users:[], count}] }
@@ -2008,11 +2010,11 @@
     // Demo-Store für Team-Dateiablage-Links (v4.12.0): { [teamId]: [link, ...] }
     let MOCK_TEAM_LINKS = {
       1: [
-        { id: 'tl1', team_id: 1, titel: 'Nextcloud-Ordner Kollegium', url: 'https://cloud.krs-beispiel.de/s/kollegium', beschreibung: 'Gemeinsame Dateien des Kollegiums', icon: '📁', created_by: 1, created_at: '2026-06-25T08:00:00.000Z', sort_order: 0 },
-        { id: 'tl2', team_id: 1, titel: 'Nextcloud Schulordner', url: 'https://cloud.krs-beispiel.de/s/kollegium-archiv', beschreibung: 'Pilot der eigenen Dateiablage', icon: '☁️', created_by: 2, created_at: '2026-06-26T10:15:00.000Z', sort_order: 1 }
+        { id: 'tl1', team_id: 1, titel: 'Nextcloud-Ordner Kollegium', url: 'https://cloud.musterschule.example/s/kollegium', beschreibung: 'Gemeinsame Dateien des Kollegiums', icon: '📁', created_by: 1, created_at: '2026-06-25T08:00:00.000Z', sort_order: 0 },
+        { id: 'tl2', team_id: 1, titel: 'Nextcloud Schulordner', url: 'https://cloud.musterschule.example/s/kollegium-archiv', beschreibung: 'Pilot der eigenen Dateiablage', icon: '☁️', created_by: 2, created_at: '2026-06-26T10:15:00.000Z', sort_order: 1 }
       ],
       2: [
-        { id: 'tl3', team_id: 2, titel: 'Noten & Arrangements (Nextcloud)', url: 'https://cloud.krs-beispiel.de/s/musik', beschreibung: 'Ablage der Fachschaft Musik', icon: '🎵', created_by: 1, created_at: '2026-06-27T12:00:00.000Z', sort_order: 0 }
+        { id: 'tl3', team_id: 2, titel: 'Noten & Arrangements (Nextcloud)', url: 'https://cloud.musterschule.example/s/musik', beschreibung: 'Ablage der Fachschaft Musik', icon: '🎵', created_by: 1, created_at: '2026-06-27T12:00:00.000Z', sort_order: 0 }
       ]
     };
 
@@ -2025,7 +2027,7 @@
         { id: 'tt3', team_id: 1, titel: 'Pädagogischer Tag', datum: __demoDatum(-30), uhrzeit: '', ort: 'Aula', beschreibung: 'Bereits vorbei — steht unter „Vergangene Termine".', created_by: 3, created_at: '2026-03-20T08:00:00.000Z' }
       ],
       2: [
-        { id: 'tt4', team_id: 2, titel: 'Schulband-Generalprobe', datum: __demoDatum(8), uhrzeit: '15:30', ort: 'Musiksaal', beschreibung: 'Generalprobe fürs Sommerkonzert', created_by: 1, created_at: '2026-06-22T10:00:00.000Z' }
+        { id: 'tt4', team_id: 2, titel: 'Musik-AG-Generalprobe', datum: __demoDatum(8), uhrzeit: '15:30', ort: 'Musiksaal', beschreibung: 'Generalprobe fürs Sommerkonzert', created_by: 1, created_at: '2026-06-22T10:00:00.000Z' }
       ]
     };
 
@@ -2035,19 +2037,19 @@
         { id: 2, name: 'FAQ und Infos', unread: 3 },
         { id: 3, name: 'Austausch Digitales', unread: 0 },
         { id: 4, name: 'Kollegialer Austausch', unread: 1 },
-        { id: 5, name: 'NEO Zeugnis', unread: 0 },
-        { id: 6, name: 'Schulsozialarbeit informiert', unread: 0 },
+        { id: 5, name: 'Zeugnisse', unread: 0 },
+        { id: 6, name: 'Schulsozialarbeit', unread: 0 },
         { id: 7, name: 'SMV', unread: 2 },
       ],
       2: [
         { id: 10, name: 'Allgemein', is_default: true, unread: 0 },
-        { id: 11, name: 'Schulband', unread: 1 },
+        { id: 11, name: 'Musik-AG', unread: 1 },
         { id: 12, name: 'Konzerte', unread: 0 },
       ],
       3: [
         { id: 20, name: 'Allgemein', is_default: true, unread: 0 },
-        { id: 21, name: 'iPad-Verwaltung', unread: 2 },
-        { id: 22, name: 'iServ', unread: 0 },
+        { id: 21, name: 'Geräteverwaltung', unread: 2 },
+        { id: 22, name: 'Schulverwaltung', unread: 0 },
       ],
     };
 
@@ -2055,14 +2057,14 @@
       2: [
         {
           id: 1, author: MOCK_USERS[1], title: 'FAQ und Infos Schulwoche 12',
-          content: '<p>Liebe Kolleginnen und Kollegen,</p><p><strong>1. Sperrung Schwimmbad:</strong></p><ul><li>Am Freitag den 21.03.2026 findet kein Schwimmunterricht statt</li><li>Grund: Wartungsarbeiten am Filtersystem</li></ul><p><strong>2. Elternsprechtag:</strong></p><ul><li>Donnerstag, 26.03.2026, 16:00–19:00 Uhr</li><li>Bitte Terminlisten bis Mittwoch eintragen</li></ul><p><strong>3. Fortbildung Medienkompetenz:</strong></p><ul><li>Anmeldung bis 28.03. bei Norbert K.</li><li>Thema: KI im Unterricht — Chancen und Grenzen</li></ul>',
+          content: '<p>Liebe Kolleginnen und Kollegen,</p><p><strong>1. Sperrung Schwimmbad:</strong></p><ul><li>Am Freitag den 21.03.2026 findet kein Schwimmunterricht statt</li><li>Grund: Wartungsarbeiten am Filtersystem</li></ul><p><strong>2. Elternsprechtag:</strong></p><ul><li>Donnerstag, 26.03.2026, 16:00–19:00 Uhr</li><li>Bitte Terminlisten bis Mittwoch eintragen</li></ul><p><strong>3. Fortbildung Medienkompetenz:</strong></p><ul><li>Anmeldung bis 28.03. im Sekretariat</li><li>Thema: KI im Unterricht — Chancen und Grenzen</li></ul>',
           reactions: [{ emoji: '👍', users: [1, 4, 5], count: 3 }, { emoji: '📝', users: [3], count: 1 }],
           replies: 4, reply_users: [MOCK_USERS[0], MOCK_USERS[3], MOCK_USERS[6]],
           created_at: '20.03.2026, 08:15'
         },
         {
           id: 2, author: MOCK_USERS[1], title: 'FAQ und Infos Schulwoche 11',
-          content: '<p>Liebe Kolleginnen und Kollegen,</p><p><strong>1. Projektwoche Planung:</strong></p><ul><li>Bitte Projektvorschläge bis Freitag 14.03. einreichen</li><li>Formular liegt im Lehrerzimmer aus oder digital über iServ</li></ul><p><strong>2. Neue iPads eingetroffen:</strong></p><ul><li>15 neue iPads für den Informatik-Raum</li><li>Einrichtung erfolgt durch Norbert — bitte Geduld</li></ul>',
+          content: '<p>Liebe Kolleginnen und Kollegen,</p><p><strong>1. Projektwoche Planung:</strong></p><ul><li>Bitte Projektvorschläge bis Freitag 14.03. einreichen</li><li>Formular liegt im Lehrerzimmer aus oder digital über die Schulverwaltung</li></ul><p><strong>2. Neue iPads eingetroffen:</strong></p><ul><li>15 neue iPads für den Informatik-Raum</li><li>Einrichtung erfolgt diese Woche — bitte Geduld</li></ul>',
           reactions: [{ emoji: '👍', users: [1, 3, 7], count: 3 }],
           replies: 2, reply_users: [MOCK_USERS[0], MOCK_USERS[4]],
           created_at: '14.03.2026, 07:55'
@@ -2094,8 +2096,8 @@
           created_at: '19.03.2026, 14:30'
         },
         {
-          id: 4, author: MOCK_USERS[0], title: 'Schulband — Auftritt beim Schulfest',
-          content: '<p>Hallo zusammen!</p><p>Die Schulband tritt am <strong>Schulfest (04.04.2026)</strong> auf. Wir spielen um 15:00 Uhr auf dem Schulhof.</p><p>Wer Lust hat zu helfen (Aufbau ab 13:00), bitte bei mir melden. Wir brauchen vor allem Hilfe beim Soundcheck.</p>',
+          id: 4, author: MOCK_USERS[0], title: 'Musik-AG — Auftritt beim Schulfest',
+          content: '<p>Hallo zusammen!</p><p>Die Musik-AG tritt am <strong>Schulfest (04.04.2026)</strong> auf. Wir spielen um 15:00 Uhr auf dem Schulhof.</p><p>Wer Lust hat zu helfen (Aufbau ab 13:00), bitte bei mir melden. Wir brauchen vor allem Hilfe beim Soundcheck.</p>',
           reactions: [{ emoji: '🎵', users: [2, 3, 7], count: 3 }, { emoji: '💪', users: [4, 5], count: 2 }],
           replies: 6, reply_users: [MOCK_USERS[1], MOCK_USERS[3], MOCK_USERS[5], MOCK_USERS[7]],
           created_at: '18.03.2026, 11:20'
@@ -2114,7 +2116,7 @@
 
     let MOCK_REPLIES = {
       1: [
-        { id: 101, author: MOCK_USERS[0], content: 'Danke Daniel! Wegen der Fortbildung: Ist das ganztägig oder nur nachmittags?', created_at: '20.03.2026, 08:45' },
+        { id: 101, author: MOCK_USERS[0], content: 'Danke! Wegen der Fortbildung: Ist das ganztägig oder nur nachmittags?', created_at: '20.03.2026, 08:45' },
         { id: 102, author: MOCK_USERS[1], content: 'Nachmittags, 14:00–17:00 Uhr. Vertretung für die 5./6. Stunde muss organisiert werden.', created_at: '20.03.2026, 09:12' },
         { id: 103, author: MOCK_USERS[3], content: 'Kann ich mich auch noch anmelden? Klingt spannend!', created_at: '20.03.2026, 10:30' },
         { id: 104, author: MOCK_USERS[6], content: 'Ich hätte auch Interesse. Gibt es noch Plätze?', created_at: '20.03.2026, 11:05' },
@@ -2122,13 +2124,13 @@
       4: [
         { id: 201, author: MOCK_USERS[1], content: 'Super Sache! Ich helfe gerne beim Aufbau.', created_at: '18.03.2026, 12:00' },
         { id: 202, author: MOCK_USERS[3], content: 'Ich kann ab 13:30 da sein. Reicht das?', created_at: '18.03.2026, 13:15' },
-        { id: 203, author: MOCK_USERS[0], content: 'Klar Maria, das passt! Danke euch beiden!', created_at: '18.03.2026, 13:30' },
+        { id: 203, author: MOCK_USERS[0], content: 'Klar, das passt! Danke euch beiden!', created_at: '18.03.2026, 13:30' },
       ]
     };
 
     let MOCK_MESSAGES = {
       1: [
-        { id: 1, sender: MOCK_USERS[1], content: 'Hey Norbert, kurze Frage:', created_at: '17:25' },
+        { id: 1, sender: MOCK_USERS[1], content: 'Hey, kurze Frage:', created_at: '17:25' },
         { id: 2, sender: MOCK_USERS[1], content: 'Kannst du morgen die Vertretung für die 3. Stunde übernehmen? Eine Kollegin ist krank.', created_at: '17:25' },
         { id: 3, sender: MOCK_USERS[1], content: 'Wäre Klasse 8a, Musik', created_at: '17:30' },
       ],
@@ -5412,7 +5414,7 @@
           React.createElement('p', { style: { color: 'var(--text-secondary)', marginBottom: '8px', maxWidth: '400px', textAlign: 'center', lineHeight: '1.5' } },
             'Falls für ', React.createElement('strong', null, email), ' ein Zugang besteht, wurde ein Link zum Zurücksetzen des Passworts gesendet.'),
           React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: '13px', maxWidth: '400px', textAlign: 'center', lineHeight: '1.5' } },
-            'Der Link ist 1 Stunde gültig. Schau auch im Spam-Ordner nach. Kommt keine Mail an, melde dich bei Norbert — er kann das Passwort direkt zurücksetzen.'),
+            'Der Link ist 1 Stunde gültig. Schau auch im Spam-Ordner nach. Kommt keine Mail an, wende dich an deine Schulleitung oder IT-Betreuung — von dort kann das Passwort direkt zurückgesetzt werden.'),
           React.createElement('button', {
             onClick: () => { setResetSent(false); setError(''); },
             style: { marginTop: '24px', padding: '8px 24px', fontSize: '13px', background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border)' }
@@ -5484,7 +5486,7 @@
           style: { background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '13px', textDecoration: 'underline', padding: '4px 8px', minHeight: '32px', marginBottom: '8px' }
         }, 'Passwort vergessen?'),
 
-        React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: '12px', marginBottom: '16px' } }, 'Passwort von der Schulleitung erhalten? Sonst bei Norbert melden.'),
+        React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: '12px', marginBottom: '16px' } }, 'Passwort von der Schulleitung erhalten? Sonst bei der Schulleitung oder IT-Betreuung melden.'),
 
         // Demo-Modus
         React.createElement('button', {
@@ -8348,15 +8350,15 @@
         '🏠-Button zurück zum Hub erscheint nicht mehr, wenn Connect im Hub eingebettet läuft'
       ] },
       { v: '4.15.0', date: '10.07.2026', items: [
-        'Chat & Kanäle holen verpasste Nachrichten jetzt automatisch nach (Sicherheitsnetz, wenn das WLAN kurz hakt) — danke Patrick!',
-        'Gruppenchats: Klick auf die Mitgliederzahl zeigt alle Mitglieder und lässt neue hinzufügen — danke Werner!',
-        'Neue Zeile schreiben: ↵-Knopf unter dem Eingabefeld + Hinweis „Shift+Enter" — danke Caroline!',
-        'iPad quer: linke Leiste ist nicht mehr abgeschnitten und scrollt bei Bedarf — danke Steffen!',
-        'Auf Touch-Geräten stehen ✏️ Bearbeiten und 🗑️ Löschen jetzt unter der Nachricht — danke Katharina!',
-        'Emoji-Auswahl: neue Kategorie „Natur" — inklusive 🐝 Biene — danke Katharina!'
+        'Chat & Kanäle holen verpasste Nachrichten jetzt automatisch nach (Sicherheitsnetz, wenn das WLAN kurz hakt)',
+        'Gruppenchats: Klick auf die Mitgliederzahl zeigt alle Mitglieder und lässt neue hinzufügen',
+        'Neue Zeile schreiben: ↵-Knopf unter dem Eingabefeld + Hinweis „Shift+Enter"',
+        'iPad quer: linke Leiste ist nicht mehr abgeschnitten und scrollt bei Bedarf',
+        'Auf Touch-Geräten stehen ✏️ Bearbeiten und 🗑️ Löschen jetzt unter der Nachricht',
+        'Emoji-Auswahl: neue Kategorie „Natur" — inklusive 🐝 Biene'
       ] },
       { v: '4.14.0', date: '08.07.2026', items: ['Neuer 🏠-Button oben in der Seitenleiste: bringt dich direkt zurück zum KRS Hub'] },
-      { v: '4.13.0', date: '07.07.2026', items: ['Passwort selbst zurücksetzen: „Passwort vergessen?" auf dem Anmeldebildschirm schickt einen Link an deine Schul-E-Mail', 'Neues Passwort danach direkt in Connect setzen — kein altes Passwort nötig', 'Passwort ändern in den ⚙️ Einstellungen (eingeloggt, jederzeit)', 'Kommt keine Reset-Mail an, kann Norbert das Passwort weiterhin direkt zurücksetzen'] },
+      { v: '4.13.0', date: '07.07.2026', items: ['Passwort selbst zurücksetzen: „Passwort vergessen?" auf dem Anmeldebildschirm schickt einen Link an deine Schul-E-Mail', 'Neues Passwort danach direkt in Connect setzen — kein altes Passwort nötig', 'Passwort ändern in den ⚙️ Einstellungen (eingeloggt, jederzeit)', 'Kommt keine Reset-Mail an, kann die Schulleitung oder IT-Betreuung das Passwort weiterhin direkt zurücksetzen'] },
       { v: '4.12.1', date: '04.07.2026', items: ['Sicherheit: SVG-Dateien können nicht mehr hochgeladen oder als Bild eingebettet werden (Schutz vor eingebettetem Schadcode)'] },
       { v: '4.12.0', date: '02.07.2026', items: ['Dateiablage pro Team: benannte Links (z. B. iServ- oder Nextcloud-Ordner) direkt im Team anlegen und pflegen', 'Neuer Tab 📅 Termine pro Team: kommende Termine auf einen Blick, vergangene ausklappbar', 'Anlegen dürfen alle Team-Mitglieder; Bearbeiten/Löschen die Ersteller:in und Team-Admins'] },
       { v: '4.11.2', date: '28.06.2026', items: ['Zurück-Button: aus Hilfe, Datenschutz oder Feedback kommst du mit „← Zurück" wieder zu den Einstellungen — eine Ebene zurück statt alles zu schließen'] },

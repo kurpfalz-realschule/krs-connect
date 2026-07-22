@@ -15,8 +15,8 @@ test.describe('KRS Connect — Smoke: Login & Setup', () => {
     await expect(page.locator('[data-screen="user-selection"]')).toBeVisible({ timeout: 6_000 });
   });
 
-  test('forceUser=nk loggt automatisch als Norbert ein', async ({ page }) => {
-    await openConnect(page, { user: 'nk' });
+  test('forceUser=la loggt automatisch als Lehrkraft A ein', async ({ page }) => {
+    await openConnect(page, { user: 'la' });
     await waitForAppReady(page);
     // Nach automatischem Login sollte die User-Auswahl weg sein
     await expect(page.locator('[data-screen="user-selection"]'))

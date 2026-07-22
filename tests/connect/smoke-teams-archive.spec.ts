@@ -9,7 +9,7 @@ import { test, expect, openConnect } from '../fixtures/connect';
  */
 test.describe('#8 Teams-Archivierung — DataService (Demo)', () => {
   test('archive → restore → delete verhalten sich korrekt', async ({ page }) => {
-    await openConnect(page, { user: 'nk' });
+    await openConnect(page, { user: 'la' });
 
     const r = await page.evaluate(async () => {
       const DS = (window as any).DataService;

@@ -8,7 +8,7 @@ import { test, expect, openConnect } from '../fixtures/connect';
  */
 test.describe('#12 Feedback-Board — DataService (Demo)', () => {
   test('submitFeedback fügt ein, updateFeedbackStatus ändert Status, ungültiger Status wird abgelehnt', async ({ page }) => {
-    await openConnect(page, { user: 'nk' });
+    await openConnect(page, { user: 'la' });
 
     const r = await page.evaluate(async () => {
       const DS = (window as any).DataService;
