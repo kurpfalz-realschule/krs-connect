@@ -139,7 +139,8 @@
       "img-src 'self' data: blob:",
       "object-src 'none'",
       "base-uri 'none'",
-      "frame-ancestors 'none'",
+      // KEIN frame-ancestors: <meta>-CSP unterstützt das nicht (Browser verwirft sonst
+      // die ganze Policy + Konsolen-Warnung). Framing-Schutz läuft über window.top oben.
     ].join('; ');
     const meta = document.createElement('meta');
     meta.setAttribute('http-equiv', 'Content-Security-Policy-Report-Only');

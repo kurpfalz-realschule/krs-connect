@@ -151,20 +151,22 @@
   try {
     const su = window.TENANT.supabase && window.TENANT.supabase.url;
     const fb = window.TENANT.feedback && window.TENANT.feedback.gasUrl;
-    const hubOrigins = (window.TENANT.hub && window.TENANT.hub.enabled && window.TENANT.hub.allowedOrigins) || [];
     const connectSrc = ["'self'"];
     if (su) {
       connectSrc.push(su);
       try { connectSrc.push('wss://' + new URL(su).host); } catch (e) {}
     }
     if (fb) connectSrc.push(fb);
+    // KEIN frame-ancestors hier: das <meta http-equiv="CSP">-Element unterstützt
+    // frame-ancestors/sandbox/report-uri nicht (Web-Plattform-Grenze) — ein Browser
+    // verwirft dann die GESAMTE Policy und loggt eine Konsolen-Warnung. Framing-Schutz
+    // läuft stattdessen über die window.top-Prüfung weiter unten (3.8).
     const csp = [
       "script-src https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com 'unsafe-inline'",
       "connect-src " + connectSrc.join(' '),
       "img-src 'self' data: blob:",
       "object-src 'none'",
       "base-uri 'none'",
-      "frame-ancestors " + (hubOrigins.length ? hubOrigins.join(' ') : "'none'"),
     ].join('; ');
     const meta = document.createElement('meta');
     meta.setAttribute('http-equiv', 'Content-Security-Policy-Report-Only');
