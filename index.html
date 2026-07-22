@@ -8730,7 +8730,9 @@
         if (this.state.hasError) {
           const style = { padding: '40px', textAlign: 'center', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' };
           return React.createElement('div', { style },
-            React.createElement('h2', { style: { color: 'var(--text-primary)', marginBottom: '12px' } }, 'Etwas ist schiefgelaufen'),
+            // A3 (22.07.2026): h1 statt h2 — Root-ErrorBoundary, bei einem Absturz
+            // die einzige Überschrift der Seite (analog Hub-Fix, A11Y-SPEC 6.7).
+            React.createElement('h1', { style: { color: 'var(--text-primary)', marginBottom: '12px' } }, 'Etwas ist schiefgelaufen'),
             React.createElement('p', { style: { color: 'var(--text-secondary)', marginBottom: '20px' } },
               this.props.fallbackMessage || 'Dieser Bereich hatte einen Fehler. Bitte versuche es erneut.'
             ),

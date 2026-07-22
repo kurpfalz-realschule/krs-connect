@@ -97,4 +97,22 @@ test.describe('KRS Connect — WCAG 2.1 AA (axe-core)', () => {
     await input.click();
     await runAxe(page, 'connect/formular');
   });
+
+  // A3 (22.07.2026): Startansicht ist Teams (mehrspaltig: Sidebar + Team-/
+  // Kanal-Liste + Post-Feed). Die Chat-Ansicht hat eine ZWEITE, unabhängige
+  // Mehrspalten-Struktur (Sidebar + Gespräch-Liste + Nachrichtenverlauf) und
+  // war bisher nicht separat axe-geprüft — deckt die in A2b offen gelassene
+  // Frage nach vollständiger axe-"region"-Abdeckung im mehrspaltigen Layout ab.
+  test('Chat-Ansicht (zweite Mehrspalten-Struktur) ist axe-sauber', async ({ page }) => {
+    await openConnect(page, { user: 'nk' });
+    await waitForAppReady(page);
+
+    const chatNav = page.locator('button[aria-label="Chats"]').first();
+    if (!(await chatNav.isVisible().catch(() => false))) {
+      test.skip(true, 'Chat-Navigation in dieser UI-Variante nicht gefunden');
+    }
+    await chatNav.click();
+    await expect(page.locator('main#main')).toBeVisible();
+    await runAxe(page, 'connect/chat');
+  });
 });
