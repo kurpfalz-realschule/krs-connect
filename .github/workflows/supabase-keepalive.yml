@@ -13,8 +13,16 @@ jobs:
       - uses: actions/checkout@v4
       - name: Ping Supabase REST
         run: |
-          ANON=$(grep -o 'eyJ[A-Za-z0-9_.-]*' index.html | head -1)
-          URL=$(grep -o 'https://[a-z]*\.supabase\.co' index.html | head -1)
+          # Anon-/Publishable-Key und URL stehen seit dem tenant.js-Umbau in tenant.js,
+          # nicht mehr in index.html. Beide Dateien durchsuchen (tenant.js zuerst),
+          # damit der Ping auch nach weiteren Umbauten robust bleibt.
+          FILES="tenant.js index.html"
+          ANON=$(grep -hoE 'eyJ[A-Za-z0-9_.-]+|sb_publishable_[A-Za-z0-9_]+' $FILES 2>/dev/null | head -1)
+          URL=$(grep -hoE 'https://[a-z0-9]+\.supabase\.co' $FILES 2>/dev/null | head -1)
+          if [ -z "$ANON" ] || [ -z "$URL" ]; then
+            echo "::error::Anon-Key oder Supabase-URL nicht gefunden (tenant.js/index.html) - Keep-Alive kann nicht pingen. Quelle der Credentials pruefen."
+            exit 1
+          fi
           CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "apikey: $ANON" "$URL/rest/v1/users?select=id&limit=1")
-          echo "Keep-Alive-Ping: HTTP $CODE"
-          [ "$CODE" = "200" ] || { echo "::warning::Supabase nicht erreichbar - evtl. pausiert!"; exit 1; }
+          echo "Keep-Alive-Ping: HTTP $CODE ($URL)"
+          [ "$CODE" = "200" ] || { echo "::warning::Supabase nicht erreichbar (HTTP $CODE) - evtl. pausiert!"; exit 1; }
