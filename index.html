@@ -5088,7 +5088,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.16.0';
+    window.KRS_VERSION = '4.17.0';
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
     // Playwright den Klick-Handler prüfen kann, ohne wirklich zu navigieren.
     // Aus tenant.js (TENANT-SPEC.md 2.4) — leer, wenn hub.enabled:false.
@@ -8345,6 +8345,9 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.17.0', date: '22.07.2026', items: [
+        'Barrierefreiheit deutlich verbessert: Tastaturbedienung für Dialoge (Fokus bleibt beim Öffnen im Dialog, springt beim Schließen zurück), Sprung-Link „Zum Inhalt springen", bessere Farbkontraste bei Profil-/Team-Farben, klarere Überschriften-Struktur für Screenreader'
+      ] },
       { v: '4.16.0', date: '11.07.2026', items: [
         'Dateiablage: Hinweis und Link zeigen jetzt auf die Nextcloud der Schule statt auf iServ',
         '🏠-Button zurück zum Hub erscheint nicht mehr, wenn Connect im Hub eingebettet läuft'
