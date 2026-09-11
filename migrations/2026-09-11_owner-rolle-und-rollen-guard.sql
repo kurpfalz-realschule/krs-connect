@@ -15,13 +15,27 @@
 --   ausfuehren und sich selbst zum globalen Admin machen. Der Guard-Trigger
 --   unten schliesst das, ohne die bestehenden Policies umzubauen.
 --
--- REIHENFOLGE: Block A + B VOR dem Code-Deploy einspielen (aendern nichts an
---   Norberts Rechten). Block C (role='owner' setzen) ERST NACH dem Deploy von
---   v4.21.0 — vorher wuerde die alte UI (role === 'admin') ihm alle
---   Admin-Funktionen ausblenden.
+-- STATUS (11.09.2026)
+--   Block A  + B2 (Rollen-Guard): AM 11.09.2026 BEREITS EINGESPIELT und geprueft.
+--     Grund fuer das Vorziehen: B2 schliesst die Eskalationsluecke aus Zweck 2
+--     und wirkt unabhaengig vom Frontend-Deploy — jede Stunde Wartezeit waere
+--     unnoetiges Risiko gewesen.
+--     Gegenprobe per SQL mit gesetzten JWT-Claims (alles in einer
+--     zurueckgerollten Transaktion):
+--       Lehrkraft (member) -> role='admin'  : BLOCKIERT
+--       Lehrkraft (member) -> role='owner'  : BLOCKIERT
+--       Lehrkraft aendert display_name      : ERLAUBT   (richtig)
+--       Admin stuft Mitglied hoch           : ERLAUBT   (richtig)
+--       Admin vergibt 'owner'               : BLOCKIERT (richtig)
+--   Block B1 (posts-Policies): OFFEN — zusammen mit dem Deploy von v4.21.0.
+--     Vorher eingespielt saehen die anderen Admins in der alten UI weiterhin
+--     Bearbeiten/Loeschen an fremden Beitraegen, es liefe nur ins Leere.
+--   Block C (role='owner' fuer id 1): OFFEN — ERST NACH dem Deploy. Die alte
+--     UI prueft role === 'admin' und wuerde Norbert sonst alle
+--     Admin-Funktionen ausblenden.
 -- ============================================================================
 
--- ---------------------------------------------------------------- Block A --
+-- ------------------------------------------- Block A — EINGESPIELT 11.09. --
 -- CHECK-Constraint um 'owner' erweitern; is_global_admin() zaehlt den Inhaber
 -- mit (sonst verliert er saemtliche uebrigen Admin-Rechte serverseitig).
 
@@ -51,8 +65,8 @@ $$;
 
 revoke execute on function public.is_platform_owner() from anon;
 
--- ---------------------------------------------------------------- Block B --
--- B1) posts: fremde Beitraege nur noch fuer den Inhaber.
+-- ------------------------------------------------------- Block B1 — OFFEN --
+-- posts: fremde Beitraege nur noch fuer den Inhaber. Mit dem Deploy einspielen.
 
 drop policy if exists "posts_update_own_or_admin" on public.posts;
 drop policy if exists "posts_delete_own_or_admin" on public.posts;
@@ -64,7 +78,8 @@ create policy "posts_update_own_or_owner" on public.posts
 create policy "posts_delete_own_or_owner" on public.posts
   for delete using     (author_id = public.get_app_user_id() or public.is_platform_owner());
 
--- B2) Rollen-Guard: schliesst die Eskalation aus users_update_own und
+-- ------------------------------------------ Block B2 — EINGESPIELT 11.09. --
+-- Rollen-Guard: schliesst die Eskalation aus users_update_own und
 --     schuetzt die Inhaber-Rolle vor anderen Admins.
 --     auth.uid() is null = direkter SQL-/service_role-Zugriff (Migrationen,
 --     Admin-Skripte) — der bleibt erlaubt, sonst koennte niemand mehr
