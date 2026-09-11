@@ -120,6 +120,10 @@ test.describe('A2b Fokus & Tastatur — KRS Connect (Demo)', () => {
     await waitForAppReady(page);
     const fab = page.locator('.krsc-fab');
     if (await fab.count() === 0) test.skip(true, 'Lern-Coach nicht geladen — UI-Variante');
+    // v4.21.0: Der FAB ist standardmäßig ausgeblendet (verdeckte auf dem Handy
+    // den Inhalt). Für diesen Focus-Trap-Regressionstest wird er freigeschaltet.
+    await page.evaluate(() => (window as any).KRSCoach.showFab(true));
+    await expect(fab).toBeVisible({ timeout: 3_000 });
     // Panel ist im DOM (role="dialog"), aber zu (kein .krsc-open) → FAB darf
     // nicht inert sein und muss klickbar bleiben.
     await expect(fab).not.toHaveAttribute('inert', '');

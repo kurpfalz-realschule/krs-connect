@@ -441,6 +441,28 @@
     .post-content li { margin: 4px 0; }
     .post-content strong { font-weight: 600; }
 
+    /* v4.21.0 Mobile-Fix: Eingefuegte Bilder/Tabellen in Nutzer-HTML sprengten
+       auf dem Handy den Rand (horizontaler Scroll, Bild halb abgeschnitten).
+       Gilt fuer alle Stellen, an denen sanitizeHtml-Inhalt gerendert wird:
+       Beitrag, Thread-Antwort, Chat-Nachricht, Suchtreffer. */
+    .post-content, .thread-reply-content, .chat-text { overflow-wrap: anywhere; }
+    .post-content img,
+    .thread-reply-content img,
+    .chat-text img {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      margin: 8px 0;
+      border-radius: var(--radius);
+      cursor: zoom-in;
+    }
+    .post-content table,
+    .thread-reply-content table,
+    .chat-text table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
+    .post-content pre,
+    .thread-reply-content pre,
+    .chat-text pre { max-width: 100%; overflow-x: auto; }
+
     .post-reactions {
       display: flex;
       flex-wrap: wrap;
@@ -1334,7 +1356,20 @@
       max-width: 90vw; max-height: 82vh;
       border-radius: 8px;
       box-shadow: 0 8px 40px rgba(0,0,0,.5);
-      object-fit: contain; cursor: default;
+      object-fit: contain; cursor: zoom-in;
+      /* v4.21.0: Pinch-/Doppeltipp-Zoom (Screenshots waren auf dem Handy
+         nicht lesbar). touch-action:none, weil wir die Geste selbst rechnen. */
+      transform-origin: 50% 50%;
+      touch-action: none;
+      will-change: transform;
+      -webkit-user-select: none; user-select: none;
+    }
+    .lightbox-overlay img.lightbox-img.lb-zoomed { cursor: grab; }
+    .lightbox-zoomhint {
+      position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+      color: #fff; font-size: 12px; background: rgba(0,0,0,.55);
+      padding: 5px 14px; border-radius: 20px; pointer-events: none;
+      opacity: .85;
     }
     .lightbox-caption {
       position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
@@ -1400,6 +1435,8 @@
     }
 
   </style>
+  <!-- Native iOS-Huelle (krs-ios). Im Browser wirkungslos. -->
+  <script src="krs-native-client.js"></script>
 </head>
 <body>
   <div id="app"><div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#5A5F72"><div style="width:40px;height:40px;border:3px solid #E2E4E8;border-top-color:#5B7B94;border-radius:50%;animation:spin 0.8s linear infinite"></div><div>Wird geladen...</div><style>@keyframes spin{to{transform:rotate(360deg)}}</style></div></div>
@@ -1531,6 +1568,7 @@
     // ============================================================
     (function() {
       var _lbImgs = [], _lbIdx = 0, _lbKeyHandler = null, _lbTouchStartX = 0;
+      var _lbScale = 1, _lbHintShown = false;
 
       window.openLightbox = function(images, startIdx) {
         _lbImgs = images;
@@ -1579,6 +1617,7 @@
         imgEl.alt = imgName;
         imgEl.onclick = function(e) { e.stopPropagation(); };
         ov.appendChild(imgEl);
+        attachZoom(imgEl, ov);
 
         // Nav next
         if (_lbImgs.length > 1) {
@@ -1604,12 +1643,24 @@
         caption.appendChild(dlLink);
         ov.appendChild(caption);
 
-        // Touch-Swipe
-        ov.addEventListener('touchstart', function(e) { _lbTouchStartX = e.touches[0].clientX; });
+        // Touch-Swipe — nur im nicht gezoomten Zustand, sonst kollidiert es mit Pan
+        ov.addEventListener('touchstart', function(e) { if (e.touches.length === 1) _lbTouchStartX = e.touches[0].clientX; });
         ov.addEventListener('touchend', function(e) {
+          if (_lbScale > 1.01 || _lbImgs.length < 2) return;
+          if (e.touches.length > 0) return;
           var diff = _lbTouchStartX - e.changedTouches[0].clientX;
           if (Math.abs(diff) > 50) { diff > 0 ? lbNext() : lbPrev(); }
         });
+
+        // Zoom-Hinweis nur beim ersten Oeffnen pro Sitzung
+        if (!_lbHintShown) {
+          _lbHintShown = true;
+          var hint = document.createElement('div');
+          hint.className = 'lightbox-zoomhint';
+          hint.textContent = 'Doppeltippen oder aufziehen zum Vergroessern';
+          ov.appendChild(hint);
+          setTimeout(function(){ if (hint.parentNode) hint.parentNode.removeChild(hint); }, 3500);
+        }
 
         document.body.appendChild(ov);
 
@@ -1634,7 +1685,139 @@
           document.removeEventListener('keydown', _lbKeyHandler);
           _lbKeyHandler = null;
         }
+        _lbScale = 1;
       }
+
+      // ---- Zoom-Engine: Pinch, Doppeltipp, Pan, Mausrad ----------------
+      // Transform-Origin ist die Bildmitte. Ein Punkt mit Abstand d von der
+      // Mitte landet bei mitte + t + scale*d. Daraus folgt fuer einen
+      // Fixpunkt m:  t = m - mitte - scale*d   mit  d = (m - mitte - t0)/s0.
+      function attachZoom(imgEl, ov) {
+        var sc = 1, tx = 0, ty = 0;
+        var startDist = 0, startScale = 1, startTx = 0, startTy = 0;
+        var startMx = 0, startMy = 0, panX = 0, panY = 0, panning = false;
+        var lastTap = 0;
+        var MAXSC = 6;
+
+        function centre() {
+          var r = imgEl.getBoundingClientRect();
+          // Bounding-Rect ist bereits transformiert — Mitte bleibt aber die Mitte.
+          return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+        }
+        function baseSize() {
+          // Unskalierte Groesse (Layout-Groesse ohne Transform)
+          return { w: imgEl.offsetWidth || 1, h: imgEl.offsetHeight || 1 };
+        }
+        function clamp() {
+          var b = baseSize();
+          var maxX = Math.max(0, (sc - 1) * b.w / 2);
+          var maxY = Math.max(0, (sc - 1) * b.h / 2);
+          if (tx > maxX) tx = maxX; if (tx < -maxX) tx = -maxX;
+          if (ty > maxY) ty = maxY; if (ty < -maxY) ty = -maxY;
+        }
+        function apply() {
+          if (sc < 1) sc = 1; if (sc > MAXSC) sc = MAXSC;
+          if (sc <= 1.001) { sc = 1; tx = 0; ty = 0; }
+          clamp();
+          _lbScale = sc;
+          imgEl.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + sc + ')';
+          imgEl.classList.toggle('lb-zoomed', sc > 1.01);
+        }
+        // Zoomt so, dass der Punkt (mx,my) unter dem Finger bleibt.
+        function zoomTo(newScale, mx, my, fromScale, fromTx, fromTy) {
+          var c = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+          var dx = (mx - c.x - fromTx) / fromScale;
+          var dy = (my - c.y - fromTy) / fromScale;
+          sc = Math.max(1, Math.min(MAXSC, newScale));
+          tx = mx - c.x - sc * dx;
+          ty = my - c.y - sc * dy;
+          apply();
+        }
+
+        imgEl.addEventListener('touchstart', function(e) {
+          if (e.touches.length === 2) {
+            e.preventDefault();
+            var a = e.touches[0], b2 = e.touches[1];
+            startDist = Math.hypot(a.clientX - b2.clientX, a.clientY - b2.clientY) || 1;
+            startScale = sc; startTx = tx; startTy = ty;
+            startMx = (a.clientX + b2.clientX) / 2;
+            startMy = (a.clientY + b2.clientY) / 2;
+            panning = false;
+          } else if (e.touches.length === 1) {
+            var now = Date.now();
+            if (now - lastTap < 300) {
+              e.preventDefault();
+              if (sc > 1.01) { sc = 1; tx = 0; ty = 0; apply(); }
+              else { zoomTo(2.5, e.touches[0].clientX, e.touches[0].clientY, 1, 0, 0); }
+              lastTap = 0;
+              return;
+            }
+            lastTap = now;
+            if (sc > 1.01) {
+              panning = true;
+              panX = e.touches[0].clientX; panY = e.touches[0].clientY;
+            }
+          }
+        }, { passive: false });
+
+        imgEl.addEventListener('touchmove', function(e) {
+          if (e.touches.length === 2) {
+            e.preventDefault();
+            var a = e.touches[0], b2 = e.touches[1];
+            var dist = Math.hypot(a.clientX - b2.clientX, a.clientY - b2.clientY) || 1;
+            zoomTo(startScale * (dist / startDist), startMx, startMy, startScale, startTx, startTy);
+          } else if (panning && e.touches.length === 1) {
+            e.preventDefault();
+            tx += e.touches[0].clientX - panX;
+            ty += e.touches[0].clientY - panY;
+            panX = e.touches[0].clientX; panY = e.touches[0].clientY;
+            apply();
+          }
+        }, { passive: false });
+
+        imgEl.addEventListener('touchend', function() { panning = false; }, { passive: true });
+
+        // Desktop: Doppelklick und Strg/Cmd+Mausrad
+        imgEl.addEventListener('dblclick', function(e) {
+          e.preventDefault(); e.stopPropagation();
+          if (sc > 1.01) { sc = 1; tx = 0; ty = 0; apply(); }
+          else { zoomTo(2.5, e.clientX, e.clientY, 1, 0, 0); }
+        });
+        imgEl.addEventListener('wheel', function(e) {
+          e.preventDefault();
+          zoomTo(sc * (e.deltaY < 0 ? 1.15 : 0.87), e.clientX, e.clientY, sc, tx, ty);
+        }, { passive: false });
+
+        // Maus-Pan im gezoomten Zustand
+        imgEl.addEventListener('mousedown', function(e) {
+          if (sc <= 1.01) return;
+          e.preventDefault(); panning = true; panX = e.clientX; panY = e.clientY;
+        });
+        window.addEventListener('mousemove', function(e) {
+          if (!panning || !imgEl.isConnected) return;
+          tx += e.clientX - panX; ty += e.clientY - panY;
+          panX = e.clientX; panY = e.clientY; apply();
+        });
+        window.addEventListener('mouseup', function() { panning = false; });
+
+        apply();
+      }
+
+      // ---- Bilder im Beitragstext anklickbar machen --------------------
+      // Eingefuegte Bilder (WYSIWYG) stehen als rohes HTML im Beitrag und
+      // waren bisher weder klickbar noch zoombar. Delegierter Listener, damit
+      // er auch fuer spaeter nachgeladene Beitraege greift.
+      document.addEventListener('click', function(e) {
+        var img = e.target;
+        if (!img || img.tagName !== 'IMG') return;
+        var host = img.closest && img.closest('.post-content, .thread-reply-content, .chat-text');
+        if (!host) return;
+        e.preventDefault();
+        e.stopPropagation();
+        var all = Array.prototype.slice.call(host.querySelectorAll('img'));
+        var list = all.map(function(n) { return { url: n.getAttribute('src'), name: n.getAttribute('alt') || 'Bild' }; });
+        window.openLightbox(list, Math.max(0, all.indexOf(img)));
+      });
     })();
   </script>
 
@@ -1671,7 +1854,11 @@
         '.fv-nav:hover{background:rgba(0,0,0,.7)}' +
         '.fv-navprev{left:12px}.fv-navnext{right:12px}' +
         '.fv-bigdl{margin-top:14px}' +
-        '@media(max-width:768px){.fv-box{width:100vw;height:100vh;border-radius:0}.fv-name{max-width:46vw}}';
+        '.fv-pdfbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:8px 10px;border-bottom:1px solid var(--border,#e2e4e8);background:var(--bg,#fff);position:sticky;top:0;z-index:2}' +
+        '.fv-pdflbl{font-size:12px;color:var(--text-muted,#888);margin-left:2px}' +
+        '.fv-pdfpages{flex:1;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch;padding:12px;display:flex;flex-direction:column;align-items:center;gap:12px}' +
+        '.fv-pdfpage{max-width:100%;box-shadow:0 1px 6px rgba(0,0,0,.18);background:#fff;border-radius:2px}' +
+        '@media(max-width:768px){.fv-box{width:100vw;height:100vh;border-radius:0}.fv-name{max-width:46vw}.fv-pdfpages{padding:6px}}';
       var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
 
       // ---- Helfer ----
@@ -1792,6 +1979,140 @@
          .catch(function(){ renderPreviewResolved(file, body, file.url); });
       }
 
+      // ------------------------------------------------------------------
+      // v4.21.0 — PDF-Vorschau.
+      // Vorher: <iframe src=pdf>. Auf dem iPhone gibt Safari darin keine
+      // Zoom- oder Anpassen-Steuerung her — das PDF war weder lesbar noch
+      // im Querformat brauchbar. Jetzt: PDF.js rendert auf Canvas, Breite
+      // passt sich dem Fenster an (auch beim Drehen), plus Zoomstufen und
+      // „In neuem Tab" als Weg zum nativen iOS-Viewer mit Pinch-Zoom.
+      // Schlaegt PDF.js fehl (CDN weg, kaputte Datei), faellt es auf das
+      // alte iframe zurueck — schlechter, aber nie eine leere Seite.
+      // ------------------------------------------------------------------
+      var PDFJS_VER = '3.11.174';
+      function pdfFallbackIframe(body, url, name){
+        body.innerHTML = '';
+        var ifr = document.createElement('iframe');
+        ifr.className = 'fv-frame'; ifr.src = url; ifr.title = name || 'PDF';
+        body.appendChild(ifr);
+      }
+
+      function renderPdf(file, body, url){
+        body.innerHTML = '<div class="fv-loading">PDF wird geladen…</div>';
+        loadScript('pdfjs', [
+          'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/' + PDFJS_VER + '/pdf.min.js',
+          'https://cdn.jsdelivr.net/npm/pdfjs-dist@' + PDFJS_VER + '/build/pdf.min.js'
+        ]).then(function(){
+          var lib = window.pdfjsLib;
+          if (!lib) throw new Error('pdfjs-missing');
+          try {
+            lib.GlobalWorkerOptions.workerSrc =
+              'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/' + PDFJS_VER + '/pdf.worker.min.js';
+          } catch (e) {}
+          return lib.getDocument({ url: url }).promise;
+        }).then(function(doc){
+          buildPdfUi(doc, body, url, file.name);
+        }).catch(function(err){
+          console.warn('PDF.js nicht verfuegbar, Fallback auf iframe:', err);
+          pdfFallbackIframe(body, url, file.name);
+        });
+      }
+
+      function buildPdfUi(doc, body, url, name){
+        body.innerHTML = '';
+        var bar = document.createElement('div'); bar.className = 'fv-pdfbar';
+        var pages = document.createElement('div'); pages.className = 'fv-pdfpages';
+        body.appendChild(bar); body.appendChild(pages);
+
+        // zoom = null -> an Fensterbreite anpassen (Standard, auch nach Drehen)
+        var zoom = null;
+        var rendering = false, pending = false;
+
+        function mkBtn(label, title, fn){
+          var b = document.createElement('button');
+          b.className = 'fv-btn'; b.textContent = label; b.title = title;
+          b.setAttribute('aria-label', title);
+          b.onclick = fn;
+          return b;
+        }
+        var lbl = document.createElement('span');
+        lbl.className = 'fv-pdflbl';
+
+        function setZoom(z){ zoom = z; draw(); }
+        bar.appendChild(mkBtn('−', 'Verkleinern', function(){ setZoom(Math.max(0.25, (zoom || currentFit()) - 0.25)); }));
+        bar.appendChild(mkBtn('+', 'Vergroessern', function(){ setZoom(Math.min(5, (zoom || currentFit()) + 0.25)); }));
+        bar.appendChild(mkBtn('↔', 'An Breite anpassen', function(){ setZoom(null); }));
+        bar.appendChild(lbl);
+        var openBtn = document.createElement('a');
+        openBtn.className = 'fv-btn'; openBtn.href = url; openBtn.target = '_blank'; openBtn.rel = 'noopener';
+        openBtn.textContent = '↗ In neuem Tab';
+        openBtn.title = 'Im Browser-eigenen PDF-Viewer oeffnen (Pinch-Zoom)';
+        bar.appendChild(openBtn);
+
+        function availWidth(){
+          var w = pages.clientWidth || body.clientWidth || window.innerWidth;
+          return Math.max(180, w - 24);   // Rand
+        }
+        var _fit = 1;
+        function currentFit(){ return _fit; }
+
+        function draw(){
+          if (rendering) { pending = true; return; }
+          rendering = true;
+          pages.innerHTML = '';
+          var n = doc.numPages;
+          lbl.textContent = n + (n === 1 ? ' Seite' : ' Seiten');
+          var chain = Promise.resolve();
+          for (var i = 1; i <= n; i++) {
+            (function(num){
+              chain = chain.then(function(){
+                return doc.getPage(num).then(function(page){
+                  var base = page.getViewport({ scale: 1 });
+                  var fit = availWidth() / base.width;
+                  if (num === 1) _fit = fit;
+                  var scale = zoom == null ? fit : zoom;
+                  // Retina scharf, aber Speicher deckeln
+                  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+                  var vp = page.getViewport({ scale: scale });
+                  var cv = document.createElement('canvas');
+                  cv.className = 'fv-pdfpage';
+                  cv.width = Math.floor(vp.width * dpr);
+                  cv.height = Math.floor(vp.height * dpr);
+                  cv.style.width = Math.floor(vp.width) + 'px';
+                  cv.style.height = Math.floor(vp.height) + 'px';
+                  cv.setAttribute('role', 'img');
+                  cv.setAttribute('aria-label', 'Seite ' + num + ' von ' + n);
+                  pages.appendChild(cv);
+                  var ctx = cv.getContext('2d');
+                  ctx.scale(dpr, dpr);
+                  return page.render({ canvasContext: ctx, viewport: vp }).promise;
+                });
+              });
+            })(i);
+          }
+          chain.then(function(){
+            rendering = false;
+            if (pending) { pending = false; draw(); }
+          }).catch(function(err){
+            rendering = false;
+            console.warn('PDF-Render fehlgeschlagen:', err);
+            pdfFallbackIframe(body, url, name);
+          });
+        }
+
+        // Drehen/Resize: nur im Fit-Modus neu zeichnen, entprellt.
+        var rt = null;
+        function onResize(){
+          if (zoom != null) return;
+          clearTimeout(rt);
+          rt = setTimeout(function(){ if (pages.isConnected) draw(); }, 180);
+        }
+        window.addEventListener('resize', onResize);
+        window.addEventListener('orientationchange', onResize);
+
+        draw();
+      }
+
       function renderPreviewResolved(file, body, url){
         var ext = extOf(file);
         try {
@@ -1799,7 +2120,7 @@
             body.innerHTML = ''; var img = document.createElement('img'); img.className = 'fv-img'; img.src = url; img.alt = file.name || ''; body.appendChild(img); return;
           }
           if (ext === 'pdf') {
-            body.innerHTML = ''; var ifr = document.createElement('iframe'); ifr.className = 'fv-frame'; ifr.src = url; ifr.title = file.name || 'PDF'; body.appendChild(ifr); return;
+            return renderPdf(file, body, url);
           }
           if (ext === 'txt' || ext === 'csv' || ext === 'md') {
             fetch(url).then(function(r){ return r.text(); }).then(function(t){
@@ -3662,25 +3983,33 @@
         }
       }
 
-      subscribeToChannel(channelId, onNewPost) {
+      // v4.20.0: alle drei Subscriptions hören jetzt auch auf UPDATE/DELETE
+      // (vorher nur INSERT — bearbeitete/gelöschte Beiträge & Nachrichten
+      // blieben bei anderen Nutzern bis zum Reload stehen). Callback-Objekt
+      // { onInsert, onUpdate, onDelete } statt einzelner Funktion.
+      subscribeToChannel(channelId, { onInsert, onUpdate, onDelete } = {}) {
         if (this.isDemo) return () => {};
         const subKey = 'channel'; // Nur eine Channel-Sub gleichzeitig
         this.subManager.remove(subKey);
         try {
+          const hydrateAuthor = async (post) => {
+            if (post.author_id && !post.author) {
+              try {
+                const { data: author } = await this.sb.from('users').select('*').eq('id', post.author_id).single();
+                post.author = author;
+              } catch (e) {
+                post.author = { display_name: 'Unbekannt', avatar_color: '#757575' };
+              }
+            }
+            return post;
+          };
           const sub = this.sb.channel('posts-' + channelId)
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'posts', filter: `channel_id=eq.${channelId}` },
-              async (payload) => {
-                const post = payload.new;
-                if (post.author_id && !post.author) {
-                  try {
-                    const { data: author } = await this.sb.from('users').select('*').eq('id', post.author_id).single();
-                    post.author = author;
-                  } catch (e) {
-                    post.author = { display_name: 'Unbekannt', avatar_color: '#757575' };
-                  }
-                }
-                onNewPost(post);
-              })
+              async (payload) => { if (onInsert) onInsert(await hydrateAuthor(payload.new)); })
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'posts', filter: `channel_id=eq.${channelId}` },
+              (payload) => { if (onUpdate) onUpdate(payload.new); })
+            .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'posts', filter: `channel_id=eq.${channelId}` },
+              (payload) => { if (onDelete) onDelete(payload.old); })
             .subscribe();
           this.subManager.add(subKey, sub);
           return () => { this.subManager.remove(subKey); };
@@ -3690,25 +4019,29 @@
         }
       }
 
-      subscribeToConversation(conversationId, onNewMessage) {
+      subscribeToConversation(conversationId, { onInsert, onUpdate, onDelete } = {}) {
         if (this.isDemo) return () => {};
         const subKey = 'conversation';
         this.subManager.remove(subKey);
         try {
+          const hydrateSender = async (msg) => {
+            if (msg.sender_id && !msg.sender) {
+              try {
+                const { data: sender } = await this.sb.from('users').select('*').eq('id', msg.sender_id).single();
+                msg.sender = sender;
+              } catch (e) {
+                msg.sender = { display_name: 'Unbekannt', avatar_color: '#757575' };
+              }
+            }
+            return msg;
+          };
           const sub = this.sb.channel('messages-' + conversationId)
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
-              async (payload) => {
-                const msg = payload.new;
-                if (msg.sender_id && !msg.sender) {
-                  try {
-                    const { data: sender } = await this.sb.from('users').select('*').eq('id', msg.sender_id).single();
-                    msg.sender = sender;
-                  } catch (e) {
-                    msg.sender = { display_name: 'Unbekannt', avatar_color: '#757575' };
-                  }
-                }
-                onNewMessage(msg);
-              })
+              async (payload) => { if (onInsert) onInsert(await hydrateSender(payload.new)); })
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
+              (payload) => { if (onUpdate) onUpdate(payload.new); })
+            .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
+              (payload) => { if (onDelete) onDelete(payload.old); })
             .subscribe();
           this.subManager.add(subKey, sub);
           return () => { this.subManager.remove(subKey); };
@@ -3718,30 +4051,73 @@
         }
       }
 
-      subscribeToReplies(parentId, onNewReply) {
+      subscribeToReplies(parentId, { onInsert, onUpdate, onDelete } = {}) {
         if (this.isDemo) return () => {};
         const subKey = 'replies';
         this.subManager.remove(subKey);
         try {
+          const hydrateAuthor = async (reply) => {
+            if (reply.author_id && !reply.author) {
+              try {
+                const { data: author } = await this.sb.from('users').select('*').eq('id', reply.author_id).single();
+                reply.author = author;
+              } catch (e) {
+                reply.author = { display_name: 'Unbekannt', avatar_color: '#757575' };
+              }
+            }
+            return reply;
+          };
           const sub = this.sb.channel('replies-' + parentId)
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'posts', filter: `parent_id=eq.${parentId}` },
-              async (payload) => {
-                const reply = payload.new;
-                if (reply.author_id && !reply.author) {
-                  try {
-                    const { data: author } = await this.sb.from('users').select('*').eq('id', reply.author_id).single();
-                    reply.author = author;
-                  } catch (e) {
-                    reply.author = { display_name: 'Unbekannt', avatar_color: '#757575' };
-                  }
-                }
-                onNewReply(reply);
-              })
+              async (payload) => { if (onInsert) onInsert(await hydrateAuthor(payload.new)); })
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'posts', filter: `parent_id=eq.${parentId}` },
+              (payload) => { if (onUpdate) onUpdate(payload.new); })
+            .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'posts', filter: `parent_id=eq.${parentId}` },
+              (payload) => { if (onDelete) onDelete(payload.old); })
             .subscribe();
           this.subManager.add(subKey, sub);
           return () => { this.subManager.remove(subKey); };
         } catch (err) {
           console.error('subscribeToReplies error:', err);
+          return () => {};
+        }
+      }
+
+      // v4.20.1: Reaktionen live — reactions fehlte bisher komplett in der
+      // Realtime-Publication UND im Code (Migration 2026-09-03 ergänzt die
+      // Publication; REPLICA IDENTITY bleibt bewusst DEFAULT/PK-only, siehe
+      // Migrationskopf). Supabase Realtime wendet auf DELETE-Events KEINE
+      // RLS an — mit FULL replica identity hätte payload.old bei jedem
+      // gelöschten Reaction die komplette alte Zeile (target_type,
+      // target_id, user_id, emoji) an ALLE abonnierten Sessions geschickt,
+      // auch fremde Teams. Bei DEFAULT enthält payload.old nur die PK
+      // (id) — kein target_id mehr nutzbar, auch kein Filter auf
+      // target_type möglich (Filter matcht nur Felder, die im alten Datensatz
+      // stehen). Deshalb getrennte Callbacks:
+      //   onInsert(targetId): INSERT liefert die volle neue Zeile in
+      //     payload.new UND durchläuft RLS ganz normal — target_id sicher
+      //     nutzbar, der Aufrufer lädt nur die Reaktionsliste dieses einen
+      //     Ziels frisch nach.
+      //   onDelete(): DELETE liefert keine verwertbare target_id mehr —
+      //     der Aufrufer lädt stattdessen die Reaktionen ALLER aktuell
+      //     dargestellten Posts/Nachrichten neu (die darf der Client ohnehin
+      //     lesen). Der DELETE-Listener ist absichtlich ungefiltert (auf
+      //     target_type kann unter DEFAULT nicht gefiltert werden).
+      subscribeToReactions(targetType, onInsert, onDelete) {
+        if (this.isDemo) return () => {};
+        const subKey = 'reactions-' + targetType;
+        this.subManager.remove(subKey);
+        try {
+          const sub = this.sb.channel('reactions-' + targetType)
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'reactions', filter: `target_type=eq.${targetType}` },
+              (payload) => { if (onInsert && payload.new) onInsert(payload.new.target_id); })
+            .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'reactions' },
+              () => { if (onDelete) onDelete(); })
+            .subscribe();
+          this.subManager.add(subKey, sub);
+          return () => { this.subManager.remove(subKey); };
+        } catch (err) {
+          console.error('subscribeToReactions error:', err);
           return () => {};
         }
       }
@@ -4142,6 +4518,13 @@
     // COMPONENTS
     // ============================================================
     const { useState, useEffect, useMemo, useRef, useCallback } = React;
+
+    // v4.21.0 — Rollen. 'owner' ist ein Admin MIT Zusatzrechten (fremde
+    // Beitraege bearbeiten/loeschen). Jede Admin-Pruefung muss ihn deshalb
+    // mitzaehlen, sonst verliert der Inhaber alle uebrigen Admin-Funktionen.
+    const ADMIN_ROLES = ['admin', 'owner'];
+    function isAdminRole(u) { return !!(u && ADMIN_ROLES.indexOf(u.role) !== -1); }
+    function roleLabel(r) { return r === 'owner' ? 'Inhaber' : (r === 'admin' ? 'Admin' : 'Mitglied'); }
 
     // ============================================================
     // UPDATE-BANNER (#13) — ohne Service Worker: pollt die live index.html
@@ -5115,7 +5498,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.19.1';
+    window.KRS_VERSION = '4.21.0';
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
     // Playwright den Klick-Handler prüfen kann, ohne wirklich zu navigieren.
     // Aus tenant.js (TENANT-SPEC.md 2.4) — leer, wenn hub.enabled:false.
@@ -5725,13 +6108,13 @@
                       style: {
                         border: 'none', font: 'inherit',
                         fontSize: '11px', padding: '2px 8px', borderRadius: '4px',
-                        background: u.role === 'admin' ? 'var(--accent-light)' : 'var(--bg-tertiary)',
-                        color: u.role === 'admin' ? 'var(--accent)' : 'var(--text-muted)',
+                        background: isAdminRole(u) ? 'var(--accent-light)' : 'var(--bg-tertiary)',
+                        color: isAdminRole(u) ? 'var(--accent)' : 'var(--text-muted)',
                         cursor: u.id !== currentUser.id ? 'pointer' : 'default'
                       },
                       onClick: () => u.id !== currentUser.id && handleToggleRole(u.id, u.role),
                       title: u.id !== currentUser.id ? 'Klicken um Rolle zu ändern' : 'Eigene Rolle'
-                    }, u.role === 'admin' ? 'Admin' : 'Mitglied'),
+                    }, roleLabel(u.role)),
                     // Status Toggle
                     u.id !== currentUser.id && React.createElement('button', {
                       onClick: () => handleToggleStatus(u.id, u.status || 'active'),
@@ -5879,6 +6262,94 @@
       );
     }
 
+    // ============================================================
+    // v4.21.0 — Weiterleiten-Modal mit Suche.
+    // Vorher: nur Kanaele + bereits geoeffnete Direktchats. Kolleg:innen,
+    // mit denen man noch nie geschrieben hatte, waren gar nicht erreichbar.
+    // Jetzt: ein Suchfeld ueber Kanaele, laufende Chats UND alle Personen;
+    // bei einer noch unbekannten Person wird der Chat beim Senden angelegt.
+    // ============================================================
+    function ForwardModal({ payload, channels, conversations, allUsers, currentUser, selectedChannelId, onForward, onClose }) {
+      const [q, setQ] = useState('');
+      const inputRef = useRef(null);
+      useEffect(() => { const t = setTimeout(() => { try { inputRef.current && inputRef.current.focus(); } catch (e) {} }, 50); return () => clearTimeout(t); }, []);
+
+      const norm = (v) => String(v == null ? '' : v).toLowerCase();
+      const needle = norm(q).trim();
+      const hit = (name) => !needle || norm(name).indexOf(needle) !== -1;
+
+      const chanHits = (channels || []).filter(ch => ch.id !== selectedChannelId && hit(ch.name));
+
+      const convList = (conversations || []).map(cv => ({
+        cv,
+        name: cv.is_group ? (cv.name || 'Gruppenchat') : ((cv.user || {}).display_name || 'Chat'),
+        partnerId: cv.is_group ? null : ((cv.user || {}).id != null ? String((cv.user || {}).id) : null)
+      }));
+      const convHits = convList.filter(c => hit(c.name));
+
+      // Personen ohne laufenden Chat — erst ab einem Suchbegriff, sonst
+      // erschlaegt die 53er-Liste die eigentlichen Ziele.
+      const known = new Set(convList.map(c => c.partnerId).filter(Boolean));
+      const peopleHits = needle
+        ? (allUsers || []).filter(u =>
+            String(u.id) !== String(currentUser && currentUser.id) &&
+            !known.has(String(u.id)) &&
+            (hit(u.display_name) || hit(u.username)))
+        : [];
+
+      const rowStyle = { display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', width: '100%', border: 'none', background: 'none', cursor: 'pointer', borderRadius: 'var(--radius)', fontSize: '14px', color: 'var(--text-primary)', minHeight: '44px', textAlign: 'left' };
+      const headStyle = { fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', margin: '10px 4px 4px', fontWeight: 700 };
+      const nothing = chanHits.length === 0 && convHits.length === 0 && peopleHits.length === 0;
+
+      return React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': payload.__file ? '↪ Datei weiterleiten' : '↪ Nachricht weiterleiten', onClick: onClose },
+        React.createElement('div', { className: 'channel-dialog', style: { width: 'min(380px, 94vw)' }, onClick: e => e.stopPropagation() },
+          React.createElement('h3', null, payload.__file ? '↪ Datei weiterleiten' : '↪ Nachricht weiterleiten'),
+          payload.__file && React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)', margin: '0 0 10px 0', fontSize: '13px' } },
+            React.createElement('span', null, _attIcon(payload.__file)),
+            React.createElement('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, payload.__file.name || 'Datei')
+          ),
+          React.createElement('input', {
+            ref: inputRef, type: 'search', value: q, onChange: e => setQ(e.target.value),
+            placeholder: 'Kanal oder Person suchen …', 'aria-label': 'Ziel suchen',
+            style: { width: '100%', padding: '10px 12px', marginBottom: '8px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: '16px', minHeight: '44px', boxSizing: 'border-box' }
+          }),
+          React.createElement('div', { style: { maxHeight: '46vh', overflowY: 'auto', WebkitOverflowScrolling: 'touch' } },
+            nothing && React.createElement('p', { style: { fontSize: '13px', color: 'var(--text-muted)', padding: '12px 4px', margin: 0 } },
+              needle ? ('Nichts gefunden für „' + q + '".') : 'Keine Ziele verfügbar.'),
+            chanHits.length > 0 && React.createElement('div', { style: headStyle }, 'Kanäle'),
+            chanHits.map(ch => React.createElement('button', {
+              key: 'c' + ch.id, style: rowStyle, className: 'list-item',
+              onClick: () => onForward(payload, { type: 'channel', id: ch.id })
+            },
+              React.createElement('span', { style: { color: 'var(--text-muted)' } }, '#'),
+              React.createElement('span', null, ch.name)
+            )),
+            convHits.length > 0 && React.createElement('div', { style: headStyle }, 'Direktnachrichten'),
+            convHits.map(c => React.createElement('button', {
+              key: 'd' + c.cv.id, style: rowStyle, className: 'list-item',
+              onClick: () => onForward(payload, { type: 'dm', id: c.cv.id })
+            },
+              React.createElement('span', null, c.cv.is_group ? '👥' : '💬'),
+              React.createElement('span', null, c.name)
+            )),
+            peopleHits.length > 0 && React.createElement('div', { style: headStyle }, 'Weitere Personen'),
+            peopleHits.map(u => React.createElement('button', {
+              key: 'u' + u.id, style: rowStyle, className: 'list-item',
+              onClick: () => onForward(payload, { type: 'user', id: u.id })
+            },
+              React.createElement(Avatar, { user: u, size: 24 }),
+              React.createElement('span', null, u.display_name || u.username || ('Nutzer ' + u.id))
+            ))
+          ),
+          !needle && React.createElement('p', { style: { fontSize: '12px', color: 'var(--text-muted)', margin: '8px 2px 0' } },
+            'Tippe einen Namen, um auch Kolleg:innen ohne laufenden Chat zu finden.'),
+          React.createElement('div', { className: 'dialog-actions' },
+            React.createElement('button', { onClick: onClose }, 'Abbrechen')
+          )
+        )
+      );
+    }
+
     function PostList({ posts, setPosts, channelId, dataService, user, allUsers, onOpenThread, hasMore, onLoadMore, loadingMore, onForward, onSave, savedPosts, onDragDrop, readReceiptsEnabled }) {
       const [newPostTitle, setNewPostTitle] = useState('');
       const [newPostContent, setNewPostContent] = useState('');
@@ -5918,6 +6389,50 @@
           }
         });
       }, [posts.length, dataService]);
+
+      // v4.20.1: Reaktionen live (Sprint Sonnet #1a, DELETE-Fix S1b). Reagiert
+      // ein anderer Nutzer auf einen Post, kam bisher nichts an — reactions
+      // fehlte in der Realtime-Publication UND hatte keine Subscription
+      // (Migration 2026-09-03_reactions-realtime.sql holt Ersteres nach).
+      // INSERT liefert eine sichere target_id (RLS-gefiltert) → gezieltes
+      // Nachladen genau dieses Posts. DELETE liefert keine target_id mehr
+      // (REPLICA IDENTITY bleibt DEFAULT, s. subscribeToReactions) → beim
+      // Löschen einer Reaktion werden die Reaktionen ALLER aktuell
+      // dargestellten Posts neu geladen (postsRef statt `posts`-Closure,
+      // damit die Liste immer aktuell ist), gebündelt über einen kurzen
+      // Debounce-Timer, damit mehrere DELETE-Events kurz hintereinander
+      // nicht mehrere Refetches auslösen.
+      const postsRef = useRef(posts);
+      postsRef.current = posts;
+      useEffect(() => {
+        if (dataService.isDemo) return;
+        let cancelled = false;
+        let deleteDebounce = null;
+        const reloadAllDisplayedPosts = () => {
+          if (deleteDebounce) clearTimeout(deleteDebounce);
+          deleteDebounce = setTimeout(async () => {
+            const ids = postsRef.current.filter(p => p.id && typeof p.id === 'number').map(p => p.id);
+            if (ids.length === 0) return;
+            const map = await dataService.getReactions('post', ids);
+            if (cancelled) return;
+            setPosts(prev => prev.map(p => (p.id && typeof p.id === 'number')
+              ? { ...p, reactions: map.get(p.id) || [] }
+              : p));
+          }, 400);
+        };
+        const unsub = dataService.subscribeToReactions('post',
+          async (targetId) => {
+            const map = await dataService.getReactions('post', [targetId]);
+            if (cancelled) return;
+            const freshReactions = map.get(targetId) || [];
+            setPosts(prev => prev.some(p => p.id === targetId)
+              ? prev.map(p => p.id === targetId ? { ...p, reactions: freshReactions } : p)
+              : prev);
+          },
+          reloadAllDisplayedPosts
+        );
+        return () => { cancelled = true; if (deleteDebounce) clearTimeout(deleteDebounce); unsub(); };
+      }, [dataService]);
 
       // Mark posts as read when they are displayed (nur mit Opt-in)
       useEffect(() => {
@@ -6164,7 +6679,7 @@
               ),
               selectedFiles.length > 0 && React.createElement('span', { style: { fontSize: '11px', color: 'var(--text-muted)' } }, selectedFiles.length + '/10'),
               // Dringend-Button nur für Admins sichtbar (Phase 7.5)
-              user?.role === 'admin' && React.createElement('button', {
+              isAdminRole(user) && React.createElement('button', {
                 type: 'button',
                 onClick: () => setIsUrgent(u => !u),
                 title: isUrgent ? 'Dringend-Markierung entfernen' : 'Als dringend markieren',
@@ -6222,7 +6737,15 @@
         }).map(post => {
           const author = post.author || { display_name: 'Unbekannt', avatar_color: '#757575' };
           const replyCount = post.replies ?? post.reply_count ?? 0;
-          const isOwner = user && (post.author_id === user.id || user.role === 'admin');
+          // v4.21.0 Rechte: Fremde Beitraege bearbeiten/loeschen darf nur noch
+          // die Rolle 'owner' (Schulleitung der Plattform = Norbert), nicht
+          // jeder globale Admin. Serverseitig identisch durchgesetzt in
+          // migrations/2026-09-11_posts-owner-only-edit.sql — die UI-Regel
+          // allein waere per API umgehbar.
+          const isAuthor = !!(user && String(post.author_id) === String(user.id));
+          const isPlatformOwner = !!(user && user.role === 'owner');
+          const isOwner = isAuthor || isPlatformOwner;   // darf bearbeiten/loeschen
+          const canPin = isOwner || isAdminRole(user);
           const isEditing = editingPost === post.id;
           const postStyle = post.is_urgent
             ? { borderLeft: '3px solid var(--danger)', background: 'rgba(239,68,68,0.04)' }
@@ -6246,7 +6769,7 @@
                 // Weiterleiten
                 onForward && React.createElement('button', { onClick: () => onForward(post), title: 'Weiterleiten', 'aria-label': 'Nachricht weiterleiten', style: { background: 'none', border: 'none', cursor: 'pointer', padding: '8px', color: 'var(--text-muted)', fontSize: '14px', borderRadius: 'var(--radius)', minWidth: '36px', minHeight: '36px' } }, '↪'),
                 // Pin: Admin oder Autor darf pinnen
-                (isOwner || user.role === 'admin') && React.createElement('button', { onClick: () => handleTogglePin(post), title: post.is_pinned ? 'Loslösen' : 'Anheften', 'aria-label': post.is_pinned ? 'Post loslösen' : 'Post anheften', style: { background: 'none', border: 'none', cursor: 'pointer', padding: '8px', color: post.is_pinned ? 'var(--accent-orange)' : 'var(--text-muted)', fontSize: '14px', borderRadius: 'var(--radius)', minWidth: '36px', minHeight: '36px' } }, '📌'),
+                canPin && React.createElement('button', { onClick: () => handleTogglePin(post), title: post.is_pinned ? 'Loslösen' : 'Anheften', 'aria-label': post.is_pinned ? 'Post loslösen' : 'Post anheften', style: { background: 'none', border: 'none', cursor: 'pointer', padding: '8px', color: post.is_pinned ? 'var(--accent-orange)' : 'var(--text-muted)', fontSize: '14px', borderRadius: 'var(--radius)', minWidth: '36px', minHeight: '36px' } }, '📌'),
                 // Edit/Delete: Nur Autor
                 isOwner && React.createElement('button', { onClick: () => handleEditPost(post), title: 'Bearbeiten', 'aria-label': 'Post bearbeiten', style: { background: 'none', border: 'none', cursor: 'pointer', padding: '8px', color: 'var(--text-muted)', fontSize: '14px', borderRadius: 'var(--radius)', minWidth: '36px', minHeight: '36px' } }, '✏️'),
                 isOwner && React.createElement('button', { onClick: () => handleDeletePost(post.id), title: 'Löschen', 'aria-label': 'Post löschen', style: { background: 'none', border: 'none', cursor: 'pointer', padding: '8px', color: 'var(--text-muted)', fontSize: '14px', borderRadius: 'var(--radius)', minWidth: '36px', minHeight: '36px' } }, '🗑️')
@@ -6669,7 +7192,7 @@
                   ),
                   isAdmin && member.id !== currentUser.id && React.createElement('button', {
                     type: 'button',
-                    style: { background: 'none', border: 'none', cursor: 'pointer', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', color: member.role === 'admin' ? 'var(--accent)' : 'var(--text-muted)', transition: 'all 0.15s' },
+                    style: { background: 'none', border: 'none', cursor: 'pointer', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', color: isAdminRole(member) ? 'var(--accent)' : 'var(--text-muted)', transition: 'all 0.15s' },
                     onClick: () => handleToggleRole(member.id, member.role),
                     title: member.role === 'admin' ? 'Zum Mitglied machen' : 'Zum Admin machen'
                   }, member.role === 'admin' ? '↓ Mitglied' : '↑ Admin'),
@@ -7003,6 +7526,51 @@
           .catch(() => {});
         return () => { cancelled = true; };
       }, [messages, dataService]);
+
+      // v4.20.1: Reaktionen live auf Nachrichten (Sprint Sonnet #1a, DELETE-Fix
+      // S1b) — analog zu PostList: INSERT liefert eine sichere target_id
+      // (RLS-gefiltert) → gezieltes Nachladen genau dieser Nachricht. DELETE
+      // liefert keine target_id mehr (REPLICA IDENTITY bleibt DEFAULT, s.
+      // subscribeToReactions) → beim Löschen einer Reaktion werden die
+      // Reaktionen ALLER aktuell dargestellten Nachrichten neu geladen
+      // (messagesRef statt `messages`-Closure), gebündelt über einen kurzen
+      // Debounce-Timer gegen eine Refetch-Lawine bei mehreren Events kurz
+      // hintereinander.
+      const messagesRef = useRef(messages);
+      messagesRef.current = messages;
+      useEffect(() => {
+        if (dataService.isDemo) return;
+        let cancelled = false;
+        let deleteDebounce = null;
+        const reloadAllDisplayedMessages = () => {
+          if (deleteDebounce) clearTimeout(deleteDebounce);
+          deleteDebounce = setTimeout(async () => {
+            const ids = messagesRef.current.map(m => m.id).filter(Boolean);
+            if (ids.length === 0) return;
+            const map = await dataService.getReactions('message', ids);
+            if (cancelled) return;
+            setMsgReactions(prev => {
+              const next = new Map(prev);
+              for (const id of ids) next.set(id, map.get(id) || []);
+              return next;
+            });
+          }, 400);
+        };
+        const unsub = dataService.subscribeToReactions('message',
+          async (targetId) => {
+            const map = await dataService.getReactions('message', [targetId]);
+            if (cancelled) return;
+            const freshReactions = map.get(targetId) || [];
+            setMsgReactions(prev => {
+              const next = new Map(prev);
+              next.set(targetId, freshReactions);
+              return next;
+            });
+          },
+          reloadAllDisplayedMessages
+        );
+        return () => { cancelled = true; if (deleteDebounce) clearTimeout(deleteDebounce); unsub(); };
+      }, [dataService]);
 
       const handleToggleMsgReaction = async (msgId, emoji) => {
         setReactionPickerMsgId(null);
@@ -8289,7 +8857,13 @@
               React.createElement(WikiLink, { url: 'https://de.m.wikipedia.org/wiki/Datenschutz-Grundverordnung', title: 'DSGVO', label: 'Was ist die DSGVO?' })
             )
           ),
-          React.createElement('div', { style: { marginTop: '16px', textAlign: 'center' } },
+          React.createElement('div', { style: { marginTop: '16px', display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' } },
+            // v4.21.0: Der Lern-Coach hat keinen Dauer-Button mehr auf jedem
+            // Screen — er wird von hier aus geoeffnet.
+            React.createElement('button', {
+              onClick: () => { onClose(); try { window.KRSCoach && window.KRSCoach.open(); } catch (e) {} },
+              style: { padding: '10px 24px', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', fontSize: '14px', fontWeight: 600, minHeight: '44px' }
+            }, '🎓 Lern-Coach (Tutorials)'),
             React.createElement('button', {
               onClick: () => { onClose(); onStartOnboarding(); },
               style: { padding: '10px 24px', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: 'var(--radius)', cursor: 'pointer', fontSize: '14px', fontWeight: '500' }
@@ -8334,6 +8908,21 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.21.0', date: '11.09.2026', items: [
+        'Handy: Eingefügte Bilder im Beitrag sprengen nicht mehr den Rand — antippen öffnet sie groß, Doppeltipp und Aufziehen zoomen',
+        'PDF-Vorschau passt sich der Bildschirmbreite an (auch im Querformat), mit Zoomstufen und „In neuem Tab"',
+        'Weiterleiten hat ein Suchfeld: Kanäle, laufende Chats und alle Kolleg:innen — auch ohne bestehenden Chat',
+        'Fremde Beiträge bearbeiten oder löschen darf nur noch der Inhaber, nicht mehr jeder Admin (Anheften bleibt Admin-Recht)',
+        'Sicherheit: Rollen lassen sich nicht mehr über das eigene Profil ändern',
+        'Der Lern-Coach klebt nicht mehr auf jedem Bildschirm — er steckt jetzt unter „❓ Hilfe → 🎓 Lern-Coach (Tutorials)"'
+      ] },
+      { v: '4.20.1', date: '03.09.2026', items: [
+        'Kleine Nachbesserung an den Live-Reaktionen von gestern: Beim Entfernen einer Reaktion wurden intern unnötig viele Detaildaten übertragen — jetzt werden nur noch die für dich sichtbaren Reaktionen neu geladen, nichts Zusätzliches. Für dich ändert sich nichts, außer dass es jetzt sauberer läuft.'
+      ] },
+      { v: '4.20.0', date: '03.09.2026', items: [
+        'Reaktionen auf Beiträge und Nachrichten erscheinen jetzt live bei allen — vorher erst nach Neuladen sichtbar',
+        'Bearbeitet oder löscht jemand einen Beitrag oder eine Nachricht, verschwindet die alte Fassung jetzt sofort auch bei den anderen — ohne Neuladen'
+      ] },
       { v: '4.19.1', date: '31.07.2026', items: [
         'Neuen Kanal per Enter anlegen: Dialog ging manchmal sofort wieder auf, statt zu schließen — jetzt zuverlässig behoben'
       ] },
@@ -8977,6 +9566,14 @@
         const isFile = !!(payload && payload.__file);
         const fromLabel = selectedChannel?.name ? ('#' + selectedChannel.name) : 'einem Chat';
         try {
+          // v4.21.0: Ziel ist eine Person ohne laufenden Chat — Konversation
+          // zuerst anlegen (createConversation ist idempotent, liefert eine
+          // bestehende zurueck, falls doch schon eine existiert).
+          if (target.type === 'user') {
+            const conv = await dataService.createConversation(user.id, target.id);
+            if (!conv || conv.id == null) throw new Error('Konversation konnte nicht angelegt werden');
+            target = { type: 'dm', id: conv.id };
+          }
           if (target.type === 'channel') {
             if (isFile) {
               await dataService.createPost(target.id, user.id, '<p><em>↪ Weitergeleitete Datei</em></p>', '', JSON.stringify([payload.__file]), false);
@@ -9286,18 +9883,31 @@
             }
           };
           loadPosts();
-          const unsub = dataService.subscribeToChannel(selectedChannel.id, newPost => {
-            if (cancelled) return;
-            if (postsLoadingRef.current) {
-              // Während Loading: Events in Queue sammeln
-              pendingRealtimeRef.current.push(newPost);
-              return;
+          const unsub = dataService.subscribeToChannel(selectedChannel.id, {
+            onInsert: newPost => {
+              if (cancelled) return;
+              if (postsLoadingRef.current) {
+                // Während Loading: Events in Queue sammeln
+                pendingRealtimeRef.current.push(newPost);
+                return;
+              }
+              setPosts(prev => {
+                // Duplikat-Prävention (optimistic update + Realtime)
+                if (prev.some(p => p.id === newPost.id)) return prev;
+                return [newPost, ...prev];
+              });
+            },
+            // v4.20.0: bearbeitet/gelöscht von anderen Nutzern — funktionales
+            // setState (prev => ...) statt Closure über `posts`, sonst Stale-
+            // Closure-Falle (Skill stale-closure-cdn-react-falle).
+            onUpdate: updatedPost => {
+              if (cancelled) return;
+              setPosts(prev => prev.map(p => p.id === updatedPost.id ? { ...p, ...updatedPost, reactions: p.reactions } : p));
+            },
+            onDelete: deletedPost => {
+              if (cancelled) return;
+              setPosts(prev => prev.filter(p => p.id !== deletedPost.id));
             }
-            setPosts(prev => {
-              // Duplikat-Prävention (optimistic update + Realtime)
-              if (prev.some(p => p.id === newPost.id)) return prev;
-              return [newPost, ...prev];
-            });
           });
           // Feedback #4 (Stresstest 09.07.): Polling-Fallback auch für Kanal-Posts —
           // fängt verpasste Realtime-Events nach WLAN-Abbruch ab (Merge, kein Replace).
@@ -9339,11 +9949,19 @@
             if (!cancelled) setReplies(repliesData);
           };
           loadReplies();
-          const unsub = dataService.subscribeToReplies(openThread.id, newReply => {
-            if (!cancelled) setReplies(prev => {
-              if (prev.some(r => r.id === newReply.id)) return prev;
-              return [...prev, newReply];
-            });
+          const unsub = dataService.subscribeToReplies(openThread.id, {
+            onInsert: newReply => {
+              if (!cancelled) setReplies(prev => {
+                if (prev.some(r => r.id === newReply.id)) return prev;
+                return [...prev, newReply];
+              });
+            },
+            onUpdate: updatedReply => {
+              if (!cancelled) setReplies(prev => prev.map(r => r.id === updatedReply.id ? { ...r, ...updatedReply } : r));
+            },
+            onDelete: deletedReply => {
+              if (!cancelled) setReplies(prev => prev.filter(r => r.id !== deletedReply.id));
+            }
           });
           return () => { cancelled = true; unsub(); };
         }
@@ -9377,11 +9995,19 @@
             }
           };
           loadMessages();
-          const unsub = dataService.subscribeToConversation(selectedConversation.id, newMsg => {
-            if (!cancelled) setChatMessages(prev => {
-              if (prev.some(m => m.id === newMsg.id)) return prev;
-              return [...prev, newMsg];
-            });
+          const unsub = dataService.subscribeToConversation(selectedConversation.id, {
+            onInsert: newMsg => {
+              if (!cancelled) setChatMessages(prev => {
+                if (prev.some(m => m.id === newMsg.id)) return prev;
+                return [...prev, newMsg];
+              });
+            },
+            onUpdate: updatedMsg => {
+              if (!cancelled) setChatMessages(prev => prev.map(m => m.id === updatedMsg.id ? { ...m, ...updatedMsg } : m));
+            },
+            onDelete: deletedMsg => {
+              if (!cancelled) setChatMessages(prev => prev.filter(m => m.id !== deletedMsg.id));
+            }
           });
           // Feedback #4 (Stresstest 09.07.): „Chat aktualisiert sich nicht live".
           // Realtime-Websockets brechen im Schul-WLAN gern ab; verpasste Events
@@ -9866,7 +10492,7 @@
                 'aria-label': 'Suche öffnen'
               }, '🔍'),
               // Aufräumen (mehrere Teams löschen) — nur globaler Admin
-              user?.role === 'admin' && React.createElement('button', {
+              isAdminRole(user) && React.createElement('button', {
                 className: 'feedback-trigger',
                 onClick: () => setShowBulkTeams(true),
                 title: 'Teams aufräumen (mehrere löschen)',
@@ -9951,13 +10577,13 @@
                         React.createElement('div', { style: { width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: team.icon_color, borderRadius: 'var(--radius)', color: 'white', fontSize: '12px', fontWeight: '600' } }, team.icon_text),
                         React.createElement('span', { className: 'list-item-text' }, team.name)
                       ),
-                      (user?.role === 'admin') && React.createElement('button', {
+                      (isAdminRole(user)) && React.createElement('button', {
                         className: 'team-hide-btn',
                         'data-testid': 'team-restore-btn',
                         onClick: (e) => { e.stopPropagation(); handleRestoreTeam(team.id); },
                         title: 'Team wiederherstellen'
                       }, '♻'),
-                      (user?.role === 'admin') && React.createElement('button', {
+                      (isAdminRole(user)) && React.createElement('button', {
                         className: 'team-hide-btn',
                         'data-testid': 'team-delete-archived-btn',
                         onClick: (e) => { e.stopPropagation(); handleDeleteTeam(team.id); },
@@ -9975,7 +10601,7 @@
           selectedTeam && React.createElement(React.Fragment, null,
             React.createElement('div', { className: 'sidebar-header', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
               React.createElement('h2', null, '# Kanäle'),
-              user?.role === 'admin' && React.createElement('button', {
+              isAdminRole(user) && React.createElement('button', {
                 className: 'new-chat-btn',
                 onClick: () => setShowCreateChannel(true),
                 title: 'Neuen Kanal erstellen',
@@ -9991,8 +10617,8 @@
                   onClick: () => handleChannelSelect(ch),
                   onContextMenu: (e) => handleChannelContextMenu(e, ch),
                   // Tastatur-Äquivalent zum Rechtsklick (WCAG 2.1.1): Kontextmenü-Taste / Shift+F10
-                  onKeyDown: (e) => { if (user?.role === 'admin' && (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10'))) handleChannelContextMenu(e, ch); },
-                  'aria-haspopup': user?.role === 'admin' ? 'menu' : undefined,
+                  onKeyDown: (e) => { if (isAdminRole(user) && (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10'))) handleChannelContextMenu(e, ch); },
+                  'aria-haspopup': isAdminRole(user) ? 'menu' : undefined,
                   'aria-current': selectedChannel?.id === ch.id ? 'page' : undefined
                 },
                   React.createElement('span', { style: { fontSize: '12px' } }, '#'),
@@ -10034,7 +10660,7 @@
                 'Benannte Links zu gemeinsamen Ordnern (z. B. Nextcloud). Die Dateien selbst bleiben dort — ' + (window.T ? window.T('app.name', 'die App') : 'die App') + ' speichert nur die Verweise.'),
               React.createElement(TeamLinksSection, {
                 team: selectedTeam, dataService, user,
-                isTeamAdmin: userTeamRole === 'admin' || user?.role === 'admin'
+                isTeamAdmin: userTeamRole === 'admin' || isAdminRole(user)
               })
             )
           ),
@@ -10046,7 +10672,7 @@
             React.createElement('div', { className: 'content-body' },
               React.createElement(TeamTermineSection, {
                 team: selectedTeam, dataService, user,
-                isTeamAdmin: userTeamRole === 'admin' || user?.role === 'admin'
+                isTeamAdmin: userTeamRole === 'admin' || isAdminRole(user)
               })
             )
           ),
@@ -10138,8 +10764,8 @@
           onClose: () => setShowTeamMembers(false),
           onMembersUpdated: () => {},
           currentUser: user,
-          isAdmin: userTeamRole === 'admin' || user?.role === 'admin',
-          isGlobalAdmin: user?.role === 'admin',
+          isAdmin: userTeamRole === 'admin' || isAdminRole(user),
+          isGlobalAdmin: isAdminRole(user),
           teamName: selectedTeam.name,
           onArchive: handleArchiveTeam,
           onDelete: handleDeleteTeam
@@ -10220,47 +10846,15 @@
             )
           );
         })(),
-        // Nachricht weiterleiten Modal
-        showForwardModal && React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': showForwardModal.__file ? '↪ Datei weiterleiten' : '↪ Nachricht weiterleiten', onClick: () => setShowForwardModal(null) },
-          React.createElement('div', { className: 'channel-dialog', style: { width: '340px' }, onClick: e => e.stopPropagation() },
-            React.createElement('h3', null, showForwardModal.__file ? '↪ Datei weiterleiten' : '↪ Nachricht weiterleiten'),
-            showForwardModal.__file && React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)', margin: '0 0 10px 0', fontSize: '13px' } },
-              React.createElement('span', null, _attIcon(showForwardModal.__file)),
-              React.createElement('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, showForwardModal.__file.name || 'Datei')
-            ),
-            React.createElement('p', { style: { fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 8px 0' } }, 'Ziel auswählen:'),
-            React.createElement('div', { style: { maxHeight: '300px', overflowY: 'auto' } },
-              React.createElement('div', { style: { fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', margin: '4px 4px', fontWeight: 700 } }, 'Kanäle'),
-              channels.filter(ch => ch.id !== selectedChannel?.id).map(ch =>
-                React.createElement('button', {
-                  key: 'c' + ch.id,
-                  style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', width: '100%', border: 'none', background: 'none', cursor: 'pointer', borderRadius: 'var(--radius)', fontSize: '13px', color: 'var(--text-primary)', minHeight: '40px' },
-                  className: 'list-item',
-                  onClick: () => handleForwardPost(showForwardModal, { type: 'channel', id: ch.id })
-                },
-                  React.createElement('span', { style: { color: 'var(--text-muted)' } }, '#'),
-                  React.createElement('span', null, ch.name)
-                )
-              ),
-              conversations.length > 0 && React.createElement('div', { style: { fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', margin: '10px 4px 4px', fontWeight: 700 } }, 'Direktnachrichten'),
-              conversations.map(cv => {
-                const nm = cv.is_group ? (cv.name || 'Gruppenchat') : ((cv.user || {}).display_name || 'Chat');
-                return React.createElement('button', {
-                  key: 'd' + cv.id,
-                  style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', width: '100%', border: 'none', background: 'none', cursor: 'pointer', borderRadius: 'var(--radius)', fontSize: '13px', color: 'var(--text-primary)', minHeight: '40px' },
-                  className: 'list-item',
-                  onClick: () => handleForwardPost(showForwardModal, { type: 'dm', id: cv.id })
-                },
-                  React.createElement('span', null, '💬'),
-                  React.createElement('span', null, nm)
-                );
-              })
-            ),
-            React.createElement('div', { className: 'dialog-actions' },
-              React.createElement('button', { onClick: () => setShowForwardModal(null) }, 'Abbrechen')
-            )
-          )
-        ),
+        // Nachricht weiterleiten Modal (v4.21.0: eigene Komponente mit Suche)
+        showForwardModal && React.createElement(ForwardModal, {
+          payload: showForwardModal,
+          channels, conversations, allUsers,
+          currentUser: user,
+          selectedChannelId: selectedChannel?.id,
+          onForward: handleForwardPost,
+          onClose: () => setShowForwardModal(null)
+        }),
         // Main app layout
         React.createElement('div', { className: 'app-layout', role: 'application' },
         // Skip-Link „Zum Inhalt springen" (WCAG 2.4.1) — erstes fokussierbares Element
@@ -10359,7 +10953,7 @@
             // v4.10.0: Einstellungen (⚙️) bündelt Benachrichtigungen, Lesebestätigungen, Hilfe & „Was ist neu"
             React.createElement('button', { className: 'feedback-trigger', onClick: () => openModal('settings'), title: 'Einstellungen', 'aria-label': 'Einstellungen öffnen' }, '⚙️'),
             // Admin-Button (nur für Admins sichtbar, Phase 6) — 🛠️ statt ⚙️, kein Konflikt mit Einstellungen
-            user?.role === 'admin' && React.createElement('button', { className: 'feedback-trigger', onClick: () => setShowAdmin(true), title: 'Administration', 'aria-label': 'Admin-Panel öffnen' }, '🛠️'),
+            isAdminRole(user) && React.createElement('button', { className: 'feedback-trigger', onClick: () => setShowAdmin(true), title: 'Administration', 'aria-label': 'Admin-Panel öffnen' }, '🛠️'),
             React.createElement('button', {
               onClick: () => setShowProfile(prev => !prev),
               title: 'Profil',
@@ -10437,7 +11031,7 @@
         // Feedback Modal
         React.createElement(UpdateBanner, null),
         topModal === 'feedback' && React.createElement(FeedbackModal, { user, dataService, onClose: backModal, canGoBack, onOpenBoard: () => openModal('feedbackBoard') }),
-        topModal === 'feedbackBoard' && React.createElement(FeedbackBoardModal, { dataService, isAdmin: user?.role === 'admin', onClose: backModal, canGoBack, onNewFeedback: () => openModal('feedback') }),
+        topModal === 'feedbackBoard' && React.createElement(FeedbackBoardModal, { dataService, isAdmin: isAdminRole(user), onClose: backModal, canGoBack, onNewFeedback: () => openModal('feedback') }),
         // v4.18.0: FilesPlaceholderModal entfernt — Dateiablage ist jetzt Direktlink (siehe Sidebar-Button oben).
         showBulkTeams && React.createElement(BulkDeleteTeamsModal, {
           teams, archivedTeams, dataService,
@@ -10475,7 +11069,7 @@
           onChangePassword: (dataService && !dataService.isDemo) ? handleChangePassword : null
         }),
         // Admin-Panel (Phase 6 — nur für Admins sichtbar)
-        showAdmin && user?.role === 'admin' && React.createElement(AdminPanel, {
+        showAdmin && isAdminRole(user) && React.createElement(AdminPanel, {
           dataService, currentUser: user, onClose: () => setShowAdmin(false)
         })
       )
@@ -10767,10 +11361,18 @@ window.KRS_COACH_CONFIG = {
   fab.className='krsc-fab'; fab.type='button';
   fab.setAttribute('aria-label','Lern-Coach öffnen');
   root.appendChild(fab);
+  // v4.21.0: Der FAB klebte auf jedem Screen, bis alle Schritte abgehakt waren —
+  // auf dem Handy verdeckt er den Inhalt. Standard ist jetzt: unsichtbar. Der
+  // Lern-Coach wird ueber „❓ Hilfe → 🎓 Lern-Coach" geoeffnet. Wer den
+  // Schnellzugriff moechte, blendet ihn dort wieder ein (Flag in localStorage).
+  var FABKEY = 'krs_coach_fab_' + APP;
+  function fabWanted(){ try { return localStorage.getItem(FABKEY) === '1'; } catch(e) { return false; } }
+  function setFabWanted(v){ try { localStorage.setItem(FABKEY, v ? '1' : '0'); } catch(e) {} renderFab(); }
+
   function renderFab(){
     var n=doneCount();
+    if(!fabWanted()){ fab.style.display='none'; return; }
     // Einmal durch → FAB dauerhaft ausblenden (Fortschritt bleibt in localStorage).
-    // Wieder einblendbar per window.KRSCoach.reset() oder .open().
     if(allDone()){ fab.style.display='none'; return; }
     fab.style.display='';
     fab.classList.remove('krsc-done');
@@ -10887,7 +11489,10 @@ window.KRS_COACH_CONFIG = {
   renderFab();
 
   // Öffentliche Mini-API (z.B. für „Coach starten"-Button in der App)
-  window.KRSCoach={ open:openPanel, close:closePanel, reset:function(){state.done={};active=0;save(state);renderFab();} };
+  window.KRSCoach={ open:openPanel, close:closePanel,
+    reset:function(){state.done={};active=0;save(state);renderFab();},
+    showFab:function(v){ setFabWanted(v !== false); },
+    fabVisible:fabWanted };
 })();
 </script>
 <!-- ═══ Ende KRS LERN-COACH ═══ -->

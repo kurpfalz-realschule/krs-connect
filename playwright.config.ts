@@ -4,7 +4,7 @@ import { defineConfig, devices } from '@playwright/test';
  * Playwright-Konfiguration für KRS Connect + KRS Hub
  *
  * Drei Test-Suites:
- *  - tests/connect/  → Smoke-Tests gegen lokale krs-connect-v3.html im Demo-Modus
+ *  - tests/connect/  → Smoke-Tests gegen lokale krs-connect-deploy/index.html im Demo-Modus
  *  - tests/hub/      → Smoke-Tests gegen lokale krs-hub/index.html im Demo-Modus
  *  - tests/live/     → Health-Checks gegen die Live-URLs auf GitHub Pages
  *
