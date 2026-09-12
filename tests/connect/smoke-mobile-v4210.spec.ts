@@ -128,13 +128,26 @@ test.describe('v4.21.0 — Weiterleiten mit Suche (Punkt 2)', () => {
     const suche = page.locator('input[aria-label="Ziel suchen"]');
     await expect(suche).toBeVisible({ timeout: 5_000 });
 
-    // Ohne Suchbegriff: nur Kanäle/laufende Chats, keine Personenliste.
-    await expect(page.getByText('Weitere Personen')).toHaveCount(0);
+    // Alle Pruefungen auf den Dialog eingrenzen — 'Direktnachrichten' steht
+    // auch ausserhalb im UI und wuerde sonst doppelt matchen.
+    const dlg = page.locator('.channel-dialog').filter({ has: suche });
 
-    // Mit Suchbegriff: Personen tauchen auf.
+    // Ohne Suchbegriff: nur Kanäle/laufende Chats, keine Personenliste.
+    await expect(dlg.getByText('Weitere Personen')).toHaveCount(0);
+
+    // Anna L. (id 4) HAT in den Demo-Daten schon einen Chat
+    // (MOCK_CONVERSATIONS id 3). Sie gehoert unter 'Direktnachrichten' und
+    // darf NICHT zusaetzlich unter 'Weitere Personen' stehen — das ist die
+    // Entdopplung, an der dieser Test im CI-Lauf #74 zu Recht haengen blieb.
     await suche.fill('Anna');
-    await expect(page.getByText('Weitere Personen')).toBeVisible({ timeout: 3_000 });
-    await expect(page.getByRole('button', { name: /Anna/ })).toBeVisible();
+    await expect(dlg.getByText('Direktnachrichten')).toBeVisible({ timeout: 3_000 });
+    await expect(dlg.getByText('Weitere Personen')).toHaveCount(0);
+
+    // Markus K. (id 5) hat KEINEN laufenden Chat. Genau dafuer ist die Suche
+    // da: vorher war er ueber 'Weiterleiten' ueberhaupt nicht erreichbar.
+    await suche.fill('Markus');
+    await expect(dlg.getByText('Weitere Personen')).toBeVisible({ timeout: 3_000 });
+    await expect(dlg.getByRole('button', { name: /Markus/ })).toBeVisible();
 
     // Unsinn → sauberer Leer-Zustand statt stiller leerer Liste.
     await suche.fill('zzzzzz');
