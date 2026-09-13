@@ -27,12 +27,19 @@
 --       Lehrkraft aendert display_name      : ERLAUBT   (richtig)
 --       Admin stuft Mitglied hoch           : ERLAUBT   (richtig)
 --       Admin vergibt 'owner'               : BLOCKIERT (richtig)
---   Block B1 (posts-Policies): OFFEN — zusammen mit dem Deploy von v4.21.0.
---     Vorher eingespielt saehen die anderen Admins in der alten UI weiterhin
---     Bearbeiten/Loeschen an fremden Beitraegen, es liefe nur ins Leere.
---   Block C (role='owner' fuer id 1): OFFEN — ERST NACH dem Deploy. Die alte
---     UI prueft role === 'admin' und wuerde Norbert sonst alle
---     Admin-Funktionen ausblenden.
+--   Block B1 + C: AM 12.09.2026 EINGESPIELT, direkt nach dem Deploy von
+--     v4.21.0 (CI-Lauf #75 gruen, Live-Version 4.21.0 verifiziert).
+--     Gegenprobe an einem echten fremden Beitrag (posts.id 97) mit gesetzten
+--     JWT-Claims, in einer zurueckgerollten Transaktion:
+--       Daniel Schmitt (admin) aendert fremden Beitrag : BLOCKIERT (richtig)
+--       Norbert (owner)        aendert fremden Beitrag : ERLAUBT   (richtig)
+--       is_global_admin()  fuer den Inhaber            : true  -> behaelt alle
+--                                                        uebrigen Admin-Rechte
+--       is_platform_owner() fuer den Inhaber           : true
+--     Rollenstand danach: id 1 = owner, id 3 + 51 = admin, Rest member.
+--
+--   DIESE MIGRATION IST DAMIT VOLLSTAENDIG ANGEWENDET. Zum Zurueckdrehen den
+--   UNDO-Block am Dateiende verwenden.
 -- ============================================================================
 
 -- ------------------------------------------- Block A — EINGESPIELT 11.09. --
@@ -65,8 +72,8 @@ $$;
 
 revoke execute on function public.is_platform_owner() from anon;
 
--- ------------------------------------------------------- Block B1 — OFFEN --
--- posts: fremde Beitraege nur noch fuer den Inhaber. Mit dem Deploy einspielen.
+-- ------------------------------------------ Block B1 — EINGESPIELT 12.09. --
+-- posts: fremde Beitraege nur noch fuer den Inhaber.
 
 drop policy if exists "posts_update_own_or_admin" on public.posts;
 drop policy if exists "posts_delete_own_or_admin" on public.posts;
@@ -109,10 +116,10 @@ create trigger trg_guard_user_role_change
   before update on public.users
   for each row execute function public.guard_user_role_change();
 
--- ---------------------------------------------------------------- Block C --
--- ERST NACH DEM DEPLOY VON v4.21.0 AUSFUEHREN.
+-- ------------------------------------------- Block C — EINGESPIELT 12.09. --
+-- Wurde nach dem Deploy von v4.21.0 ausgefuehrt.
 
--- update public.users set role = 'owner' where id = 1;   -- Norbert Kotzan
+update public.users set role = 'owner' where id = 1;   -- Norbert Kotzan
 
 -- ============================================================================
 -- PRUEFUNG
