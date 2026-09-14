@@ -1383,6 +1383,12 @@
       opacity: 0.8; transition: opacity .2s;
     }
     .lightbox-caption a:hover { opacity: 1; }
+    .lightbox-caption .lightbox-dl {
+      color: #fff; background: none; border: none; padding: 4px 6px; cursor: pointer;
+      font: inherit; display: flex; align-items: center; gap: 4px;
+      opacity: 0.8; transition: opacity .2s; min-height: 32px;
+    }
+    .lightbox-caption .lightbox-dl:hover { opacity: 1; }
     .lightbox-nav {
       position: fixed; top: 50%; transform: translateY(-50%);
       width: 48px; height: 48px;
@@ -1634,12 +1640,29 @@
         caption.className = 'lightbox-caption';
         var countText = _lbImgs.length > 1 ? ((_lbIdx + 1) + '/' + _lbImgs.length + ' — ') : '';
         if (countText) caption.appendChild(document.createTextNode(countText));
-        var dlLink = document.createElement('a');
-        dlLink.href = imgUrl;
-        dlLink.download = imgName;
+        // v4.23.0 — Download lief über <a href=Storage-Pfad download>. Zwei Fehler
+        // in einem: (1) bei privatem Bucket ist `imgUrl` nur der Objekt-Pfad
+        // (z. B. "uploads/123.png") — der Link zeigte auf eine 404-Seite der
+        // eigenen Domain; (2) selbst mit Signed URL ignorieren alle Browser das
+        // `download`-Attribut bei fremder Origin, das Bild wurde nur angezeigt.
+        // Jetzt geht der Klick über dieselbe Blob-Route wie im Datei-Viewer.
+        // (Rückmeldung Daniel Schmitt, 14.09.2026: "Herunterladen im Chatbereich
+        // funktioniert nicht".)
+        var dlLink = document.createElement('button');
+        dlLink.type = 'button';
+        dlLink.className = 'lightbox-dl';
         dlLink.title = 'Herunterladen';
         dlLink.textContent = '⬇ Download';
-        dlLink.onclick = function(e) { e.stopPropagation(); };
+        dlLink.onclick = function(e) {
+          e.stopPropagation();
+          e.preventDefault();
+          var dl = window.__krsDownloadFile;
+          if (dl) { dl({ url: imgUrl, name: imgName || 'Bild' }); return; }
+          // Datei-Viewer noch nicht geladen → wenigstens in neuem Tab öffnen.
+          var open1 = function(u){ window.open(u, '_blank', 'noopener'); };
+          if (window.__krsResolveStorageUrl) window.__krsResolveStorageUrl(imgUrl).then(open1).catch(function(){ open1(imgUrl); });
+          else open1(imgUrl);
+        };
         caption.appendChild(dlLink);
         ov.appendChild(caption);
 
@@ -1886,17 +1909,46 @@
       }
 
       // ---- Download erzwingen (mit Originalnamen) ----
+      // v4.23.0 — vorher konnte dieser Weg lautlos scheitern:
+      //   · `r.ok` wurde nicht geprüft → eine Fehlerantwort (abgelaufene Signed
+      //     URL, 400/403) landete als winzige JSON-Datei unter dem Namen der
+      //     echten Datei — sie ließ sich hinterher nicht öffnen.
+      //   · Der Notfall-Weg setzte `download` auf eine fremde Origin; das
+      //     ignorieren alle Browser — die Datei wurde bestenfalls angezeigt.
+      //   · Bei großen Dateien (der Elternbrief-PDF hat 15 MB) passierte
+      //     sichtbar minutenlang nichts.
+      // Jetzt: Statusmeldung, echte Fehlerprüfung, und als Notfall die
+      // Supabase-Option `?download=<name>`, die serverseitig ein
+      // Content-Disposition setzt und damit ohne `download`-Attribut auskommt.
+      function _dlToast(msg, type){ if (typeof window.showToast === 'function') window.showToast(msg, type || 'info'); }
+      function _dlAppendParam(url, name){
+        try {
+          var u = new URL(url, window.location.href);
+          u.searchParams.set('download', name || 'datei');
+          return u.toString();
+        } catch (e) { return url; }
+      }
       function forceDownload(file){
+        var name = (file && file.name) || 'datei';
         // S1: privater Bucket → Signed URL ziehen, dann laden.
         var rp = window.__krsResolveStorageUrl ? window.__krsResolveStorageUrl(file.url) : Promise.resolve(file.url);
-        rp.then(function(url){
-          fetch(url).then(function(r){ return r.blob(); }).then(function(blob){
+        var slow = setTimeout(function(){ _dlToast('„' + name + '" wird vorbereitet …', 'info'); }, 400);
+        rp.catch(function(){ return file.url; }).then(function(url){
+          return fetch(url).then(function(r){
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.blob();
+          }).then(function(blob){
+            clearTimeout(slow);
             var u = URL.createObjectURL(blob);
-            var a = document.createElement('a'); a.href = u; a.download = file.name || 'datei';
+            var a = document.createElement('a'); a.href = u; a.download = name;
             document.body.appendChild(a); a.click(); a.remove();
             setTimeout(function(){ URL.revokeObjectURL(u); }, 5000);
-          }).catch(function(){
-            var a = document.createElement('a'); a.href = url; a.download = file.name || 'datei'; a.target = '_blank'; a.rel = 'noopener'; a.click();
+          }).catch(function(err){
+            clearTimeout(slow);
+            console.error('forceDownload fehlgeschlagen:', err);
+            // Notfall: serverseitiges Content-Disposition erzwingen und öffnen.
+            var w = window.open(_dlAppendParam(url, name), '_blank', 'noopener');
+            if (!w) _dlToast('„' + name + '" konnte nicht geladen werden. Bitte über „↗ Neuer Tab" versuchen.', 'error');
           });
         });
       }
@@ -2188,6 +2240,10 @@
       container.appendChild(toast);
       setTimeout(() => { toast.remove(); }, CONFIG.TOAST_DURATION);
     }
+    // v4.23.0 — Lightbox und Datei-Viewer liegen in klassischen <script>-Bloecken
+    // und haben keinen Zugriff auf diesen Modul-Scope. Ohne diese Zeile blieben
+    // Download-Fehler dort unsichtbar (stiller Fehlschlag).
+    window.showToast = showToast;
 
     // ============================================================
     // APP-KONFIGURATION — Alle "Magic Numbers" zentral
@@ -2674,19 +2730,33 @@
         }
       }
 
+      // v4.23.0 — Die eigene Rolle IM Team (team_members.role) hing bisher nur am
+      // gerade ausgewählten Team. Dadurch sah eine Team-Admin:in in der Liste
+      // keine Verwaltungs-Aktionen, obwohl die Datenbank sie längst erlaubt
+      // (Policies channels_insert_admin / teams_delete_admin).
+      // Rückmeldung Regina Meister, 14.09.2026: „ich habe kein Plus bei Kanäle
+      // bin aber Admin" und „Ich kann ein falsch erstelltes Team nicht mehr
+      // löschen". Wird an jedes Team als `my_role` gehängt — Normalizer-Regel:
+      // beide Lade-Wege (aktiv + archiviert) setzen das Feld.
+      _attachMyRole(teams, memberships) {
+        const roleByTeam = new Map((memberships || []).map(m => [String(m.team_id), m.role || 'member']));
+        for (const t of teams || []) t.my_role = roleByTeam.get(String(t.id)) || 'member';
+        return teams || [];
+      }
+
       async getTeams(userId) {
         // Aktive (nicht archivierte) Teams. Archivierte über getArchivedTeams().
-        if (this.isDemo) return MOCK_TEAMS.filter(t => !t.archived_at);
+        if (this.isDemo) return MOCK_TEAMS.filter(t => !t.archived_at).map(t => ({ ...t, my_role: 'admin' }));
         try {
           if (userId) {
             // Nur Teams laden, in denen der User Mitglied ist
-            const { data: memberships, error: memErr } = await this.sb.from('team_members').select('team_id').eq('user_id', userId);
+            const { data: memberships, error: memErr } = await this.sb.from('team_members').select('team_id, role').eq('user_id', userId);
             if (memErr) throw memErr;
             if (!memberships || memberships.length === 0) return [];
             const teamIds = memberships.map(m => m.team_id);
             const { data, error } = await this.sb.from('teams').select('*').in('id', teamIds).is('archived_at', null).order('category, name');
             if (error) throw error;
-            return data || [];
+            return this._attachMyRole(data || [], memberships);
           }
           const { data, error } = await this.sb.from('teams').select('*').is('archived_at', null).order('category, name');
           if (error) throw error;
@@ -2699,16 +2769,16 @@
 
       // ── Team-Archivierung (#8) ──────────────────────────
       async getArchivedTeams(userId) {
-        if (this.isDemo) return MOCK_TEAMS.filter(t => t.archived_at);
+        if (this.isDemo) return MOCK_TEAMS.filter(t => t.archived_at).map(t => ({ ...t, my_role: 'admin' }));
         try {
           if (userId) {
-            const { data: memberships, error: memErr } = await this.sb.from('team_members').select('team_id').eq('user_id', userId);
+            const { data: memberships, error: memErr } = await this.sb.from('team_members').select('team_id, role').eq('user_id', userId);
             if (memErr) throw memErr;
             if (!memberships || memberships.length === 0) return [];
             const teamIds = memberships.map(m => m.team_id);
             const { data, error } = await this.sb.from('teams').select('*').in('id', teamIds).not('archived_at', 'is', null).order('name');
             if (error) throw error;
-            return data || [];
+            return this._attachMyRole(data || [], memberships);
           }
           const { data, error } = await this.sb.from('teams').select('*').not('archived_at', 'is', null).order('name');
           if (error) throw error;
@@ -2976,11 +3046,51 @@
         try {
           const { data, error } = await this.sb.from('posts').select('*, author:users(*)').eq('channel_id', channelId).is('parent_id', null).order('created_at', { ascending: false }).range(offset, offset + limit - 1);
           if (error) throw error;
-          return data || [];
+          const parents = data || [];
+          // v4.22.0 — Antwort-Zaehler. Eine Beitragszeile weiss nicht, wie viele
+          // Antworten an ihr haengen (`parent_id` steht an der Antwort). Ohne
+          // diesen zweiten Aufruf stand im Feed immer „Antworten (0)" — dass es
+          // schon Antworten gibt, sah man erst nach dem Oeffnen des Threads
+          // (Rueckmeldung aus dem Kollegium, 14.09.2026).
+          await this.attachReplyCounts(parents);
+          return parents;
         } catch (err) {
           console.error('getPosts error:', err);
           return [];
         }
+      }
+
+      // v4.22.0 — Antwort-Zaehler fuer eine ganze Seite Beitraege in EINEM
+      // Aufruf (nicht N Aufrufe): zwei Spalten holen, im Browser gruppieren.
+      // Setzt `replies` (Anzahl) und `last_reply_at` (juengste Antwort).
+      async attachReplyCounts(posts) {
+        if (this.isDemo || !Array.isArray(posts) || posts.length === 0) return posts;
+        const ids = posts.map(p => p.id).filter(id => id != null);
+        if (ids.length === 0) return posts;
+        try {
+          const { data, error } = await this.sb.from('posts')
+            .select('parent_id, created_at')
+            .in('parent_id', ids)
+            .limit(5000);
+          if (error) throw error;
+          const stats = new Map();
+          for (const row of data || []) {
+            const key = String(row.parent_id);
+            const cur = stats.get(key) || { count: 0, last: null };
+            cur.count += 1;
+            if (!cur.last || row.created_at > cur.last) cur.last = row.created_at;
+            stats.set(key, cur);
+          }
+          for (const p of posts) {
+            const s = stats.get(String(p.id));
+            p.replies = s ? s.count : 0;
+            p.last_reply_at = s ? s.last : null;
+          }
+        } catch (err) {
+          // Kein harter Fehler: lieber Beitraege ohne Zaehler als gar keine.
+          console.error('attachReplyCounts error:', err);
+        }
+        return posts;
       }
 
       async uploadFile(file, folder = 'uploads') {
@@ -4524,6 +4634,10 @@
     // mitzaehlen, sonst verliert der Inhaber alle uebrigen Admin-Funktionen.
     const ADMIN_ROLES = ['admin', 'owner'];
     function isAdminRole(u) { return !!(u && ADMIN_ROLES.indexOf(u.role) !== -1); }
+    // v4.23.0 — „Admin" heisst in Connect zweierlei: global (users.role) ODER
+    // im einzelnen Team (team_members.role). Die Oberflaeche pruefte bisher fast
+    // ueberall nur das Globale und war damit strenger als die Datenbank.
+    function canManageTeam(u, team) { return isAdminRole(u) || !!(team && team.my_role === 'admin'); }
     function roleLabel(r) { return r === 'owner' ? 'Inhaber' : (r === 'admin' ? 'Admin' : 'Mitglied'); }
 
     // ============================================================
@@ -5498,7 +5612,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.21.0';
+    window.KRS_VERSION = '4.22.0';
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
     // Playwright den Klick-Handler prüfen kann, ohne wirklich zu navigieren.
     // Aus tenant.js (TENANT-SPEC.md 2.4) — leer, wenn hub.enabled:false.
@@ -6811,7 +6925,15 @@
               })
             ),
             React.createElement('div', { className: 'post-footer', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' } },
-              React.createElement('button', { onClick: () => onOpenThread(post) }, '💬 Antworten (' + replyCount + ')'),
+              React.createElement('button', {
+                onClick: () => onOpenThread(post),
+                'aria-label': replyCount > 0 ? (replyCount + ' Antworten öffnen') : 'Auf diesen Beitrag antworten',
+                style: replyCount > 0 ? { color: 'var(--accent)', fontWeight: '600' } : null
+              },
+                replyCount > 0
+                  ? ('💬 ' + replyCount + ' Antwort' + (replyCount === 1 ? '' : 'en') + (post.last_reply_at ? ' · zuletzt ' + formatDate(post.last_reply_at) : ''))
+                  : '💬 Antworten'
+              ),
               (() => {
                 const readers = readReceipts.get(post.id);
                 if (!readers || readers.length === 0) return null;
@@ -8908,6 +9030,10 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.22.0', date: '14.09.2026', items: [
+        'Man sieht jetzt direkt am Beitrag, dass es Antworten gibt: Der Knopf zeigt die Anzahl und wann zuletzt geantwortet wurde — vorher stand dort immer „Antworten (0)", und man musste jeden Beitrag einzeln öffnen',
+        'Neue Antworten erhöhen den Zähler sofort, auch wenn jemand anderes antwortet, während der Kanal offen ist'
+      ] },
       { v: '4.21.0', date: '11.09.2026', items: [
         'Handy: Eingefügte Bilder im Beitrag sprengen nicht mehr den Rand — antippen öffnet sie groß, Doppeltipp und Aufziehen zoomen',
         'PDF-Vorschau passt sich der Bildschirmbreite an (auch im Querformat), mit Zoomstufen und „In neuem Tab"',
@@ -9886,6 +10012,17 @@
           const unsub = dataService.subscribeToChannel(selectedChannel.id, {
             onInsert: newPost => {
               if (cancelled) return;
+              // v4.22.0 — Antworten tragen dieselbe channel_id wie ihr Beitrag und
+              // kommen deshalb hier mit an. Sie gehoeren nicht in die Beitragsliste,
+              // sondern erhoehen den Zaehler am Eltern-Beitrag. Waehrend des Ladens
+              // ignorieren: der frische getPosts-Aufruf zaehlt sie ohnehin mit.
+              if (newPost.parent_id) {
+                if (postsLoadingRef.current) return;
+                setPosts(prev => prev.map(p => String(p.id) === String(newPost.parent_id)
+                  ? { ...p, replies: (p.replies ?? p.reply_count ?? 0) + 1, last_reply_at: newPost.created_at }
+                  : p));
+                return;
+              }
               if (postsLoadingRef.current) {
                 // Während Loading: Events in Queue sammeln
                 pendingRealtimeRef.current.push(newPost);
@@ -9916,8 +10053,21 @@
             setPosts(prev => {
               const known = new Set(prev.map(p => p.id));
               const neu = fresh.filter(p => !known.has(p.id));
-              if (neu.length === 0) return prev;
-              const merged = [...neu, ...prev];
+              // v4.22.0 — Antwort-Zaehler der bekannten Beitraege mitziehen: eine
+              // Antwort, deren Realtime-Event verloren ging, bliebe sonst bis zum
+              // Kanalwechsel unsichtbar.
+              const freshById = new Map(fresh.map(p => [String(p.id), p]));
+              let countsChanged = false;
+              const withCounts = prev.map(p => {
+                const f = freshById.get(String(p.id));
+                if (!f) return p;
+                const c = f.replies ?? f.reply_count ?? 0;
+                if (c === (p.replies ?? p.reply_count ?? 0) && (f.last_reply_at ?? null) === (p.last_reply_at ?? null)) return p;
+                countsChanged = true;
+                return { ...p, replies: c, last_reply_at: f.last_reply_at ?? null };
+              });
+              if (neu.length === 0) return countsChanged ? withCounts : prev;
+              const merged = [...neu, ...withCounts];
               const ts = p => new Date(p.created_at).getTime();
               if (merged.every(p => !isNaN(ts(p)))) merged.sort((a, b) => ts(b) - ts(a));
               return merged;
@@ -11027,7 +11177,14 @@
             : React.createElement(SearchView, { dataService, user, allUsers, teams })
         ),
         // Thread overlay (nur in Teams-View)
-        view === 'teams' && openThread && React.createElement(ThreadPanel, { post: openThread, replies, dataService, user, onClose: () => setOpenThread(null), onReplyCreated: (r) => setReplies(prev => prev.some(x => x.id === r.id) ? prev : [...prev, r]) }),
+        view === 'teams' && openThread && React.createElement(ThreadPanel, { post: openThread, replies, dataService, user, onClose: () => setOpenThread(null), onReplyCreated: (r) => {
+          setReplies(prev => prev.some(x => x.id === r.id) ? prev : [...prev, r]);
+          // v4.22.0 — eigene Antwort: Zaehler im Feed sofort mitziehen.
+          const parentId = r.parent_id ?? (openThread && openThread.id);
+          setPosts(prev => prev.map(p => String(p.id) === String(parentId)
+            ? { ...p, replies: (p.replies ?? p.reply_count ?? 0) + 1, last_reply_at: r.created_at || new Date().toISOString() }
+            : p));
+        } }),
         // Feedback Modal
         React.createElement(UpdateBanner, null),
         topModal === 'feedback' && React.createElement(FeedbackModal, { user, dataService, onClose: backModal, canGoBack, onOpenBoard: () => openModal('feedbackBoard') }),
