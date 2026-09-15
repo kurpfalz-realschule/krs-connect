@@ -220,6 +220,10 @@
       overflow: hidden;
     }
 
+    /* v4.23.0 — Teams- und Kanaele-Spalte waren beide 280px breit; zusammen mit
+       der 68px-Leiste blieben auf einem 1280er-Laptop nur ~650px fuer die
+       Beitragsspalte. Rueckmeldung Tanja Appel, 12.09.2026: Spalten „Teams" und
+       „Kanaele" schmaler, die Schreibspalte breiter. Zusammen ~120px gewonnen. */
     .sidebar-content {
       width: 280px;
       background: var(--bg-secondary);
@@ -228,6 +232,9 @@
       flex-direction: column;
       flex-shrink: 0;
     }
+
+    .sidebar-teams { width: 236px; min-width: 236px; }
+    .sidebar-channels { width: 204px; min-width: 204px; }
 
     .sidebar-header {
       padding: 20px;
@@ -933,6 +940,9 @@
       z-index: 2000;
     }
 
+    /* v4.23.0: Aktions-Knopf im Toast (z. B. „Rückgängig") */
+    .toast-action { margin-left: auto; background: none; border: 1px solid var(--border); border-radius: var(--radius); color: var(--accent); cursor: pointer; font: inherit; font-weight: 600; padding: 6px 12px; min-height: 36px; white-space: nowrap; }
+    .toast-action:hover { background: var(--bg-tertiary); }
     .toast {
       background: var(--bg-secondary);
       border: 1px solid var(--border);
@@ -1168,14 +1178,27 @@
 
     /* Teams visibility */
     .team-item { position: relative; }
-    .team-hide-btn { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); opacity: 0; background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; font-size: 12px; transition: opacity 0.15s; }
-    .team-item:hover .team-hide-btn { opacity: 1; }
-    .team-hide-btn:hover { color: var(--danger); }
+    /* v4.23.0 — Fehlklick-Falle. Beide Knoepfe waren `opacity:0`, blieben aber
+       klickbar. Auf dem iPad/iPhone gibt es kein :hover, also traf jeder Tipp
+       am rechten Rand einer Team-Zeile einen unsichtbaren Knopf — „zack ist das
+       Team weg" (Rueckmeldung Tanja Appel, 12.09.2026). Zwei Aenderungen:
+       `pointer-events:none` solange unsichtbar, und auf Touch-Geraeten sind die
+       Knoepfe dauerhaft sichtbar statt unsichtbar-aktiv. Dazu mehr Abstand
+       (40px statt 20px) und groessere Trefferflaechen. */
+    .team-hide-btn { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); opacity: 0; pointer-events: none; background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 6px; font-size: 13px; line-height: 1; min-width: 32px; min-height: 32px; border-radius: var(--radius); transition: opacity 0.15s; }
+    .team-item:hover .team-hide-btn, .team-item:focus-within .team-hide-btn { opacity: 1; pointer-events: auto; }
+    .team-hide-btn:hover { color: var(--danger); background: var(--bg-tertiary); }
     /* v4.19.0: Stummschalten — zweiter Icon-Button links neben team-hide-btn */
-    .team-mute-btn { position: absolute; right: 24px; top: 50%; transform: translateY(-50%); opacity: 0; background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; font-size: 12px; transition: opacity 0.15s; }
-    .team-item:hover .team-mute-btn { opacity: 1; }
-    .team-mute-btn:hover { color: var(--accent-orange); }
-    .team-mute-btn.active { opacity: 1; color: var(--accent-orange); }
+    .team-mute-btn { position: absolute; right: 38px; top: 50%; transform: translateY(-50%); opacity: 0; pointer-events: none; background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 6px; font-size: 13px; line-height: 1; min-width: 32px; min-height: 32px; border-radius: var(--radius); transition: opacity 0.15s; }
+    .team-item:hover .team-mute-btn, .team-item:focus-within .team-mute-btn { opacity: 1; pointer-events: auto; }
+    .team-mute-btn:hover { color: var(--accent-orange); background: var(--bg-tertiary); }
+    .team-mute-btn.active { opacity: 1; pointer-events: auto; color: var(--accent-orange); }
+    /* Touch-Geraete: dauerhaft sichtbar, damit niemand blind auf sie tippt. */
+    @media (hover: none) {
+      .team-hide-btn, .team-mute-btn { opacity: 0.45; pointer-events: auto; min-width: 40px; min-height: 40px; }
+      .team-mute-btn { right: 44px; }
+      .team-item .list-item { padding-right: 88px; }
+    }
     .hidden-teams-toggle { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 12px; width: 100%; transition: color 0.15s; }
     .hidden-teams-toggle:hover { color: var(--text-primary); }
 
@@ -1188,6 +1211,8 @@
     /* Tablet Breakpoint (iPad 768-1024px) */
     @media (min-width: 769px) and (max-width: 1024px) {
       .sidebar-content { width: 220px; min-width: 220px; }
+      .sidebar-teams { width: 190px; min-width: 190px; }
+      .sidebar-channels { width: 172px; min-width: 172px; }
       .content { flex: 1; min-width: 0; }
       .thread-panel { width: 320px; min-width: 320px; }
       .emoji-picker { width: 280px; min-width: 280px; }
@@ -1228,6 +1253,8 @@
       .team-drawer { display: flex; flex-direction: column; position: fixed; top: 0; left: 0; width: 80vw; max-width: 300px; height: calc(100vh - 56px); height: calc(100dvh - 56px); z-index: 100; transform: translateX(-100%); transition: transform 0.25s ease; background: var(--bg-secondary); box-shadow: 2px 0 12px rgba(0,0,0,0.15); overflow-y: auto; }
       .team-drawer.mobile-open { transform: translateX(0); }
       .team-drawer .sidebar-content { position: static; width: 100%; max-width: none; height: auto; transform: none; box-shadow: none; z-index: auto; flex: 0 0 auto; }
+      /* v4.23.0: die neuen Desktop-Breiten duerfen den Handy-Drawer nicht verengen */
+      .team-drawer .sidebar-teams, .team-drawer .sidebar-channels { width: 100%; min-width: 0; }
       .team-drawer .sidebar-content + .sidebar-content { border-top: 1px solid var(--border); }
       .mobile-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); z-index: 99; }
       .mobile-overlay.visible { display: block; }
@@ -2216,7 +2243,9 @@
     // ============================================================
     // TOAST SYSTEM — User-Feedback statt console.error
     // ============================================================
-    function showToast(message, type = 'error') {
+    // v4.23.0 — dritter Parameter `action` = { label, onClick }. Damit kann eine
+    // Aktion direkt zurueckgenommen werden, statt sie im Menue zu suchen.
+    function showToast(message, type = 'error', action = null) {
       const container = document.getElementById('toast-container')
         || (() => {
           const c = document.createElement('div');
@@ -2237,6 +2266,14 @@
       msgSpan.textContent = String(message);
       toast.appendChild(iconSpan);
       toast.appendChild(msgSpan);
+      if (action && action.label && typeof action.onClick === 'function') {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'toast-action';
+        btn.textContent = action.label;
+        btn.onclick = () => { try { action.onClick(); } finally { toast.remove(); } };
+        toast.appendChild(btn);
+      }
       container.appendChild(toast);
       setTimeout(() => { toast.remove(); }, CONFIG.TOAST_DURATION);
     }
@@ -3241,14 +3278,20 @@
         } catch (err) { console.error('getFeedback error:', err); return []; }
       }
 
-      async submitFeedback({ userId = null, name = 'Anonym', category = 'sonstiges', rating = 0, message = '', page = '' }) {
+      // v4.23.0 — `imageUrl` neu: Screenshot zum Feedback (Storage-Objektpfad im
+      // privaten Bucket, wie bei Beitraegen). Spalte feedback.image_url,
+      // Migration 2026-09-14_feedback-screenshot.sql.
+      // Rueckmeldung Daniel Schmitt, 14.09.2026: „Man kann hier im
+      // Feedbackbereich auch keine Bilder/Screenshot einfuegen."
+      async submitFeedback({ userId = null, name = 'Anonym', category = 'sonstiges', rating = 0, message = '', page = '', imageUrl = null }) {
         const clean = {
           name: String(name || 'Anonym').substring(0, 100),
           category: String(category || 'sonstiges').substring(0, 40),
           rating: Math.min(Math.max(parseInt(rating, 10) || 0, 0), 5),
           message: String(message || '').trim().substring(0, 2000),
           page: String(page || '').substring(0, 200),
-          status: 'offen'
+          status: 'offen',
+          image_url: imageUrl || null
         };
         if (this.isDemo) {
           const fb = { id: 'fb' + Date.now(), user_id: userId, ...clean, created_at: new Date().toISOString() };
@@ -4274,7 +4317,7 @@
 
       async createTeam(name, description, iconText, iconColor, creatorId) {
         if (this.isDemo) {
-          const newTeam = { id: 'team-' + Date.now(), name, description, icon_text: iconText, icon_color: iconColor, category: 'Teams', members: 1 };
+          const newTeam = { id: 'team-' + Date.now(), name, description, icon_text: iconText, icon_color: iconColor, category: 'Teams', members: 1, my_role: 'admin' };
           MOCK_TEAMS.push(newTeam);
           MOCK_CHANNELS[newTeam.id] = [{ id: 'ch-' + Date.now(), name: 'Allgemein', is_default: true, unread: 0, team_id: newTeam.id }];
           return newTeam;
@@ -4290,7 +4333,12 @@
             p_icon_color: iconColor || null
           });
           if (error) throw error;
-          return Array.isArray(data) ? data[0] : data;
+          const created = Array.isArray(data) ? data[0] : data;
+          // v4.23.0 — create_team() macht die Erstellerin zur Team-Admin. Ohne
+          // diese Zeile fehlt `my_role` am frischen Objekt und die Verwaltungs-
+          // Knoepfe blieben bis zum naechsten Laden verborgen (Normalizer-Regel:
+          // jeder Weg, auf dem ein Team-Objekt entsteht, setzt my_role).
+          return created ? { ...created, my_role: 'admin' } : created;
         } catch (err) {
           // Fehler NICHT mehr still schlucken — Aufrufer (handleCreateTeam) zeigt Toast.
           console.error('createTeam error:', err);
@@ -5612,7 +5660,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.22.0';
+    window.KRS_VERSION = '4.23.0';
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
     // Playwright den Klick-Handler prüfen kann, ohne wirklich zu navigieren.
     // Aus tenant.js (TENANT-SPEC.md 2.4) — leer, wenn hub.enabled:false.
@@ -7052,8 +7100,13 @@
                   React.createElement('button', { type: 'button', onClick: () => removeReplyFile(idx), 'aria-label': 'Datei entfernen', style: { position: 'absolute', top: '-6px', right: '-6px', width: '18px', height: '18px', borderRadius: '50%', background: 'var(--danger)', color: 'white', border: 'none', cursor: 'pointer', fontSize: '10px', lineHeight: '18px', textAlign: 'center', padding: 0 } }, '✕')
                 ))
               ),
-              React.createElement('div', { style: { display: 'flex', gap: '8px', width: '100%', alignItems: 'flex-end' } },
-                React.createElement('div', { style: { flex: 1, minWidth: 0 } },
+              // v4.23.0 — `flexWrap`: auf schmalen Bildschirmen rutschte die Zeile
+              // zusammen, Bueroklammer und Senden wurden gequetscht bzw. waren
+              // nicht mehr zu treffen („teilweise ist kein Dateianhang moeglich,
+              // wenn man auf einen Beitrag antwortet" — Tanja Appel, 12.09.2026).
+              // Das Textfeld bekommt eine Mindestbreite und darf umbrechen.
+              React.createElement('div', { style: { display: 'flex', gap: '8px', width: '100%', alignItems: 'flex-end', flexWrap: 'wrap' } },
+                React.createElement('div', { style: { flex: '1 1 180px', minWidth: '160px' } },
                   React.createElement(MentionTextarea, { value: replyContent, onChange: setReplyContent, placeholder: 'Antwort schreiben...', onEnter: (html) => handleSendReply(null, html), style: { minHeight: '60px' } })
                 ),
                 React.createElement('input', { ref: replyFileRef, type: 'file', multiple: true, accept: 'image/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt', onChange: handleReplyFileSelect, style: { display: 'none' } }),
@@ -8609,6 +8662,33 @@
       const [message, setMessage] = useState('');
       const [sending, setSending] = useState(false);
       const [lastSubmit, setLastSubmit] = useState(0);
+      // v4.23.0 — Screenshot zum Feedback: per Knopf auswaehlen ODER mit Strg+V
+      // direkt ins Feld einfuegen (so macht man einen Screenshot am schnellsten).
+      const [shot, setShot] = useState(null);       // { file, preview }
+      const shotRef = useRef(null);
+
+      const takeShotFile = (file) => {
+        if (!file) return;
+        if (!/^image\//.test(file.type || '')) { showToast('Bitte ein Bild auswählen (PNG, JPG).', 'error'); return; }
+        if (file.size > 10 * 1024 * 1024) { showToast('Bild zu groß (max. 10 MB).', 'error'); return; }
+        setShot(prev => { if (prev?.preview) URL.revokeObjectURL(prev.preview); return { file, preview: URL.createObjectURL(file) }; });
+      };
+      const removeShot = () => setShot(prev => { if (prev?.preview) URL.revokeObjectURL(prev.preview); return null; });
+      const handleShotPaste = (ev) => {
+        const items = (ev.clipboardData && ev.clipboardData.items) || [];
+        for (const it of items) {
+          if (it.kind === 'file' && /^image\//.test(it.type || '')) {
+            const f = it.getAsFile();
+            if (f) { ev.preventDefault(); takeShotFile(f); return; }
+          }
+        }
+      };
+      // Aufraeumen beim Schliessen: die Cleanup-Funktion eines []-Effekts sieht
+      // nur den ERSTEN Render (dort ist shot noch null). Deshalb ueber ein Ref,
+      // das immer den aktuellen Vorschau-Link kennt.
+      const shotUrlRef = useRef(null);
+      useEffect(() => { shotUrlRef.current = shot?.preview || null; }, [shot]);
+      useEffect(() => () => { if (shotUrlRef.current) URL.revokeObjectURL(shotUrlRef.current); }, []);
 
       const categories = [
         { id: 'bug', label: '🐛 Bug / Fehler' },
@@ -8631,13 +8711,19 @@
         setSending(true);
         // 1) Primär: ins Feedback-Board (Supabase bzw. Demo-Store) speichern
         try {
+          let imageUrl = null;
+          if (shot?.file) {
+            imageUrl = await dataService.uploadFile(shot.file);
+            if (!imageUrl) { setSending(false); return; }   // uploadFile hat bereits einen Toast gezeigt
+          }
           await dataService.submitFeedback({
             userId: user?.id || null,
             name: user?.display_name || 'Anonym',
             category: category || 'sonstiges',
             rating: Math.min(Math.max(rating, 0), 5),
             message: message.trim(),
-            page: window.location.href
+            page: window.location.href,
+            imageUrl
           });
         } catch (err) {
           console.error('submitFeedback error:', err);
@@ -8704,11 +8790,26 @@
             'aria-label': 'Was funktioniert gut? Was können wir verbessern? Wo hakt es?',
             value: message,
             onChange: (ev) => setMessage(ev.target.value),
+            onPaste: handleShotPaste,
             maxLength: 2000
           }),
           React.createElement('div', { style: { fontSize: '11px', color: 'var(--text-muted)', textAlign: 'right', marginTop: '4px' } },
             message.length + ' / 2000'
           ),
+
+          React.createElement('div', { className: 'feedback-label', style: { marginTop: '10px' } }, 'Screenshot (optional)'),
+          React.createElement('input', { ref: shotRef, type: 'file', accept: 'image/*', style: { display: 'none' },
+            onChange: (ev) => { takeShotFile(ev.target.files && ev.target.files[0]); if (shotRef.current) shotRef.current.value = ''; } }),
+          shot
+            ? React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', padding: '8px', border: '1px solid var(--border)', borderRadius: 'var(--radius)' } },
+                React.createElement('img', { src: shot.preview, alt: 'Screenshot-Vorschau', style: { width: '64px', height: '64px', objectFit: 'cover', borderRadius: 'var(--radius)' } }),
+                React.createElement('span', { style: { fontSize: '12px', color: 'var(--text-muted)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, shot.file.name || 'Screenshot'),
+                React.createElement('button', { type: 'button', onClick: removeShot, 'aria-label': 'Screenshot entfernen',
+                  style: { background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', color: 'var(--text-muted)', minWidth: '36px', minHeight: '36px' } }, '✕')
+              )
+            : React.createElement('button', { type: 'button', onClick: () => shotRef.current && shotRef.current.click(),
+                style: { background: 'var(--bg-tertiary)', border: '1px dashed var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', color: 'var(--text-secondary)', padding: '10px 12px', fontSize: '13px', width: '100%', minHeight: '44px', textAlign: 'left' } },
+                '🖼️ Bild auswählen — oder Screenshot mit Strg/⌘ + V ins Nachrichtenfeld einfügen'),
 
           !canSend && React.createElement('div', { style: { fontSize: '12px', color: 'var(--text-muted)', marginTop: '8px' } },
             !category ? 'Bitte zuerst ein Thema wählen.' : 'Bitte noch eine Nachricht schreiben.'),
@@ -8800,6 +8901,12 @@
                         React.createElement('span', { className: 'fb-badge fb-badge-' + it.status, style: { marginLeft: 'auto' } }, STATUS_LABEL[it.status] || it.status)
                       ),
                       React.createElement('div', { className: 'fb-item-msg' }, it.message),
+                      // v4.23.0 — angehaengter Screenshot. Klick oeffnet ihn gross.
+                      it.image_url && React.createElement(SignedImg, {
+                        src: it.image_url, alt: 'Screenshot zum Feedback', title: 'Screenshot öffnen',
+                        style: { maxWidth: '100%', maxHeight: '220px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', margin: '8px 0', cursor: 'pointer', display: 'block' },
+                        onClick: () => window.openFileViewer([{ url: it.image_url, name: 'Screenshot', type: 'image/png' }], 0)
+                      }),
                       React.createElement('div', { className: 'fb-item-head', style: { marginBottom: 0 } },
                         React.createElement('span', { className: 'fb-item-meta' }, fmtDate(it.created_at)),
                         isAdmin && React.createElement('select', {
@@ -9030,6 +9137,15 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.23.0', date: '15.09.2026', items: [
+        'Herunterladen funktioniert wieder: Bilder aus Chat und Beiträgen ließen sich nicht speichern — der Knopf zeigte auf eine Adresse, die es so nicht gibt',
+        'Große Dateien (z. B. ein Elternbrief-PDF) melden jetzt „wird vorbereitet …" statt scheinbar nichts zu tun; schlägt der Download fehl, sagt die App es',
+        'Screenshot ins Feedback: Bild auswählen oder einfach mit Strg/⌘ + V ins Nachrichtenfeld einfügen — im Feedback-Board ist es direkt zu sehen',
+        'Team-Admins können jetzt selbst Kanäle anlegen (das „+" neben „# Kanäle") und ihr Team über das Zahnrad verwalten, archivieren und löschen — bisher war beides nur für Schul-Admins sichtbar, obwohl die Rechte längst da waren',
+        'Kein versehentliches Ausblenden mehr: die Knöpfe „Stummschalten" und „Ausblenden" waren auf Tablet und Handy unsichtbar, aber trotzdem antippbar. Jetzt sind sie dort sichtbar, liegen weiter auseinander — und jede Meldung hat einen „Rückgängig"-Knopf',
+        'Mehr Platz zum Lesen und Schreiben: die Spalten „Teams" und „Kanäle" sind schmaler, die Beitragsspalte entsprechend breiter',
+        'Antworten: Eingabezeile bricht auf schmalen Bildschirmen um, die Büroklammer bleibt erreichbar'
+      ] },
       { v: '4.22.0', date: '14.09.2026', items: [
         'Man sieht jetzt direkt am Beitrag, dass es Antworten gibt: Der Knopf zeigt die Anzahl und wann zuletzt geantwortet wurde — vorher stand dort immer „Antworten (0)", und man musste jeden Beitrag einzeln öffnen',
         'Neue Antworten erhöhen den Zähler sofort, auch wenn jemand anderes antwortet, während der Kanal offen ist'
@@ -9676,7 +9792,9 @@
       const handleChannelContextMenu = useCallback((e, ch) => {
         e.preventDefault();
         e.stopPropagation();
-        if (user?.role !== 'admin') return;
+        // v4.23.0 — vorher `user?.role !== 'admin'`: das sperrte Team-Admins UND
+        // (seit v4.21.0) sogar den Inhaber aus.
+        if (!canManageTeam(user, selectedTeam) && userTeamRole !== 'admin') return;
         // Maus: Cursorposition. Tastatur (ContextMenu-Taste/Shift+F10): am Element ausrichten.
         let x = e.clientX, y = e.clientY;
         if (!x && !y && e.currentTarget && e.currentTarget.getBoundingClientRect) {
@@ -9684,7 +9802,7 @@
           x = r.right - 8; y = r.bottom - 4;
         }
         setChannelContextMenu({ channel: ch, x, y, trigger: e.currentTarget });
-      }, [user]);
+      }, [user, selectedTeam, userTeamRole]);
 
       // Forward post to another channel or DM
       const handleForwardPost = useCallback(async (payload, target) => {
@@ -10394,27 +10512,45 @@
       }, [dataService, user?.id]);
 
       // ── Ausblenden persistierend (Sprint 4) ──
-      const handleToggleTeamHidden = useCallback((teamId) => {
-        const willHide = !hiddenTeams.has(teamId);
+      // v4.23.0 — Setzen und Melden getrennt: `applyTeamHidden` haengt an keinem
+      // Set, deshalb kann der Rueckgaengig-Knopf im Toast sie gefahrlos spaeter
+      // noch einmal aufrufen (keine Stale-Closure-Falle).
+      const applyTeamHidden = useCallback((teamId, willHide) => {
         setHiddenTeams(prev => { const n = new Set(prev); if (willHide) n.add(teamId); else n.delete(teamId); return n; });
         if (dataService && user) dataService.setHidden('team', teamId, user.id, willHide);
-        showToast(willHide ? 'Forum ausgeblendet' : 'Forum wieder eingeblendet', 'info');
-      }, [hiddenTeams, dataService, user]);
+      }, [dataService, user]);
+
+      const handleToggleTeamHidden = useCallback((teamId) => {
+        const willHide = !hiddenTeams.has(teamId);
+        applyTeamHidden(teamId, willHide);
+        showToast(willHide ? 'Forum ausgeblendet' : 'Forum wieder eingeblendet', 'info',
+          { label: 'Rückgängig', onClick: () => applyTeamHidden(teamId, !willHide) });
+      }, [hiddenTeams, applyTeamHidden]);
 
       // ── Stummschalten persistierend (rein lokal) — v4.19.0 ──
-      const handleToggleTeamMute = useCallback((teamId) => {
-        const willMute = !mutedTeams.has(teamId);
+      const applyTeamMuted = useCallback((teamId, willMute) => {
         setMutedTeams(prev => { const n = new Set(prev); if (willMute) n.add(teamId); else n.delete(teamId); return n; });
         if (dataService && user) dataService.setMuted('team', teamId, user.id, willMute);
-        showToast(willMute ? 'Team stummgeschaltet — keine Benachrichtigungen mehr' : 'Stummschaltung aufgehoben', 'info');
-      }, [mutedTeams, dataService, user]);
+      }, [dataService, user]);
+
+      const handleToggleTeamMute = useCallback((teamId) => {
+        const willMute = !mutedTeams.has(teamId);
+        applyTeamMuted(teamId, willMute);
+        showToast(willMute ? 'Team stummgeschaltet — keine Benachrichtigungen mehr' : 'Stummschaltung aufgehoben', 'info',
+          { label: 'Rückgängig', onClick: () => applyTeamMuted(teamId, !willMute) });
+      }, [mutedTeams, applyTeamMuted]);
+
+      const applyConvHidden = useCallback((convId, willHide) => {
+        setHiddenConversations(prev => { const n = new Set(prev); if (willHide) n.add(convId); else n.delete(convId); return n; });
+        if (dataService && user) dataService.setHidden('conv', convId, user.id, willHide);
+      }, [dataService, user]);
 
       const handleToggleConvHidden = useCallback((convId) => {
         const willHide = !hiddenConversations.has(convId);
-        setHiddenConversations(prev => { const n = new Set(prev); if (willHide) n.add(convId); else n.delete(convId); return n; });
-        if (dataService && user) dataService.setHidden('conv', convId, user.id, willHide);
-        showToast(willHide ? 'Chat ausgeblendet' : 'Chat wieder eingeblendet', 'info');
-      }, [hiddenConversations, dataService, user]);
+        applyConvHidden(convId, willHide);
+        showToast(willHide ? 'Chat ausgeblendet' : 'Chat wieder eingeblendet', 'info',
+          { label: 'Rückgängig', onClick: () => applyConvHidden(convId, !willHide) });
+      }, [hiddenConversations, applyConvHidden]);
 
       const handleTeamSelect = async (team) => {
         setSelectedTeam(team);
@@ -10630,7 +10766,7 @@
       const teamsView = React.createElement(React.Fragment, null,
         mobileSidebarOpen && React.createElement('div', { className: 'mobile-overlay visible', onClick: () => setMobileSidebarOpen(false) }),
         React.createElement('div', { className: 'team-drawer' + (mobileSidebarOpen ? ' mobile-open' : '') },
-        React.createElement('div', { className: 'sidebar-content' },
+        React.createElement('div', { className: 'sidebar-content sidebar-teams' },
           React.createElement('div', { className: 'sidebar-header', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
             React.createElement('h2', null, 'Teams'),
             React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
@@ -10727,13 +10863,13 @@
                         React.createElement('div', { style: { width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: team.icon_color, borderRadius: 'var(--radius)', color: 'white', fontSize: '12px', fontWeight: '600' } }, team.icon_text),
                         React.createElement('span', { className: 'list-item-text' }, team.name)
                       ),
-                      (isAdminRole(user)) && React.createElement('button', {
+                      canManageTeam(user, team) && React.createElement('button', {
                         className: 'team-hide-btn',
                         'data-testid': 'team-restore-btn',
                         onClick: (e) => { e.stopPropagation(); handleRestoreTeam(team.id); },
                         title: 'Team wiederherstellen'
                       }, '♻'),
-                      (isAdminRole(user)) && React.createElement('button', {
+                      canManageTeam(user, team) && React.createElement('button', {
                         className: 'team-hide-btn',
                         'data-testid': 'team-delete-archived-btn',
                         onClick: (e) => { e.stopPropagation(); handleDeleteTeam(team.id); },
@@ -10747,16 +10883,29 @@
             })()
           )
         ),
-        React.createElement('div', { className: 'sidebar-content' },
+        React.createElement('div', { className: 'sidebar-content sidebar-channels' },
           selectedTeam && React.createElement(React.Fragment, null,
             React.createElement('div', { className: 'sidebar-header', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
               React.createElement('h2', null, '# Kanäle'),
-              isAdminRole(user) && React.createElement('button', {
-                className: 'new-chat-btn',
-                onClick: () => setShowCreateChannel(true),
-                title: 'Neuen Kanal erstellen',
-                'aria-label': 'Neuen Kanal erstellen'
-              }, '+')
+              // v4.23.0 — Team-Admins duerfen laut RLS (channels_insert_admin)
+              // Kanaele anlegen; die Oberflaeche zeigte das Plus bisher nur
+              // globalen Admins. Daneben ein Zahnrad als auffindbarer Weg zur
+              // Team-Verwaltung (Mitglieder, Archivieren, Loeschen) — der war
+              // bisher nur ueber „Mitglieder" im Beitrags-Kopf erreichbar.
+              (canManageTeam(user, selectedTeam) || userTeamRole === 'admin') && React.createElement('span', { style: { display: 'flex', gap: '2px', alignItems: 'center' } },
+                React.createElement('button', {
+                  className: 'new-chat-btn',
+                  onClick: () => setShowTeamMembers(true),
+                  title: 'Team verwalten (Mitglieder, archivieren, löschen)',
+                  'aria-label': 'Team verwalten'
+                }, '⚙'),
+                React.createElement('button', {
+                  className: 'new-chat-btn',
+                  onClick: () => setShowCreateChannel(true),
+                  title: 'Neuen Kanal erstellen',
+                  'aria-label': 'Neuen Kanal erstellen'
+                }, '+')
+              )
             ),
             React.createElement('div', { className: 'sidebar-list' },
               channels.map(ch => {
@@ -10767,8 +10916,8 @@
                   onClick: () => handleChannelSelect(ch),
                   onContextMenu: (e) => handleChannelContextMenu(e, ch),
                   // Tastatur-Äquivalent zum Rechtsklick (WCAG 2.1.1): Kontextmenü-Taste / Shift+F10
-                  onKeyDown: (e) => { if (isAdminRole(user) && (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10'))) handleChannelContextMenu(e, ch); },
-                  'aria-haspopup': isAdminRole(user) ? 'menu' : undefined,
+                  onKeyDown: (e) => { if ((canManageTeam(user, selectedTeam) || userTeamRole === 'admin') && (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10'))) handleChannelContextMenu(e, ch); },
+                  'aria-haspopup': (canManageTeam(user, selectedTeam) || userTeamRole === 'admin') ? 'menu' : undefined,
                   'aria-current': selectedChannel?.id === ch.id ? 'page' : undefined
                 },
                   React.createElement('span', { style: { fontSize: '12px' } }, '#'),
