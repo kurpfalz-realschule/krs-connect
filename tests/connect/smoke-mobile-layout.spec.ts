@@ -33,8 +33,34 @@ test.describe('Mobile-Layout (Demo)', () => {
     // v4.18.0: Dateiablage ist jetzt ein direkter <a>-Link (kein Modal mehr) —
     // Selektor bewusst ohne Tag-Einschränkung, damit er button/a gleichermaßen findet.
     await expect(page.locator('[aria-label="Dateiablage (Nextcloud)"]').first()).toBeVisible();
-    // Abmelden bleibt erreichbar
-    await expect(page.locator('button[aria-label="Abmelden"]').first()).toBeVisible();
+    // Hilfe und der zweite Abmeldeweg sind mobil ausgeblendet. Abmelden bleibt
+    // über das Profil erreichbar, ohne einen dauerhaften Platz zu belegen.
+    await expect(page.locator('.app-help-link')).toBeHidden();
+    await expect(page.locator('.sidebar-bottom button[aria-label="Abmelden"]')).toBeHidden();
+  });
+
+  test('Beitragsaktionen stecken mobil in einem beschrifteten Mehr-Menü', async ({ connectPage: page }) => {
+    const post = page.locator('.post').first();
+    await expect(post).toBeVisible({ timeout: 8_000 });
+    await expect(post.locator('.post-actions-inline')).toBeHidden();
+
+    const more = post.getByRole('button', { name: 'Beitragsaktionen öffnen' });
+    await expect(more).toBeVisible();
+    await more.click();
+
+    const menu = post.getByRole('menu', { name: 'Beitragsaktionen' });
+    await expect(menu).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: /Speichern|Lesezeichen entfernen/ })).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: 'Weiterleiten' })).toBeVisible();
+  });
+
+  test('Team-Tabs und Beitragstext nutzen den knappen Platz für Wörter', async ({ connectPage: page }) => {
+    await expect(page.locator('.team-tab-icon').first()).toBeHidden();
+    await expect(page.getByRole('tab', { name: 'Beiträge' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Dateiablage' })).toBeVisible();
+
+    const textSize = await page.locator('.post-content').first().evaluate((el) => getComputedStyle(el).fontSize);
+    expect(textSize).toBe('16px');
   });
 });
 

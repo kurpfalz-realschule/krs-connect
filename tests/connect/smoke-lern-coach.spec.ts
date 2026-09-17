@@ -8,36 +8,20 @@ import { test, expect, openConnect } from '../fixtures/connect';
  * </body> eingehängt ist. Diese Tests sichern: Overlay lädt, öffnet, hat die
  * erwarteten Schritte, merkt Fortschritt und schließt wieder.
  *
- * v4.21.0: Der FAB ist NICHT mehr standardmäßig sichtbar (er verdeckte auf
- * dem Handy den Inhalt, bis alle Schritte abgehakt waren). Einstieg ist jetzt
- * „❓ Hilfe → 🎓 Lern-Coach (Tutorials)". Wer den Schnellzugriff will,
- * schaltet ihn per KRSCoach.showFab(true) frei (localStorage-Flag
- * krs_coach_fab_connect). Die FAB-Tests unten schalten ihn deshalb explizit
- * ein — der Standardzustand „unsichtbar" wird im ersten Test geprüft.
+ * v4.23.3: Der schwebende FAB wurde vollständig entfernt. Einstieg ist nur
+ * noch bewusst über „❓ Hilfe → 🎓 Lern-Coach (Tutorials)" möglich.
  */
-
-/** Blendet den FAB für einen Test frei (Standard ist seit v4.21.0 aus). */
-async function fabEinschalten(page: import('@playwright/test').Page) {
-  await page.evaluate(() => (window as any).KRSCoach.showFab(true));
-}
 test.describe('KRS Connect — Lern-Coach Overlay', () => {
-  test('v4.21.0: FAB ist standardmäßig unsichtbar, API ist da', async ({ page }) => {
+  test('v4.23.3: schwebender Lernen-Knopf ist vollständig entfernt, API ist da', async ({ page }) => {
     await openConnect(page, { user: 'la' });
     const hasApi = await page.evaluate(() => typeof (window as any).KRSCoach === 'object');
     expect(hasApi).toBe(true);
-    await expect(page.locator('.krsc-fab')).toBeHidden({ timeout: 8_000 });
-  });
-
-  test('FAB ist nach showFab(true) sichtbar', async ({ page }) => {
-    await openConnect(page, { user: 'la' });
-    await fabEinschalten(page);
-    await expect(page.locator('.krsc-fab')).toBeVisible({ timeout: 8_000 });
+    await expect(page.locator('.krsc-fab')).toHaveCount(0);
   });
 
   test('Öffnen zeigt Panel mit 5 Schritten', async ({ page }) => {
     await openConnect(page, { user: 'la' });
-    await fabEinschalten(page);
-    await page.locator('.krsc-fab').click();
+    await page.evaluate(() => (window as any).KRSCoach.open());
     await expect(page.locator('.krsc-panel.krsc-open')).toBeVisible({ timeout: 5_000 });
     await expect(page.locator('.krsc-step')).toHaveCount(5);
     // Erste erwartete Überschrift
@@ -46,13 +30,10 @@ test.describe('KRS Connect — Lern-Coach Overlay', () => {
 
   test('Fortschritt wird gemerkt (localStorage)', async ({ page }) => {
     await openConnect(page, { user: 'la' });
-    await fabEinschalten(page);
-    await page.locator('.krsc-fab').click();
+    await page.evaluate(() => (window as any).KRSCoach.open());
     await expect(page.locator('.krsc-panel.krsc-open')).toBeVisible();
     // ersten Schritt als erledigt markieren
     await page.locator('.krsc-step').first().locator('.krsc-toggle').click();
-    // Badge im FAB zeigt >=1
-    await expect(page.locator('.krsc-fab .krsc-badge')).toContainText('1/5');
     const stored = await page.evaluate(() => {
       try { return JSON.parse(localStorage.getItem('krs_coach_connect') || '{}'); }
       catch { return {}; }
@@ -62,17 +43,15 @@ test.describe('KRS Connect — Lern-Coach Overlay', () => {
 
   test('Schließen per ESC funktioniert', async ({ page }) => {
     await openConnect(page, { user: 'la' });
-    await fabEinschalten(page);
-    await page.locator('.krsc-fab').click();
+    await page.evaluate(() => (window as any).KRSCoach.open());
     await expect(page.locator('.krsc-panel.krsc-open')).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.locator('.krsc-panel.krsc-open')).toHaveCount(0, { timeout: 3_000 });
   });
 
-  test('FAB blendet sich aus, wenn alle Schritte erledigt', async ({ page }) => {
+  test('Fortschritt bleibt nach allen Schritten und einem Reload erhalten', async ({ page }) => {
     await openConnect(page, { user: 'la' });
-    await fabEinschalten(page);
-    await page.locator('.krsc-fab').click();
+    await page.evaluate(() => (window as any).KRSCoach.open());
     await expect(page.locator('.krsc-panel.krsc-open')).toBeVisible();
     // alle Schritte als erledigt markieren
     const steps = page.locator('.krsc-step');
@@ -83,11 +62,12 @@ test.describe('KRS Connect — Lern-Coach Overlay', () => {
         await toggle.click();
       }
     }
-    // FAB ist jetzt ausgeblendet
-    await expect(page.locator('.krsc-fab')).toBeHidden({ timeout: 3_000 });
-    // Nach Reload bleibt er ausgeblendet (Fortschritt gemerkt)
+    const storedBeforeReload = await page.evaluate(() => JSON.parse(localStorage.getItem('krs_coach_connect') || '{}'));
+    expect(Object.values(storedBeforeReload.done || {}).filter(Boolean)).toHaveLength(5);
     await page.reload();
     await page.waitForFunction(() => typeof window.KRS_VERSION === 'string');
-    await expect(page.locator('.krsc-fab')).toBeHidden({ timeout: 5_000 });
+    await expect(page.locator('.krsc-fab')).toHaveCount(0);
+    const storedAfterReload = await page.evaluate(() => JSON.parse(localStorage.getItem('krs_coach_connect') || '{}'));
+    expect(Object.values(storedAfterReload.done || {}).filter(Boolean)).toHaveLength(5);
   });
 });

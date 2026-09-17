@@ -417,6 +417,65 @@
       margin-bottom: 12px;
     }
 
+    .post-author-row { display: flex; gap: 10px; align-items: center; min-width: 0; }
+    .post-author-meta { min-width: 0; }
+    .post-actions-inline { display: flex; gap: 4px; }
+    .post-action-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 8px;
+      color: var(--text-muted);
+      font-size: 14px;
+      border-radius: var(--radius);
+      min-width: 36px;
+      min-height: 36px;
+    }
+    .post-action-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .post-actions-menu { display: none; position: relative; flex: 0 0 auto; }
+    .post-actions-more {
+      width: 44px;
+      height: 44px;
+      border: none;
+      border-radius: var(--radius);
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 22px;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .post-actions-more:hover, .post-actions-more[aria-expanded="true"] { background: var(--bg-hover); }
+    .post-actions-popover {
+      position: absolute;
+      top: 46px;
+      right: 0;
+      z-index: 30;
+      min-width: 190px;
+      padding: 6px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-secondary);
+      box-shadow: var(--shadow-lg);
+    }
+    .post-actions-popover button {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      min-height: 44px;
+      padding: 8px 10px;
+      border: none;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: var(--text-primary);
+      font: inherit;
+      font-size: 14px;
+      text-align: left;
+      cursor: pointer;
+    }
+    .post-actions-popover button:hover { background: var(--bg-hover); }
+    .post-actions-popover button.danger { color: var(--danger); }
+
     .post-author {
       font-weight: 600;
       color: var(--text-primary);
@@ -1238,10 +1297,9 @@
       .sidebar-nav { flex-direction: row; flex: 1; justify-content: space-around; }
       .sidebar-nav button { font-size: 11px; padding: 6px 8px; }
       .sidebar-bottom { flex-direction: row; gap: 2px; flex: 0 0 auto; }
-      /* Bottom-Bar entrümpeln (v4.10.0): Ausblenden, was auf dem Handy nur
-         Platz frisst (Logo, Versionstext, großer Feedback-Button, Online-Zähler).
-         Sichtbar bleiben: die Nav-Icons, ⚙️ Einstellungen, 🛠️ Admin, Profil,
-         Abmelden. Suche/Online/Feedback sind in die Ansichten gewandert. */
+      /* Bottom-Bar entrümpeln: Ausblenden, was auf dem Handy nur Platz frisst
+         (Logo, Versionstext, Feedback, Online-Zähler, separater Hilfe- und
+         Abmeldeknopf). Abmelden bleibt im Profil erreichbar. */
       .sidebar .sidebar-logo, .sidebar .app-version, .sidebar .beta-feedback-btn { display: none; }
       .sidebar-nav { flex: 1; }
       .sidebar-bottom .online-indicator { display: none; }
@@ -1259,10 +1317,25 @@
       .mobile-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); z-index: 99; }
       .mobile-overlay.visible { display: block; }
       .content { flex: 1; order: 1; overflow-y: auto; min-height: 0; }
-      .content-header { position: sticky; top: 0; z-index: 10; }
+      .content-header { position: sticky; top: 0; z-index: 10; padding: 10px 12px; }
+      .content-header h1 { font-size: 17px; line-height: 1.25; }
+      .content-body { padding: 12px; gap: 12px; }
+      .team-tabs { padding: 2px 8px 0; gap: 0; }
+      .team-tab { flex: 1; padding: 7px 6px; font-size: 13px; }
+      .team-tab-icon { display: none; }
       .modal { width: 95vw; max-height: 90vh; }
-      .post-card { padding: 12px; }
-      .post-header { gap: 8px; }
+      .post, .post-card { padding: 12px; }
+      .post-header { gap: 8px; align-items: flex-start; }
+      .post-author-row { gap: 8px; min-width: 0; }
+      .post-author-meta { min-width: 0; }
+      .post-author { line-height: 1.25; }
+      .post-actions-inline { display: none; }
+      .post-actions-menu { display: block; }
+      .post-content { font-size: 16px; line-height: 1.55; }
+      .post-title { font-size: 16px; line-height: 1.35; }
+      .team-members-label { display: none; }
+      .team-members-btn { width: 44px; height: 44px; padding: 0 !important; justify-content: center; }
+      .sidebar .app-help-link, .sidebar-bottom .icon-btn[aria-label="Abmelden"] { display: none; }
       .chat-messages { padding: 8px; }
       .chat-input-bar { padding: 8px; }
       .chat-input-bar textarea { font-size: 16px; } /* Verhindert iOS-Zoom */
@@ -1333,9 +1406,14 @@
     .feedback-trigger:hover { color: var(--accent-orange); }
 
     /* #12: Großer Beta-Feedback-Button in der Sidebar */
-    .beta-feedback-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px 14px; margin-bottom: 8px; border: none; border-radius: var(--radius); background: var(--accent-orange, #f59e0b); color: #fff; font-size: 14px; font-weight: 700; cursor: pointer; min-height: 44px; box-shadow: 0 2px 8px rgba(0,0,0,0.12); transition: transform 0.12s, filter 0.12s; }
-    .beta-feedback-btn:hover { filter: brightness(1.06); transform: translateY(-1px); }
-    .beta-feedback-btn .beta-tag { font-size: 10px; font-weight: 800; letter-spacing: 0.5px; background: rgba(255,255,255,0.25); padding: 2px 6px; border-radius: 10px; }
+    /* v4.23.2 — vorher ein vollflaechiger, oranger Block mit fetter Schrift und
+       weisser BETA-Plakette: der lauteste Punkt der ganzen Seitenleiste, obwohl
+       er der seltenste Handgriff ist (Rueckmeldung Norbert, 16.09.2026).
+       Jetzt eine ruhige Umriss-Schaltflaeche in der Akzentfarbe — auffindbar,
+       aber nicht mehr dominant. Trefferflaeche bleibt bei 44px. */
+    .beta-feedback-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 10px 12px; margin-bottom: 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-tertiary); color: var(--text-secondary); font-size: 13px; font-weight: 600; cursor: pointer; min-height: 44px; transition: background 0.12s, border-color 0.12s, color 0.12s; }
+    .beta-feedback-btn:hover { background: var(--bg-primary); border-color: var(--accent); color: var(--accent); }
+    .beta-feedback-btn .beta-tag { font-size: 9px; font-weight: 700; letter-spacing: 0.6px; background: transparent; border: 1px solid currentColor; opacity: 0.6; padding: 1px 5px; border-radius: 8px; }
 
     /* #12: Feedback-Board */
     .fb-board-modal { width: 720px; max-width: 96vw; max-height: 90vh; display: flex; flex-direction: column; }
@@ -3258,10 +3336,22 @@
           return false;
         }
         try {
-          // Delete replies first, then the post
-          await this.sb.from('posts').delete().eq('parent_id', postId);
-          const { error } = await this.sb.from('posts').delete().eq('id', postId);
+          // Antworten und Lesestaende haengen live per ON DELETE CASCADE am
+          // Beitrag. Nur den Eltern-Beitrag loeschen: ein separates Loeschen
+          // fremder Antworten wird durch deren RLS ohnehin herausgefiltert.
+          // `.select()` ist absichtlich dabei: PostgREST meldet bei einer
+          // RLS-gefilterten DELETE-Anfrage keinen Fehler, sondern 0 Zeilen.
+          // Ohne Rueckgabe wuerde die UI dann faelschlich Erfolg anzeigen.
+          const { data, error } = await this.sb.from('posts')
+            .delete()
+            .eq('id', postId)
+            .select('id')
+            .maybeSingle();
           if (error) throw error;
+          if (!data) {
+            showToast('Beitrag wurde nicht gelöscht. Bitte lade die Seite neu und versuche es noch einmal.', 'error');
+            return false;
+          }
           return true;
         } catch (err) { console.error('deletePost error:', err); showToast('Beitrag konnte nicht gel\u00f6scht werden. Bitte versuche es erneut.', 'error'); return false; }
       }
@@ -5660,7 +5750,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.23.0';
+    window.KRS_VERSION = '4.23.3';
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
     // Playwright den Klick-Handler prüfen kann, ohne wirklich zu navigieren.
     // Aus tenant.js (TENANT-SPEC.md 2.4) — leer, wenn hub.enabled:false.
@@ -6530,7 +6620,24 @@
       const [showPollCreator, setShowPollCreator] = useState(false);
       const [readReceipts, setReadReceipts] = useState(new Map()); // Map<postId, [{user_id, display_name}]>
       const [expandedReads, setExpandedReads] = useState(null); // postId or null
+      const [openPostMenu, setOpenPostMenu] = useState(null); // postId or null
       // readReceiptsEnabled kommt jetzt als Prop von App (Single Source of Truth)
+
+      useEffect(() => {
+        if (openPostMenu === null) return;
+        const closeOnOutsideClick = (event) => {
+          if (!event.target.closest('.post-actions-menu')) setOpenPostMenu(null);
+        };
+        const closeOnEscape = (event) => {
+          if (event.key === 'Escape') setOpenPostMenu(null);
+        };
+        document.addEventListener('pointerdown', closeOnOutsideClick);
+        document.addEventListener('keydown', closeOnEscape);
+        return () => {
+          document.removeEventListener('pointerdown', closeOnOutsideClick);
+          document.removeEventListener('keydown', closeOnEscape);
+        };
+      }, [openPostMenu]);
 
       // Load reactions for loaded posts (Supabase mode)
       useEffect(() => {
@@ -6664,7 +6771,8 @@
       const handleDeletePost = async (postId) => {
         if (!confirm('Post wirklich l\u00f6schen?')) return;
         try {
-          await dataService.deletePost(postId);
+          const deleted = await dataService.deletePost(postId);
+          if (!deleted) return;
           setPosts(prev => prev.filter(p => p.id !== postId));
           showToast('Beitrag gel\u00f6scht', 'success');
         } catch (err) { console.error('Delete error:', err); showToast('Beitrag konnte nicht gel\u00f6scht werden.', 'error'); }
@@ -6908,6 +7016,7 @@
           const isPlatformOwner = !!(user && user.role === 'owner');
           const isOwner = isAuthor || isPlatformOwner;   // darf bearbeiten/loeschen
           const canPin = isOwner || isAdminRole(user);
+          const isSaved = !!savedPosts?.find(p => p.id === post.id);
           const isEditing = editingPost === post.id;
           const postStyle = post.is_urgent
             ? { borderLeft: '3px solid var(--danger)', background: 'rgba(239,68,68,0.04)' }
@@ -6918,23 +7027,41 @@
             post.is_urgent && React.createElement('div', { style: { fontSize: '11px', color: 'var(--danger-text, #B91C1C)', fontWeight: '700', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--danger-bg, #FEE2E2)', padding: '4px 10px', borderRadius: '4px', width: 'fit-content' } }, '🚨 DRINGEND'),
             post.is_pinned && !post.is_urgent && React.createElement('div', { style: { fontSize: '11px', color: 'var(--accent-orange)', fontWeight: '600', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '4px' } }, '📌 Angeheftet'),
             React.createElement('div', { className: 'post-header', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' } },
-              React.createElement('div', { style: { display: 'flex', gap: '10px', alignItems: 'center' } },
+              React.createElement('div', { className: 'post-author-row' },
                 React.createElement(Avatar, { user: author, size: 36 }),
-                React.createElement('div', null,
+                React.createElement('div', { className: 'post-author-meta' },
                   React.createElement('div', { className: 'post-author' }, author.display_name),
                   React.createElement('div', { className: 'post-time' }, formatDate(post.created_at), post.edited_at && ' (bearbeitet)')
                 )
               ),
-              !isEditing && React.createElement('div', { style: { display: 'flex', gap: '4px' } },
+              !isEditing && React.createElement(React.Fragment, null,
+              React.createElement('div', { className: 'post-actions-inline' },
                 // Lesezeichen
-                onSave && React.createElement('button', { onClick: () => onSave(post), title: savedPosts?.find(p => p.id === post.id) ? 'Lesezeichen entfernen' : 'Nachricht speichern', 'aria-label': 'Lesezeichen', style: { background: 'none', border: 'none', cursor: 'pointer', padding: '8px', color: savedPosts?.find(p => p.id === post.id) ? 'var(--accent)' : 'var(--text-muted)', fontSize: '14px', borderRadius: 'var(--radius)', minWidth: '36px', minHeight: '36px' } }, savedPosts?.find(p => p.id === post.id) ? '🔖' : '🔗'),
+                onSave && React.createElement('button', { className: 'post-action-btn', onClick: () => onSave(post), title: isSaved ? 'Lesezeichen entfernen' : 'Nachricht speichern', 'aria-label': isSaved ? 'Lesezeichen entfernen' : 'Nachricht speichern', style: { color: isSaved ? 'var(--accent)' : 'var(--text-muted)' } }, isSaved ? '🔖' : '🔗'),
                 // Weiterleiten
-                onForward && React.createElement('button', { onClick: () => onForward(post), title: 'Weiterleiten', 'aria-label': 'Nachricht weiterleiten', style: { background: 'none', border: 'none', cursor: 'pointer', padding: '8px', color: 'var(--text-muted)', fontSize: '14px', borderRadius: 'var(--radius)', minWidth: '36px', minHeight: '36px' } }, '↪'),
+                onForward && React.createElement('button', { className: 'post-action-btn', onClick: () => onForward(post), title: 'Weiterleiten', 'aria-label': 'Nachricht weiterleiten' }, '↪'),
                 // Pin: Admin oder Autor darf pinnen
-                canPin && React.createElement('button', { onClick: () => handleTogglePin(post), title: post.is_pinned ? 'Loslösen' : 'Anheften', 'aria-label': post.is_pinned ? 'Post loslösen' : 'Post anheften', style: { background: 'none', border: 'none', cursor: 'pointer', padding: '8px', color: post.is_pinned ? 'var(--accent-orange)' : 'var(--text-muted)', fontSize: '14px', borderRadius: 'var(--radius)', minWidth: '36px', minHeight: '36px' } }, '📌'),
+                canPin && React.createElement('button', { className: 'post-action-btn', onClick: () => handleTogglePin(post), title: post.is_pinned ? 'Loslösen' : 'Anheften', 'aria-label': post.is_pinned ? 'Post loslösen' : 'Post anheften', style: { color: post.is_pinned ? 'var(--accent-orange)' : 'var(--text-muted)' } }, '📌'),
                 // Edit/Delete: Nur Autor
-                isOwner && React.createElement('button', { onClick: () => handleEditPost(post), title: 'Bearbeiten', 'aria-label': 'Post bearbeiten', style: { background: 'none', border: 'none', cursor: 'pointer', padding: '8px', color: 'var(--text-muted)', fontSize: '14px', borderRadius: 'var(--radius)', minWidth: '36px', minHeight: '36px' } }, '✏️'),
-                isOwner && React.createElement('button', { onClick: () => handleDeletePost(post.id), title: 'Löschen', 'aria-label': 'Post löschen', style: { background: 'none', border: 'none', cursor: 'pointer', padding: '8px', color: 'var(--text-muted)', fontSize: '14px', borderRadius: 'var(--radius)', minWidth: '36px', minHeight: '36px' } }, '🗑️')
+                isOwner && React.createElement('button', { className: 'post-action-btn', onClick: () => handleEditPost(post), title: 'Bearbeiten', 'aria-label': 'Post bearbeiten' }, '✏️'),
+                isOwner && React.createElement('button', { className: 'post-action-btn', onClick: () => handleDeletePost(post.id), title: 'Löschen', 'aria-label': 'Post löschen' }, '🗑️')
+              ),
+              React.createElement('div', { className: 'post-actions-menu' },
+                React.createElement('button', {
+                  className: 'post-actions-more',
+                  onClick: () => setOpenPostMenu(openPostMenu === post.id ? null : post.id),
+                  'aria-label': 'Beitragsaktionen öffnen',
+                  'aria-haspopup': 'menu',
+                  'aria-expanded': openPostMenu === post.id ? 'true' : 'false'
+                }, '•••'),
+                openPostMenu === post.id && React.createElement('div', { className: 'post-actions-popover', role: 'menu', 'aria-label': 'Beitragsaktionen' },
+                  onSave && React.createElement('button', { role: 'menuitem', onClick: () => { setOpenPostMenu(null); onSave(post); } }, React.createElement('span', null, isSaved ? '🔖' : '🔗'), isSaved ? 'Lesezeichen entfernen' : 'Speichern'),
+                  onForward && React.createElement('button', { role: 'menuitem', onClick: () => { setOpenPostMenu(null); onForward(post); } }, React.createElement('span', null, '↪'), 'Weiterleiten'),
+                  canPin && React.createElement('button', { role: 'menuitem', onClick: () => { setOpenPostMenu(null); handleTogglePin(post); } }, React.createElement('span', null, '📌'), post.is_pinned ? 'Loslösen' : 'Anheften'),
+                  isOwner && React.createElement('button', { role: 'menuitem', onClick: () => { setOpenPostMenu(null); handleEditPost(post); } }, React.createElement('span', null, '✏️'), 'Bearbeiten'),
+                  isOwner && React.createElement('button', { role: 'menuitem', className: 'danger', onClick: () => { setOpenPostMenu(null); handleDeletePost(post.id); } }, React.createElement('span', null, '🗑️'), 'Löschen')
+                )
+              )
               )
             ),
             isEditing
@@ -9137,6 +9264,20 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.23.3', date: '17.09.2026', items: [
+        'Der blaue „Lernen"-Knopf ist vollständig aus der Ansicht entfernt. Der Lern-Coach bleibt bei Bedarf unter „Hilfe" erreichbar',
+        'Beiträge sind auf dem iPhone deutlich ruhiger: Speichern, Weiterleiten, Anheften, Bearbeiten und Löschen stecken dort jetzt in einem gemeinsamen Mehr-Menü',
+        'Mehr Platz für Inhalte auf kleinen Bildschirmen: kompaktere Ränder, Tabs ohne dekorative Symbole und besser lesbarer Beitragstext',
+        'Die mobile Navigationsleiste zeigt Hilfe und den zusätzlichen Abmeldeknopf nicht mehr doppelt; Abmelden bleibt im Profil erreichbar'
+      ] },
+      { v: '4.23.2', date: '16.09.2026', items: [
+        'Der „Lernen"-Knopf unten rechts lässt sich jetzt direkt mit einem ✕ ausblenden — bisher ging das nur über „❓ Hilfe". Wieder einschalten dort ebenfalls',
+        'Der Feedback-Knopf in der Seitenleiste ist ruhiger gestaltet: er war der auffälligste Punkt der Seite, obwohl man ihn am seltensten braucht'
+      ] },
+      { v: '4.23.1', date: '15.09.2026', items: [
+        'Eigene Beiträge lassen sich über den KRS Hub wieder löschen. Die Sicherheitsabfrage wurde im eingebetteten Connect bisher vom Hub blockiert.',
+        'Wenn die Datenbank einen Löschvorgang ablehnt, zeigt Connect jetzt einen Fehler statt den Beitrag nur scheinbar zu entfernen.'
+      ] },
       { v: '4.23.0', date: '15.09.2026', items: [
         'Herunterladen funktioniert wieder: Bilder aus Chat und Beiträgen ließen sich nicht speichern — der Knopf zeigte auf eine Adresse, die es so nicht gibt',
         'Große Dateien (z. B. ein Elternbrief-PDF) melden jetzt „wird vorbereitet …" statt scheinbar nichts zu tun; schlägt der Download fehl, sagt die App es',
@@ -10938,7 +11079,7 @@
           ),
           // v4.12.0: Tab-Leiste pro Team — Beiträge | Dateiablage (Links) | Termine
           selectedTeam && React.createElement('div', { className: 'team-tabs', role: 'tablist', 'aria-label': 'Team-Bereiche' },
-            [['posts', '💬 Beiträge'], ['links', '📁 Dateiablage'], ['termine', '📅 Termine']].map(([key, label]) =>
+            [['posts', '💬', 'Beiträge'], ['links', '📁', 'Dateiablage'], ['termine', '📅', 'Termine']].map(([key, icon, label]) =>
               React.createElement('button', {
                 key,
                 role: 'tab',
@@ -10946,7 +11087,10 @@
                 'data-testid': 'team-tab-' + key,
                 className: 'team-tab' + (teamTab === key ? ' active' : ''),
                 onClick: () => setTeamTab(key)
-              }, label)
+              },
+                React.createElement('span', { className: 'team-tab-icon', 'aria-hidden': 'true' }, icon + ' '),
+                label
+              )
             )
           ),
           // v4.12.0: Dateiablage-Links des Teams (kein eigener Datei-Speicher)
@@ -10982,13 +11126,14 @@
                 React.createElement('h1', null, '# ' + selectedChannel.name)
               ),
               selectedTeam && React.createElement('button', {
+                className: 'team-members-btn',
                 style: { background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', color: 'var(--text-secondary)', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' },
                 onClick: () => setShowTeamMembers(true),
                 title: 'Mitglieder anzeigen',
                 'aria-label': 'Team-Mitglieder anzeigen'
               },
                 React.createElement('span', { dangerouslySetInnerHTML: { __html: Icons.users }, style: { width: '16px', height: '16px' } }),
-                React.createElement('span', null, 'Mitglieder')
+                React.createElement('span', { className: 'team-members-label' }, 'Mitglieder')
               )
             ),
             React.createElement('div', { className: 'content-body' },
@@ -11551,18 +11696,6 @@ window.KRS_COACH_CONFIG = {
      Konfiguration über window.KRS_COACH_CONFIG (VOR diesem Block setzen).
      ═══════════════════════════════════════════════════════════════════════ -->
 <style id="krsc-style">
-  .krsc-fab{position:fixed;right:16px;bottom:90px;z-index:2147483000;
-    display:flex;align-items:center;gap:8px;height:48px;padding:0 18px;
-    border:none;border-radius:26px;cursor:pointer;font:600 15px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
-    color:#fff;background:linear-gradient(135deg,#2563eb,#1d4ed8);
-    box-shadow:0 6px 20px rgba(37,99,235,.42);transition:transform .15s ease,box-shadow .15s ease}
-  .krsc-fab:hover{transform:translateY(-2px);box-shadow:0 10px 26px rgba(37,99,235,.5)}
-  .krsc-fab:focus-visible{outline:3px solid #93c5fd;outline-offset:2px}
-  .krsc-fab .krsc-badge{background:rgba(255,255,255,.25);border-radius:12px;padding:2px 8px;font-size:12px;font-weight:700}
-  .krsc-fab.krsc-done{background:linear-gradient(135deg,#16a34a,#15803d);box-shadow:0 6px 20px rgba(22,163,74,.42)}
-  @media(max-width:640px){.krsc-fab{bottom:88px;right:12px;height:44px;padding:0 14px;font-size:14px}}
-  @supports(padding:max(0px)){.krsc-fab{bottom:max(90px,calc(env(safe-area-inset-bottom) + 82px))}}
-
   .krsc-overlay{position:fixed;inset:0;z-index:2147483200;background:rgba(15,23,42,.42);
     backdrop-filter:blur(2px);display:none;opacity:0;transition:opacity .2s ease}
   .krsc-overlay.krsc-open{display:block;opacity:1}
@@ -11662,29 +11795,6 @@ window.KRS_COACH_CONFIG = {
   function doneCount(){ var n=0; STEPS.forEach(function(s){ if(state.done[s.id]) n++; }); return n; }
   function allDone(){ return doneCount()===STEPS.length && STEPS.length>0; }
 
-  // ── FAB ──
-  var fab = document.createElement('button');
-  fab.className='krsc-fab'; fab.type='button';
-  fab.setAttribute('aria-label','Lern-Coach öffnen');
-  root.appendChild(fab);
-  // v4.21.0: Der FAB klebte auf jedem Screen, bis alle Schritte abgehakt waren —
-  // auf dem Handy verdeckt er den Inhalt. Standard ist jetzt: unsichtbar. Der
-  // Lern-Coach wird ueber „❓ Hilfe → 🎓 Lern-Coach" geoeffnet. Wer den
-  // Schnellzugriff moechte, blendet ihn dort wieder ein (Flag in localStorage).
-  var FABKEY = 'krs_coach_fab_' + APP;
-  function fabWanted(){ try { return localStorage.getItem(FABKEY) === '1'; } catch(e) { return false; } }
-  function setFabWanted(v){ try { localStorage.setItem(FABKEY, v ? '1' : '0'); } catch(e) {} renderFab(); }
-
-  function renderFab(){
-    var n=doneCount();
-    if(!fabWanted()){ fab.style.display='none'; return; }
-    // Einmal durch → FAB dauerhaft ausblenden (Fortschritt bleibt in localStorage).
-    if(allDone()){ fab.style.display='none'; return; }
-    fab.style.display='';
-    fab.classList.remove('krsc-done');
-    fab.innerHTML = '<span>🎓</span><span>Lernen</span><span class="krsc-badge">'+n+'/'+STEPS.length+'</span>';
-  }
-
   // ── Overlay + Panel ──
   var overlay=document.createElement('div'); overlay.className='krsc-overlay'; root.appendChild(overlay);
   var panel=document.createElement('div'); panel.className='krsc-panel'; panel.setAttribute('role','dialog');
@@ -11740,13 +11850,13 @@ window.KRS_COACH_CONFIG = {
 
     panel.querySelector('.krsc-close').onclick=closePanel;
     panel.querySelector('.krsc-later').onclick=closePanel;
-    panel.querySelector('.krsc-restart').onclick=function(){ state.done={}; active=0; save(state); clearSpot(); render(); renderFab(); };
+    panel.querySelector('.krsc-restart').onclick=function(){ state.done={}; active=0; save(state); clearSpot(); render(); };
     panel.querySelectorAll('.krsc-stephd').forEach(function(b){
       b.onclick=function(){ var i=+this.parentNode.getAttribute('data-i'); active=(active===i?-1:i); save(state); clearSpot(); render(); };
     });
     panel.querySelectorAll('.krsc-toggle').forEach(function(b){
       b.onclick=function(){ var i=+this.closest('.krsc-step').getAttribute('data-i'); var id=STEPS[i].id;
-        state.done[id]=!state.done[id]; if(state.done[id]&&i<STEPS.length-1)active=i+1; save(state); render(); renderFab(); };
+        state.done[id]=!state.done[id]; if(state.done[id]&&i<STEPS.length-1)active=i+1; save(state); render(); };
     });
     panel.querySelectorAll('.krsc-next').forEach(function(b){
       b.onclick=function(){ var i=+this.closest('.krsc-step').getAttribute('data-i'); active=Math.min(i+1,STEPS.length-1); save(state); clearSpot(); render(); };
@@ -11791,14 +11901,11 @@ window.KRS_COACH_CONFIG = {
     clearSpot(); document.removeEventListener('keydown',onKey); }
   function onKey(e){ if(e.key==='Escape'){ if(spot||tip){clearSpot();} else closePanel(); } }
 
-  fab.onclick=openPanel; overlay.onclick=closePanel;
-  renderFab();
+  overlay.onclick=closePanel;
 
   // Öffentliche Mini-API (z.B. für „Coach starten"-Button in der App)
   window.KRSCoach={ open:openPanel, close:closePanel,
-    reset:function(){state.done={};active=0;save(state);renderFab();},
-    showFab:function(v){ setFabWanted(v !== false); },
-    fabVisible:fabWanted };
+    reset:function(){state.done={};active=0;save(state);render();} };
 })();
 </script>
 <!-- ═══ Ende KRS LERN-COACH ═══ -->

@@ -113,22 +113,18 @@ test.describe('A2b Fokus & Tastatur — KRS Connect (Demo)', () => {
   // DOM und blendet es nur per CSS-transform aus. isVisible() im Focus-Trap
   // prüfte bisher nur offsetWidth/offsetHeight (transform ändert die nicht) —
   // das geschlossene Panel wurde daher fälschlich als offener Dialog erkannt,
-  // der Hintergrund (inkl. Lern-Coach-FAB) beim Laden dauerhaft inert gesetzt
+  // der Hintergrund beim Laden dauerhaft inert gesetzt
   // und der Skip-Link um den ersten Tab-Fokus gebracht. Fix: openDialogs()
   // schließt Elemente mit "krsc"-Klasse explizit aus.
   test('Lern-Coach-Panel (geschlossen) wird vom Focus-Trap nicht als offener Dialog erkannt', async ({ connectPage: page }) => {
     await waitForAppReady(page);
-    const fab = page.locator('.krsc-fab');
-    if (await fab.count() === 0) test.skip(true, 'Lern-Coach nicht geladen — UI-Variante');
-    // v4.21.0: Der FAB ist standardmäßig ausgeblendet (verdeckte auf dem Handy
-    // den Inhalt). Für diesen Focus-Trap-Regressionstest wird er freigeschaltet.
-    await page.evaluate(() => (window as any).KRSCoach.showFab(true));
-    await expect(fab).toBeVisible({ timeout: 3_000 });
-    // Panel ist im DOM (role="dialog"), aber zu (kein .krsc-open) → FAB darf
-    // nicht inert sein und muss klickbar bleiben.
-    await expect(fab).not.toHaveAttribute('inert', '');
-    await expect(fab).toBeEnabled();
-    await fab.click({ timeout: 5_000 });
+    const hasCoach = await page.evaluate(() => typeof (window as any).KRSCoach?.open === 'function');
+    if (!hasCoach) test.skip(true, 'Lern-Coach nicht geladen — UI-Variante');
+    // Panel ist im DOM (role="dialog"), aber zu (kein .krsc-open) → der
+    // App-Hintergrund darf nicht inert sein. Öffnen erfolgt seit v4.23.3 nur
+    // noch bewusst über Hilfe bzw. die interne Coach-API, ohne schwebenden FAB.
+    await expect(page.locator('#app')).not.toHaveAttribute('inert', '');
+    await page.evaluate(() => (window as any).KRSCoach.open());
     await expect(page.locator('.krsc-panel.krsc-open')).toBeVisible({ timeout: 3_000 });
   });
 
