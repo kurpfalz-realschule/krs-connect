@@ -30,9 +30,12 @@ test.describe('Mobile-Layout (Demo)', () => {
     // Sichtbar: die wichtigsten Nav-Icons
     await expect(page.locator('button[aria-label="Teams & Kanäle"]').first()).toBeVisible();
     await expect(page.locator('button[aria-label="Chats"]').first()).toBeVisible();
-    // v4.18.0: Dateiablage ist jetzt ein direkter <a>-Link (kein Modal mehr) —
-    // Selektor bewusst ohne Tag-Einschränkung, damit er button/a gleichermaßen findet.
-    await expect(page.locator('[aria-label="Dateiablage (Nextcloud)"]').first()).toBeVisible();
+    // v4.24.0: Dateiablage und Notizen stehen NICHT mehr in Connects Leiste —
+    // beides sind Hub-Apps und liegen dort als Kachel. Auf dem Handy standen
+    // sonst zwei Navigationsleisten mit denselben Zielen übereinander
+    // (Hub-Tabs + Connect-Leiste). Connect zeigt hier nur noch Foren und Chats.
+    await expect(page.locator('[aria-label="Dateiablage (Nextcloud)"]')).toHaveCount(0);
+    await expect(page.getByTestId('nav-notizen')).toHaveCount(0);
     // Hilfe und der zweite Abmeldeweg sind mobil ausgeblendet. Abmelden bleibt
     // über das Profil erreichbar, ohne einen dauerhaften Platz zu belegen.
     await expect(page.locator('.app-help-link')).toBeHidden();

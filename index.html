@@ -605,7 +605,17 @@
     .rich-editor li { margin: 3px 0; }
     .rich-editor a { color: var(--accent); text-decoration: underline; }
     /* Feedback #8: Zeilenumbruch-Hilfe unter dem Eingabefeld */
-    .composer-hint-row { display:flex; align-items:center; gap:8px; margin-top:2px; }
+    .composer-hint-row { display:flex; align-items:center; gap:8px; margin-top:6px; flex-wrap:wrap; }
+    /* v4.24.0: Aa/Emoji/Anhang links, Senden rechts — eine feste Zeile. */
+    .composer-action-btn { display:inline-flex; align-items:center; justify-content:center; min-width:40px; min-height:40px; padding:0 8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-secondary); border-radius:6px; cursor:pointer; font-size:16px; }
+    .composer-action-btn:hover { background: var(--bg-tertiary); }
+    .composer-send-btn { margin-left:auto; display:inline-flex; align-items:center; gap:6px; min-height:40px; padding:0 16px; border:none; border-radius:var(--radius); background:var(--accent); color:#fff; font-size:14px; font-weight:600; cursor:pointer; white-space:nowrap; }
+    .composer-send-btn:disabled { background: var(--text-muted); cursor:not-allowed; }
+    .composer-newline-btn.active { background: var(--accent-light, var(--bg-tertiary)); border-color: var(--accent); color: var(--accent); }
+    /* v4.24.0: eine Zeile, eine Hoehe — sonst stehen 26px-Knoepfe schief neben
+       den 40px-Knoepfen und sind auf dem Tablet schwer zu treffen. */
+    .composer-hint-row .composer-newline-btn { min-height: 40px; padding: 0 12px; font-size: 12px; }
+    .rich-toolbar-below { margin-bottom:0; margin-top:6px; }
     .composer-newline-btn { border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-secondary); border-radius:6px; cursor:pointer; font-size:11px; line-height:1; padding:4px 8px; min-height:26px; }
     .composer-newline-btn:hover { background: var(--bg-tertiary); }
     .composer-hint { font-size:11px; color:var(--text-muted); }
@@ -697,7 +707,10 @@
     }
 
     .thread-body {
-      flex: 1;
+      flex: 1 1 auto;
+      /* v4.24.0: ohne min-height:0 kann ein hoher Fuss (Antwortfeld) den
+         Lesebereich zusammenquetschen statt ihn scrollen zu lassen. */
+      min-height: 0;
       overflow-y: auto;
       padding: 20px;
       display: flex;
@@ -730,10 +743,15 @@
     }
 
     .thread-footer {
-      padding: 16px 20px;
+      padding: 12px 16px;
       border-top: 1px solid var(--border);
       display: flex;
       gap: 8px;
+      /* v4.24.0: Deckel — der Schreibbereich darf den Beitrag nie verdraengen. */
+      flex: 0 0 auto;
+      max-height: 45vh;
+      overflow-y: auto;
+      background: var(--bg-secondary);
     }
 
     .compose-box {
@@ -1336,6 +1354,15 @@
       .team-members-label { display: none; }
       .team-members-btn { width: 44px; height: 44px; padding: 0 !important; justify-content: center; }
       .sidebar .app-help-link, .sidebar-bottom .icon-btn[aria-label="Abmelden"] { display: none; }
+      /* v4.24.0: Thread auf dem Handy — schmalere Raender, kompakter Kopf,
+         damit mehr vom Beitrag sichtbar bleibt. */
+      .thread-panel { max-width: none; }
+      .thread-header { padding: 10px 12px; }
+      .thread-body { padding: 12px; gap: 12px; }
+      .thread-footer { padding: 8px 10px; }
+      .thread-footer .composer-hint-row button { min-height: 44px; }
+      .thread-footer .composer-action-btn { min-width: 44px; }
+      .thread-reply-content { font-size: 15px; line-height: 1.5; }
       .chat-messages { padding: 8px; }
       .chat-input-bar { padding: 8px; }
       .chat-input-bar textarea { font-size: 16px; } /* Verhindert iOS-Zoom */
@@ -5283,10 +5310,20 @@
       return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
-    function MentionTextarea({ value, onChange, allUsers, placeholder, autoFocus, style, showToolbar, onFilePaste, onEnter, editorRef: editorRefProp }) {
+    // v4.24.0 — neue Props:
+    //   toolbarToggle: Formatierleiste startet eingeklappt und erscheint erst per
+    //     Aa-Knopf. Gedacht fuers Antwortfeld im Thread: dort fraß die dauerhaft
+    //     ausgeklappte Leiste (B/I/U/Farbe/2x Liste/Link, auf dem iPhone zwei
+    //     Zeilen) zusammen mit Hinweiszeile und Senden-Knopf mehr als die
+    //     Haelfte des Bildschirms — der Beitrag, auf den man antwortet, war kaum
+    //     noch lesbar (Rueckmeldung Norbert, 17.09.2026).
+    //   footerActions: zusaetzliche Knoepfe (Emoji, Anhang, Senden) stehen in
+    //     DER Zeile unter dem Feld, statt neben dem Feld umzubrechen.
+    function MentionTextarea({ value, onChange, allUsers, placeholder, autoFocus, style, showToolbar, onFilePaste, onEnter, editorRef: editorRefProp, toolbarToggle, footerActions }) {
       const [mentionQuery, setMentionQuery] = useState(null);
       const [mentionIdx, setMentionIdx] = useState(0);
       const [showColors, setShowColors] = useState(false);
+      const [toolbarOpen, setToolbarOpen] = useState(false);
       const _localEditorRef = useRef(null);
       const editorRef = editorRefProp || _localEditorRef;
 
@@ -5421,7 +5458,8 @@
         emitChange();
       };
 
-      const toolbar = showToolbar === false ? null : React.createElement('div', { className: 'rich-toolbar', role: 'toolbar', 'aria-label': 'Formatierung', style: { position: 'relative' } },
+      const toolbarHidden = showToolbar === false || (toolbarToggle && !toolbarOpen);
+      const toolbar = toolbarHidden ? null : React.createElement('div', { className: 'rich-toolbar' + (toolbarToggle ? ' rich-toolbar-below' : ''), role: 'toolbar', 'aria-label': 'Formatierung', style: { position: 'relative' } },
         React.createElement('button', { type: 'button', title: 'Fett (Strg+B)', 'aria-label': 'Fett', onMouseDown: (e) => { e.preventDefault(); exec('bold'); }, style: { fontWeight: 700 } }, 'B'),
         React.createElement('button', { type: 'button', title: 'Kursiv (Strg+I)', 'aria-label': 'Kursiv', onMouseDown: (e) => { e.preventDefault(); exec('italic'); }, style: { fontStyle: 'italic' } }, 'I'),
         React.createElement('button', { type: 'button', title: 'Unterstrichen (Strg+U)', 'aria-label': 'Unterstrichen', onMouseDown: (e) => { e.preventDefault(); exec('underline'); }, style: { textDecoration: 'underline' } }, 'U'),
@@ -5441,8 +5479,18 @@
         React.createElement('button', { type: 'button', title: 'Link einfügen', 'aria-label': 'Link', onMouseDown: (e) => { e.preventDefault(); addLink(); } }, '🔗')
       );
 
+      const formatToggleBtn = toolbarToggle ? React.createElement('button', {
+        type: 'button',
+        className: 'composer-newline-btn' + (toolbarOpen ? ' active' : ''),
+        title: 'Formatierung (fett, kursiv, Farbe, Listen, Link)',
+        'aria-label': 'Formatierung ein- oder ausblenden',
+        'aria-expanded': toolbarOpen,
+        'data-testid': 'composer-format-toggle',
+        onMouseDown: (ev) => { ev.preventDefault(); setToolbarOpen(v => !v); }
+      }, 'Aa') : null;
+
       return React.createElement('div', { style: { position: 'relative' } },
-        toolbar,
+        toolbarToggle ? null : toolbar,
         mentionQuery !== null && filteredUsers.length > 0 && React.createElement('div', { className: 'mention-autocomplete', role: 'listbox', 'aria-label': 'Erwähnungen' },
           filteredUsers.map((u, i) =>
             React.createElement('button', {
@@ -5518,8 +5566,10 @@
         }),
         // Feedback #8 (Stresstest 09.07.): „Wie schreibe ich in eine neue Zeile?"
         // Wenn Enter sendet (onEnter gesetzt): sichtbarer ↵-Knopf + Hinweis.
-        onEnter && React.createElement('div', { className: 'composer-hint-row' },
-          React.createElement('button', {
+        toolbarToggle ? toolbar : null,
+        (onEnter || footerActions || formatToggleBtn) && React.createElement('div', { className: 'composer-hint-row' },
+          formatToggleBtn,
+          onEnter && React.createElement('button', {
             type: 'button',
             className: 'composer-newline-btn',
             title: 'Neue Zeile einfügen',
@@ -5550,7 +5600,8 @@
               emitChange();
             }
           }, '↵ Neue Zeile'),
-          React.createElement('span', { className: 'composer-hint' }, 'Enter = senden · Shift+Enter = neue Zeile')
+          onEnter && !footerActions && React.createElement('span', { className: 'composer-hint' }, 'Enter = senden · Shift+Enter = neue Zeile'),
+          footerActions || null
         )
       );
     }
@@ -5750,7 +5801,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.23.3';
+    window.KRS_VERSION = '4.24.0';
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
     // Playwright den Klick-Handler prüfen kann, ohne wirklich zu navigieren.
     // Aus tenant.js (TENANT-SPEC.md 2.4) — leer, wenn hub.enabled:false.
@@ -7227,28 +7278,37 @@
                   React.createElement('button', { type: 'button', onClick: () => removeReplyFile(idx), 'aria-label': 'Datei entfernen', style: { position: 'absolute', top: '-6px', right: '-6px', width: '18px', height: '18px', borderRadius: '50%', background: 'var(--danger)', color: 'white', border: 'none', cursor: 'pointer', fontSize: '10px', lineHeight: '18px', textAlign: 'center', padding: 0 } }, '✕')
                 ))
               ),
-              // v4.23.0 — `flexWrap`: auf schmalen Bildschirmen rutschte die Zeile
-              // zusammen, Bueroklammer und Senden wurden gequetscht bzw. waren
-              // nicht mehr zu treffen („teilweise ist kein Dateianhang moeglich,
-              // wenn man auf einen Beitrag antwortet" — Tanja Appel, 12.09.2026).
-              // Das Textfeld bekommt eine Mindestbreite und darf umbrechen.
-              React.createElement('div', { style: { display: 'flex', gap: '8px', width: '100%', alignItems: 'flex-end', flexWrap: 'wrap' } },
-                React.createElement('div', { style: { flex: '1 1 180px', minWidth: '160px' } },
-                  React.createElement(MentionTextarea, { value: replyContent, onChange: setReplyContent, placeholder: 'Antwort schreiben...', onEnter: (html) => handleSendReply(null, html), style: { minHeight: '60px' } })
-                ),
-                React.createElement('input', { ref: replyFileRef, type: 'file', multiple: true, accept: 'image/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt', onChange: handleReplyFileSelect, style: { display: 'none' } }),
-                React.createElement('button', { type: 'button', 'data-testid': 'reply-emoji-btn', onClick: () => setShowReplyEmoji(v => !v), title: 'Emoji einfügen', 'aria-label': 'Emoji einfügen', style: { padding: '8px 10px', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', color: 'var(--text-secondary)', alignSelf: 'flex-end', minHeight: '44px', minWidth: '44px', fontSize: '16px' } }, '😊'),
-                showReplyEmoji && React.createElement(EmojiPicker, {
-                  onSelect: (e) => { setReplyContent(c => (c || '') + e); setShowReplyEmoji(false); },
-                  onClose: () => setShowReplyEmoji(false),
-                  position: { top: '50%', left: '50%' }
-                }),
-                React.createElement('button', { type: 'button', onClick: () => replyFileRef.current?.click(), title: 'Datei anhängen', 'aria-label': 'Datei anhängen', style: { padding: '8px 10px', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', color: 'var(--text-secondary)', alignSelf: 'flex-end', minHeight: '44px', minWidth: '44px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }, dangerouslySetInnerHTML: { __html: Icons.paperclip } }),
-                React.createElement('button', { type: 'submit', disabled: saving, style: { padding: '8px 16px', background: saving ? 'var(--text-muted)' : 'var(--accent)', color: 'white', border: 'none', borderRadius: 'var(--radius)', cursor: saving ? 'not-allowed' : 'pointer', alignSelf: 'flex-end', whiteSpace: 'nowrap', fontSize: '14px', minHeight: '44px', display: 'inline-flex', alignItems: 'center', gap: '6px' } },
-                  React.createElement('span', null, saving ? 'Wird gesendet...' : 'Senden'),
-                  React.createElement('span', { style: { width: '15px', height: '15px', display: 'inline-flex' }, dangerouslySetInnerHTML: { __html: Icons.send } })
+              // v4.24.0 — Antwortfeld startet einzeilig.
+              // Vorher: Formatierleiste (2 Zeilen auf dem iPhone) + 60px-Feld +
+              // Hinweiszeile + Senden-Knopf, alle per flexWrap umbrechend —
+              // zusammen ueber die Haelfte des Bildschirms, ohne Moeglichkeit,
+              // das wieder klein zu bekommen. Der Beitrag, auf den man
+              // antwortet, war dadurch kaum lesbar (Norbert, 17.09.2026).
+              // Jetzt: EIN Feld (44px, waechst mit, gedeckelt bei 32vh) und
+              // darunter EINE feste Knopfzeile — Aa (Formatierung), Emoji,
+              // Anhang links, Senden rechts. Kein Umbruch mehr, kein Raten.
+              React.createElement(MentionTextarea, {
+                value: replyContent,
+                onChange: setReplyContent,
+                placeholder: 'Antwort schreiben...',
+                onEnter: (html) => handleSendReply(null, html),
+                toolbarToggle: true,
+                style: { minHeight: '44px', maxHeight: '32vh', overflowY: 'auto' },
+                footerActions: React.createElement(React.Fragment, null,
+                  React.createElement('input', { ref: replyFileRef, type: 'file', multiple: true, accept: 'image/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt', onChange: handleReplyFileSelect, style: { display: 'none' } }),
+                  React.createElement('button', { type: 'button', 'data-testid': 'reply-emoji-btn', onClick: () => setShowReplyEmoji(v => !v), title: 'Emoji einf\u00fcgen', 'aria-label': 'Emoji einf\u00fcgen', className: 'composer-action-btn' }, '\uD83D\uDE0A'),
+                  React.createElement('button', { type: 'button', onClick: () => replyFileRef.current?.click(), title: 'Datei anh\u00e4ngen', 'aria-label': 'Datei anh\u00e4ngen', className: 'composer-action-btn', dangerouslySetInnerHTML: { __html: Icons.paperclip } }),
+                  showReplyEmoji && React.createElement(EmojiPicker, {
+                    onSelect: (em) => { setReplyContent(c => (c || '') + em); setShowReplyEmoji(false); },
+                    onClose: () => setShowReplyEmoji(false),
+                    position: { top: '50%', left: '50%' }
+                  }),
+                  React.createElement('button', { type: 'submit', disabled: saving, className: 'composer-send-btn', 'data-testid': 'reply-send-btn' },
+                    React.createElement('span', null, saving ? 'Wird gesendet...' : 'Senden'),
+                    React.createElement('span', { style: { width: '15px', height: '15px', display: 'inline-flex' }, dangerouslySetInnerHTML: { __html: Icons.send } })
+                  )
                 )
-              )
+              })
             )
           )
         )
@@ -9264,6 +9324,12 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.24.0', date: '17.09.2026', items: [
+        'Antworten lesen ist wieder möglich: das Schreibfeld startet jetzt einzeilig statt aufgeklappt — vorher belegten Formatierleiste, Feld, Hinweiszeile und Senden-Knopf mehr als die halbe Höhe des Handys, und man bekam sie nicht wieder klein',
+        'Formatierung (fett, kursiv, Farbe, Listen, Link) steckt beim Antworten hinter dem Knopf „Aa“ — einmal tippen, wenn du sie brauchst',
+        'Emoji, Anhängen und Senden stehen in EINER festen Zeile unter dem Feld statt umzubrechen; das Feld wächst beim Schreiben mit und hört bei einem Drittel der Bildschirmhöhe auf',
+        '„Dateiablage“ und „Notizen & Aufgaben“ sind aus der Connect-Leiste entfernt — beide sind Hub-Apps und stehen dort als Kachel. Connect zeigt nur noch Foren und Chats'
+      ] },
       { v: '4.23.3', date: '17.09.2026', items: [
         'Der blaue „Lernen"-Knopf ist vollständig aus der Ansicht entfernt. Der Lern-Coach bleibt bei Bedarf unter „Hilfe" erreichbar',
         'Beiträge sind auf dem iPhone deutlich ruhiger: Speichern, Weiterleiten, Anheften, Bearbeiten und Löschen stecken dort jetzt in einem gemeinsamen Mehr-Menü',
@@ -11344,7 +11410,9 @@
             // v4.10.0: Suche & Gespeichert sind in die Ansichten gewandert (🔍 neben Überschrift, 🔖 oben in der Chat-Spalte)
             // TENANT-SPEC.md Sprint-S2-Punkt 8: nur rendern, wenn links.nextcloudUrl gesetzt ist.
             // v4.18.0: Direktlink statt Modal — ein Klick öffnet die Nextcloud der Schule in neuem Tab.
-            !!NEXTCLOUD_FILES_URL && React.createElement('a', {
+            // v4.24.0: nur fuer Schulen OHNE Hub — mit Hub liegt die Dateiablage
+            // dort als Kachel (sonst steht derselbe Link doppelt in zwei Leisten).
+            !window.__KRS_HUB_ENABLED && !!NEXTCLOUD_FILES_URL && React.createElement('a', {
               className: 'nav-item',
               href: NEXTCLOUD_FILES_URL,
               target: '_blank',
@@ -11356,17 +11424,12 @@
             },
               React.createElement('span', { dangerouslySetInnerHTML: { __html: Icons.files } })
             ),
-            // TENANT-SPEC.md 2.4/Sprint-S2-Punkt 8: URL jetzt aus hub.notizenUrl (vorher inline),
-            // Button nur bei hub.enabled (das Notizen-Modul lebt im KRS-Hub).
-            window.__KRS_HUB_ENABLED && React.createElement('button', {
-              className: 'nav-item',
-              onClick: () => window.open(window.KRS_HUB_NOTIZEN_URL, '_blank', 'noopener'),
-              title: 'Notizen & Aufgaben (persönlich)',
-              'aria-label': 'Notizen & Aufgaben',
-              'data-testid': 'nav-notizen'
-            },
-              React.createElement('span', { style: { fontSize: '20px', lineHeight: 1 } }, '📝')
-            )
+            // v4.24.0 — „Notizen & Aufgaben“ und „Dateiablage“ sind hier entfernt,
+            // solange die Schule den Hub nutzt: beides sind Hub-Apps und stehen
+            // dort als Kachel. Connect zeigt nur noch, was Connect ist — Foren
+            // und Chats (Rueckmeldung Norbert, 17.09.2026: „Connect sollte
+            // aufgeraeumt sein mit maximaler Fokussierung auf Inhalte“).
+            // Schulen ohne Hub behalten den Dateiablage-Link (siehe oben).
           ),
           // #12: Großer Beta-Feedback-Button — öffnet das Feedback-Board (für alle sichtbar)
           React.createElement('button', {
