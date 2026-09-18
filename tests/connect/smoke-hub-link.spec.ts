@@ -26,11 +26,14 @@ test.describe('KRS Connect — Hub-Link', () => {
     expect(hubUrl).toBe('https://kurpfalz-realschule.github.io/krs-hub/');
   });
 
-  // v4.16.0: Im Hub-iframe eingebettet ergibt der 🏠-Button keinen Sinn
-  // (man ist ja schon im Hub). Da Playwright echtes cross-origin iframe-
-  // Embedding nicht ohne Weiteres simulieren kann, setzen wir den Test-Hook
-  // window.__krsIsEmbedded vor dem App-Start per addInitScript.
-  test('Im Hub-Embed (__krsIsEmbedded) ist der Hub-Button ausgeblendet', async ({ page }) => {
+  // v4.16.0 hatte den 🏠-Button im Hub-iframe ausgeblendet — man war ja schon
+  // im Hub und sah dessen Leiste daneben. Seit **Hub v3.20.0 / Connect v4.28.0**
+  // gilt das Gegenteil: der Hub blendet seine eigene Leiste aus, solange Connect
+  // läuft (vorher standen zwei senkrechte Leisten nebeneinander). Damit ist das
+  // Haus in Connects Leiste der sichtbare Rückweg — eingebettet schickt es
+  // `KRS_HUB_NAVIGATE` an die Hülle, statt den Hub in den iframe zu laden.
+  // Test-Hook `window.__krsIsEmbedded` wie gehabt per addInitScript.
+  test('Im Hub-Embed führt der Hub-Button per Nachricht zurück (statt zu navigieren)', async ({ page }) => {
     await page.addInitScript(() => {
       (window as any).__krsIsEmbedded = true;
       try { localStorage.setItem('krs_onboarding_done', '1'); } catch (e) {}
@@ -40,6 +43,18 @@ test.describe('KRS Connect — Hub-Link', () => {
     await page.waitForFunction(() => typeof (window as any).KRS_VERSION === 'string', null, { timeout: 10_000 });
 
     expect(await page.evaluate(() => (window as any).__krsIsEmbedded)).toBe(true);
-    await expect(page.getByTestId('nav-hub')).toHaveCount(0);
+    await expect(page.getByTestId('nav-hub')).toBeVisible({ timeout: 8_000 });
+
+    // Klick schickt eine postMessage an die Hülle und navigiert NICHT.
+    const nachricht = await page.evaluate(async () => {
+      const w = window as any;
+      const vorher = location.href;
+      return await new Promise<string>((fertig) => {
+        w.parent.postMessage = (daten: any) => fertig(JSON.stringify(daten));
+        (document.querySelector('[data-testid="nav-hub"]') as HTMLElement)?.click();
+        setTimeout(() => fertig(location.href === vorher ? 'keine Nachricht' : 'navigiert!'), 800);
+      });
+    });
+    expect(nachricht).toContain('KRS_HUB_NAVIGATE');
   });
 });

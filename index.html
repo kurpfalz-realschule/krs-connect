@@ -6001,7 +6001,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.27.0';
+    window.KRS_VERSION = '4.28.0';
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
     // Playwright den Klick-Handler prüfen kann, ohne wirklich zu navigieren.
     // Aus tenant.js (TENANT-SPEC.md 2.4) — leer, wenn hub.enabled:false.
@@ -9676,6 +9676,9 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.28.0', date: '18.09.2026', items: [
+        'Das Haus-Symbol oben in der Leiste f\u00fchrt jetzt auch aus dem Hub heraus zur\u00fcck zur App-\u00dcbersicht \u2014 n\u00f6tig, seit der Hub seine eigene Leiste ausblendet, solange Connect l\u00e4uft'
+      ] },
       { v: '4.27.0', date: '18.09.2026', items: [
         'Im \u2630-Men\u00fc steht oben \u201eApps \u2014 zur\u00fcck zum Hub\u201c. Daf\u00fcr verschwindet die Hub-Leiste am unteren Rand, solange Connect offen ist: eine Leiste weniger, mehr Platz f\u00fcr Beitr\u00e4ge'
       ] },
@@ -11881,11 +11884,16 @@
             // weil man hier die App verlässt statt ein Zusatzmodul danebenzustellen).
             // v4.16.0: Läuft Connect im Hub-iframe, ist man schon im Hub — Button ausblenden.
             // TENANT-SPEC.md Sprint-S2-Punkt 8: nur rendern wenn hub.enabled (Fremdschulen haben keinen Hub).
-            window.__KRS_HUB_ENABLED && !window.__krsIsEmbedded && React.createElement('button', {
+            // v4.28.0 — Der Haus-Knopf steht jetzt AUCH im Hub-Einbau. Grund: seit
+            // Hub v3.20.0 blendet der Hub seine eigene Leiste aus, solange Connect
+            // läuft (vorher zwei senkrechte Leisten nebeneinander). Eingebettet
+            // schickt der Knopf eine Nachricht an die Hülle statt die Seite zu
+            // wechseln — sonst lüde Connect den Hub in den iframe hinein.
+            window.__KRS_HUB_ENABLED && React.createElement('button', {
               className: 'nav-item',
-              onClick: () => { window.location.href = window.KRS_HUB_URL; },
-              title: 'Zurück zum KRS Hub',
-              'aria-label': 'Zurück zum KRS Hub',
+              onClick: () => { if (window.__krsIsEmbedded) { zurueckZumHub(); } else { window.location.href = window.KRS_HUB_URL; } },
+              title: 'Zur\u00fcck zum KRS Hub',
+              'aria-label': 'Zur\u00fcck zum KRS Hub',
               'data-testid': 'nav-hub'
             },
               React.createElement('span', { style: { fontSize: '20px', lineHeight: 1 } }, '🏠')
