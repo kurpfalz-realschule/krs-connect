@@ -8,9 +8,14 @@ test.describe('KRS Connect — Smoke: Chat & Navigation', () => {
       test.skip(true, 'Kein Chat-Button gefunden — UI-Variante');
     }
     await chatNav.click();
-    // Conversation-Liste oder leere Chat-Sektion
-    await expect(page.getByText(/Konversation|Nachricht|Chat/i).first())
-      .toBeVisible({ timeout: 4_000 });
+    // Conversation-Liste oder leere Chat-Sektion.
+    // v4.25.0: vorher wurde der erste Text-Treffer zu /Chat/ geprüft — das
+    // war seit der neuen, am Desktop ausgeblendeten Handy-Kopfzeile
+    // (<h1>Chats</h1>) ein unsichtbares Element.
+    // Beleg, dass die Chat-Ansicht wirklich steht: die Chat-Spalte mit der
+    // Konversationsliste ist sichtbar.
+    await expect(page.locator('.sidebar-content').first()).toBeVisible({ timeout: 4_000 });
+    await expect(page.getByRole('button', { name: /Neuer Chat/i }).first()).toBeVisible({ timeout: 4_000 });
   });
 
   test('Profil-Modal lässt sich öffnen', async ({ connectPage: page }) => {

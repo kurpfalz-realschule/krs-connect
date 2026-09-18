@@ -138,7 +138,10 @@ test.describe('v4.10.0 Suche & Gespeichert in den Ansichten (Demo)', () => {
     await expect(page.getByRole('heading', { name: 'Suche' }).first()).toBeVisible({ timeout: 5_000 });
   });
 
-  test('„Gespeichert & gepinnt" oben in der Chat-Spalte öffnet Saved-Ansicht', async ({ connectPage: page }) => {
+  // v4.25.0: Der Einstieg heißt jetzt „Merkliste“ — dieselbe Ansicht führt
+  // zusätzlich zu den Aufgaben (⋯-Menü am Beitrag → „Als Aufgabe merken“),
+  // nicht mehr nur zu Lesezeichen.
+  test('„Merkliste“ oben in der Chat-Spalte öffnet die Merkliste', async ({ connectPage: page }) => {
     // In die Chat-Ansicht wechseln
     await page.locator('button[aria-label="Chats"]').first().click();
     const savedBtn = page.locator('.saved-section-btn').first();
@@ -147,6 +150,6 @@ test.describe('v4.10.0 Suche & Gespeichert in den Ansichten (Demo)', () => {
     }
     await expect(savedBtn).toBeVisible({ timeout: 5_000 });
     await savedBtn.click();
-    await expect(page.getByRole('heading', { name: /Gespeicherte Nachrichten/ }).first()).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole('heading', { name: /Merkliste/ }).filter({ visible: true }).first()).toBeVisible({ timeout: 5_000 });
   });
 });

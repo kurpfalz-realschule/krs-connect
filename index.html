@@ -1206,6 +1206,38 @@
     .chat-header { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
     .chat-header-name { font-weight: 600; font-size: 16px; }
     .back-btn { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-secondary); padding: 4px; }
+    /* v4.25.0 — Kopfzeile fuer Ansichten ohne eigene Kopfzeile (Chat-Liste).
+       Auf dem Handy war die Chat-Ansicht ohne Ausweg: die Chatliste liegt als
+       Drawer ausserhalb des Bildschirms, und es gab keinen ☰-Knopf, der sie
+       oeffnet — man sah nur „Wähle einen Chat“ und kam nicht weiter. */
+    .mobile-view-header { display: none; }
+    /* ══ Merkliste (v4.25.0) ══ */
+    .merk-form { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+    .merk-form input[type="text"] { flex: 1 1 220px; min-width: 0; min-height: 44px; padding: 8px 12px; font-size: 15px; font-family: inherit; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-primary); color: var(--text-primary); }
+    .merk-form input[type="date"] { min-height: 44px; padding: 8px 10px; font-size: 14px; font-family: inherit; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-primary); color: var(--text-primary); }
+    .merk-form button { min-height: 44px; padding: 0 18px; border: none; border-radius: var(--radius); background: var(--accent); color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; }
+    .merk-form button:disabled { background: var(--text-muted); cursor: not-allowed; }
+    .merk-heading { font-size: 13px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: var(--text-muted); margin: 0 0 8px; display: flex; align-items: center; gap: 8px; }
+    .merk-count { background: var(--bg-tertiary); color: var(--text-secondary); border-radius: 10px; padding: 1px 8px; font-size: 12px; letter-spacing: 0; }
+    .merk-list { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+    .merk-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius); }
+    .merk-item.done .merk-title { text-decoration: line-through; color: var(--text-muted); }
+    .merk-check { flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0; cursor: pointer; }
+    .merk-check input[type="checkbox"] { width: 22px; height: 22px; flex: none; accent-color: var(--accent); cursor: pointer; }
+    .merk-title { font-size: 15px; color: var(--text-primary); overflow-wrap: anywhere; }
+    .merk-meta { font-size: 12px; color: var(--text-muted); }
+    .merk-due { font-size: 12px; color: var(--text-secondary); background: var(--bg-tertiary); border-radius: 10px; padding: 2px 8px; white-space: nowrap; }
+    .merk-due.overdue { background: #fef2f2; color: #7f1d1d; font-weight: 600; }
+    .merk-remove { flex: none; min-width: 40px; min-height: 40px; background: none; border: none; color: var(--text-muted); font-size: 14px; cursor: pointer; border-radius: var(--radius); }
+    .merk-remove:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+    .merk-toggle-done { background: none; border: none; color: var(--text-secondary); font-size: 13px; cursor: pointer; padding: 6px 0; min-height: 40px; }
+    .merk-empty { font-size: 14px; color: var(--text-muted); line-height: 1.6; margin: 0 0 8px; }
+    .merk-check > span.merk-title + .merk-meta { margin-left: 0; }
+    .merk-item .merk-check > span:only-child { flex: 1; }
+    /* v4.25.0 — Navigationsblock im Drawer (nur im Hub-Einbau, nur mobil):
+       ersetzt Connects eigene untere Leiste. */
+    .drawer-nav { display: none; }
+    .mobile-drawer-only { display: none; }
 
     .chat-messages { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 6px; position: relative; }
     .chat-messages.drag-active { outline: 2px dashed var(--accent); outline-offset: -8px; background: var(--accent-light); }
@@ -1375,6 +1407,49 @@
         border-radius: var(--radius);
       }
       .mobile-menu-btn:active { background: var(--bg-hover); }
+
+      /* v4.25.0 — Kopfzeile der Chat-Ansicht (☰ oeffnet die Chatliste). */
+      .mobile-view-header {
+        display: flex; align-items: center; gap: 10px;
+        order: 0; flex: 0 0 auto;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--border);
+        background: var(--bg-secondary);
+      }
+      .mobile-view-header h1 { font-size: 17px; margin: 0; line-height: 1.2; }
+      .mobile-view-header .mobile-menu-btn { display: flex !important; }
+      .mobile-view-header .spacer { flex: 1; }
+
+      /* v4.25.0 — im Hub: Connects eigene Leiste entfällt komplett. Der
+         Wechsel Foren/Chats und alles Seltene stecken im ☰-Menü, der Wechsel
+         Connect/Apps in der Hub-Leiste darunter. Standalone (ohne Hub) bleibt
+         die Leiste, sonst gaebe es dort gar keine Navigation. */
+      html.krs-embedded .sidebar { display: none; }
+      html.krs-embedded .sidebar-content,
+      html.krs-embedded .team-drawer { height: 100vh; height: 100dvh; }
+      .mobile-drawer-only { display: flex; }
+      /* Steht schon in der Handy-Kopfzeile — die zweite Überschrift direkt
+         darunter wäre dieselbe Zeile ein zweites Mal. */
+      .mobile-view-header + .content-header { display: none; }
+      /* v4.25.0: im ☰-Menü steht die Merkliste bereits — der Knopf oben in der
+         Chatspalte wäre dort der zweite gleiche Eintrag direkt untereinander. */
+      html.krs-embedded .saved-section-btn { display: none; }
+
+      .drawer-nav {
+        display: flex; flex-wrap: wrap; gap: 6px;
+        padding: 10px; border-bottom: 1px solid var(--border);
+        background: var(--bg-tertiary);
+      }
+      .drawer-nav button {
+        flex: 1 1 44%; min-height: 44px;
+        display: flex; align-items: center; justify-content: center; gap: 6px;
+        padding: 8px 10px; font-size: 14px; font-weight: 600;
+        border: 1px solid var(--border); border-radius: var(--radius);
+        background: var(--bg-secondary); color: var(--text-secondary);
+        cursor: pointer; position: relative;
+      }
+      .drawer-nav button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+      .drawer-nav button.wide { flex: 1 1 100%; justify-content: flex-start; font-weight: 500; }
     }
 
     /* Toast System */
@@ -4701,6 +4776,86 @@
         } catch (e) { console.warn('updateUserPreference error:', e); }
       }
 
+      // ── v4.25.0: Merkliste (Tabelle `tasks`) ──
+      // Hintergrund: Das eigenständige Modul „Notizen & Aufgaben“ wurde in zwei
+      // Monaten viermal benutzt (1 Notiz, 3 Aufgaben, gezählt am 17.09.2026).
+      // Nicht weil Notizen unwichtig sind, sondern weil sie am falschen Ort
+      // lagen: ein leeres Extra-Programm, das man erst aufsuchen und dann von
+      // Hand füllen muss. Jetzt entstehen Merkposten dort, wo sie im Kopf
+      // entstehen — am Beitrag. Tabelle und RLS bleiben unverändert
+      // (`auth.uid() = user_id`, eigene Zeilen); `user_id` füllt der
+      // Spalten-Default `auth.uid()`, deshalb steht es nicht im Insert.
+      async getTasks() {
+        if (this.isDemo) { this._demoTasks = this._demoTasks || []; return this._demoTasks.slice(); }
+        try {
+          const { data, error } = await this.sb.from('tasks')
+            .select('*')
+            .order('done', { ascending: true })
+            .order('due', { ascending: true, nullsFirst: false })
+            .order('created_at', { ascending: false });
+          if (error) throw error;
+          return data || [];
+        } catch (e) { console.warn('getTasks error:', e); return []; }
+      }
+
+      async addTask(title, due = null) {
+        const clean = (title || '').trim();
+        if (!clean) return null;
+        if (this.isDemo) {
+          this._demoTasks = this._demoTasks || [];
+          const t = { id: 'demo-' + Date.now(), title: clean, done: false, due: due || null, created_at: new Date().toISOString() };
+          this._demoTasks.unshift(t);
+          return t;
+        }
+        try {
+          const row = { title: clean };
+          if (due) row.due = due;
+          const { data, error } = await this.sb.from('tasks').insert(row).select('*').single();
+          if (error) throw error;
+          return data;
+        } catch (e) {
+          console.error('addTask error:', e);
+          showToast('Die Aufgabe konnte nicht gespeichert werden. Bitte noch einmal versuchen.', 'error');
+          return null;
+        }
+      }
+
+      async setTaskDone(id, done) {
+        if (this.isDemo) {
+          this._demoTasks = (this._demoTasks || []).map(t => t.id === id ? { ...t, done } : t);
+          return true;
+        }
+        try {
+          const { error } = await this.sb.from('tasks').update({ done, updated_at: new Date().toISOString() }).eq('id', id);
+          if (error) throw error;
+          return true;
+        } catch (e) { console.error('setTaskDone error:', e); showToast('Konnte nicht gespeichert werden.', 'error'); return false; }
+      }
+
+      async deleteTask(id) {
+        if (this.isDemo) {
+          this._demoTasks = (this._demoTasks || []).filter(t => t.id !== id);
+          return true;
+        }
+        try {
+          const { error } = await this.sb.from('tasks').delete().eq('id', id);
+          if (error) throw error;
+          return true;
+        } catch (e) { console.error('deleteTask error:', e); showToast('Konnte nicht gel\u00f6scht werden.', 'error'); return false; }
+      }
+
+      // Alte Notizen aus dem abgelösten Modul: nur zählen, damit die Merkliste
+      // den Hinweis auf die alte Seite genau dann zeigt, wenn dort noch etwas
+      // liegt. Kein Import, kein Löschen — die Daten bleiben unangetastet.
+      async getNotesCount() {
+        if (this.isDemo) return 0;
+        try {
+          const { count, error } = await this.sb.from('notes').select('id', { count: 'exact', head: true });
+          if (error) throw error;
+          return count || 0;
+        } catch (e) { return 0; }
+      }
+
       // ── Phase 6: Admin-Panel Methoden ──
       async getAllUsersAdmin() {
         if (this.isDemo) return MOCK_USERS;
@@ -5801,7 +5956,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.24.0';
+    window.KRS_VERSION = '4.25.0';
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
     // Playwright den Klick-Handler prüfen kann, ohne wirklich zu navigieren.
     // Aus tenant.js (TENANT-SPEC.md 2.4) — leer, wenn hub.enabled:false.
@@ -5813,6 +5968,9 @@
     // Test-Hook exponiert; ein bereits (z. B. per page.addInitScript) gesetzter
     // Wert wird respektiert, da Playwright echtes iframe-Embedding nicht ohne
     // Weiteres simulieren kann.
+    // v4.25.0: Kennzeichnung am <html>, damit CSS auf den Hub-Einbau reagieren
+    // kann (im Hub gibt es bereits eine Leiste unten — Connect braucht dort
+    // keine zweite).
     if (typeof window.__krsIsEmbedded !== 'boolean') {
       try {
         window.__krsIsEmbedded = window.self !== window.top;
@@ -5821,6 +5979,11 @@
         window.__krsIsEmbedded = true;
       }
     }
+    // v4.25.0: <html class="krs-embedded"> — daran haengt die Regel, dass Connect
+    // im Hub keine eigene untere Leiste zeigt (der Hub hat schon eine).
+    try {
+      if (window.__krsIsEmbedded) document.documentElement.classList.add('krs-embedded');
+    } catch (e) {}
     // Recovery-Fallback: Reset-Link öffnet die App mit #...type=recovery im Hash.
     // Früh (synchron) merken, bevor supabase-js den Hash beim Init bereinigt.
     try {
@@ -6653,7 +6816,148 @@
       );
     }
 
-    function PostList({ posts, setPosts, channelId, dataService, user, allUsers, onOpenThread, hasMore, onLoadMore, loadingMore, onForward, onSave, savedPosts, onDragDrop, readReceiptsEnabled }) {
+    // ══ Merkliste (v4.25.0) ══════════════════════════════════════
+    // Vorher: „Gespeicherte Nachrichten“ — eine reine Lesezeichen-Liste. Jetzt
+    // zusätzlich Aufgaben zum Abhaken, die direkt am Beitrag entstehen
+    // (⋯-Menü → „Als Aufgabe merken“) oder hier von Hand getippt werden.
+    // Damit löst die Merkliste das eigenständige Modul „Notizen & Aufgaben“ ab,
+    // das in zwei Monaten viermal benutzt wurde.
+    function MerklisteView({ tasks, tasksLoading, savedPosts, oldNotesCount, onAddTask, onToggleTask, onDeleteTask, onRemoveSaved, onOpenMenu }) {
+      const [text, setText] = useState('');
+      const [due, setDue] = useState('');
+      const [busy, setBusy] = useState(false);
+      const [showDone, setShowDone] = useState(false);
+
+      const offen = tasks.filter(t => !t.done);
+      const erledigt = tasks.filter(t => t.done);
+
+      const submit = async (ev) => {
+        ev.preventDefault();
+        const t = text.trim();
+        if (!t || busy) return;
+        setBusy(true);
+        const row = await onAddTask(t, due || null);
+        setBusy(false);
+        if (row) { setText(''); setDue(''); }
+      };
+
+      const zeile = (task) => React.createElement('li', {
+        key: task.id,
+        className: 'merk-item' + (task.done ? ' done' : ''),
+        'data-testid': 'merk-task'
+      },
+        React.createElement('label', { className: 'merk-check' },
+          React.createElement('input', {
+            type: 'checkbox',
+            checked: !!task.done,
+            onChange: () => onToggleTask(task),
+            'aria-label': task.done ? 'Wieder öffnen: ' + task.title : 'Erledigt: ' + task.title
+          }),
+          React.createElement('span', { className: 'merk-title' }, task.title)
+        ),
+        task.due && React.createElement('span', { className: 'merk-due' + (!task.done && task.due < new Date().toISOString().slice(0, 10) ? ' overdue' : '') },
+          new Date(task.due + 'T00:00:00').toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' })
+        ),
+        React.createElement('button', {
+          type: 'button',
+          className: 'merk-remove',
+          onClick: () => onDeleteTask(task),
+          title: 'Von der Merkliste nehmen',
+          'aria-label': 'Von der Merkliste nehmen: ' + task.title
+        }, '\u2715')
+      );
+
+      return React.createElement('div', { style: { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 } },
+        React.createElement('div', { className: 'mobile-view-header' },
+          React.createElement('button', {
+            className: 'mobile-menu-btn',
+            onClick: onOpenMenu,
+            'aria-label': 'Menü öffnen',
+            style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '22px', color: 'var(--text-secondary)' }
+          }, '\u2630'),
+          React.createElement('h1', null, 'Merkliste'),
+          React.createElement('span', { className: 'spacer' })
+        ),
+        React.createElement('div', { className: 'content-header' },
+          React.createElement('h1', null, '\uD83D\uDD16 Merkliste')
+        ),
+        React.createElement('div', { className: 'content-body', style: { padding: '16px', overflowY: 'auto' } },
+
+          // ── Eingabe ──
+          React.createElement('form', { className: 'merk-form', onSubmit: submit },
+            React.createElement('input', {
+              type: 'text', value: text, onChange: e => setText(e.target.value),
+              placeholder: 'Was willst du nicht vergessen?',
+              'aria-label': 'Neuer Merkposten',
+              'data-testid': 'merk-input',
+              maxLength: 200
+            }),
+            React.createElement('input', {
+              type: 'date', value: due, onChange: e => setDue(e.target.value),
+              'aria-label': 'Termin (optional)', title: 'Termin (optional)',
+              'data-testid': 'merk-due'
+            }),
+            React.createElement('button', { type: 'submit', disabled: busy || !text.trim(), 'data-testid': 'merk-add' }, busy ? '…' : 'Hinzufügen')
+          ),
+
+          // ── Offene Aufgaben ──
+          React.createElement('h2', { className: 'merk-heading' }, 'Zu erledigen',
+            React.createElement('span', { className: 'merk-count' }, offen.length)
+          ),
+          tasksLoading && tasks.length === 0
+            ? React.createElement('p', { className: 'merk-empty' }, 'Wird geladen …')
+            : offen.length === 0
+              ? React.createElement('p', { className: 'merk-empty' }, 'Nichts offen. Merkposten entstehen am schnellsten über das ⋯-Menü eines Beitrags → „Als Aufgabe merken“.')
+              : React.createElement('ul', { className: 'merk-list' }, offen.map(zeile)),
+
+          // ── Erledigtes (eingeklappt) ──
+          erledigt.length > 0 && React.createElement(React.Fragment, null,
+            React.createElement('button', {
+              type: 'button', className: 'merk-toggle-done',
+              onClick: () => setShowDone(v => !v),
+              'aria-expanded': showDone,
+              'data-testid': 'merk-toggle-done'
+            }, (showDone ? '\u25BE' : '\u25B8') + ' Erledigt (' + erledigt.length + ')'),
+            showDone && React.createElement('ul', { className: 'merk-list' }, erledigt.map(zeile))
+          ),
+
+          // ── Gespeicherte Beiträge ──
+          React.createElement('h2', { className: 'merk-heading', style: { marginTop: '24px' } }, 'Gespeicherte Beiträge',
+            React.createElement('span', { className: 'merk-count' }, savedPosts.length)
+          ),
+          savedPosts.length === 0
+            ? React.createElement('p', { className: 'merk-empty' }, 'Noch nichts gespeichert. Das Lesezeichen \uD83D\uDD17 an einem Beitrag legt ihn hier ab.')
+            : React.createElement('ul', { className: 'merk-list' },
+                savedPosts.map((sp, idx) => React.createElement('li', { key: sp.id || idx, className: 'merk-item', 'data-testid': 'merk-saved' },
+                  React.createElement('div', { className: 'merk-check' },
+                    React.createElement('span', { className: 'merk-title' }, sp.title || '(Kein Titel)'),
+                    React.createElement('span', { className: 'merk-meta' },
+                      (sp.channel ? '# ' + sp.channel : '') + (sp.savedAt ? ' · ' + new Date(sp.savedAt).toLocaleDateString('de-DE') : '')
+                    )
+                  ),
+                  React.createElement('button', {
+                    type: 'button', className: 'merk-remove',
+                    onClick: () => onRemoveSaved(sp),
+                    title: 'Lesezeichen entfernen',
+                    'aria-label': 'Lesezeichen entfernen'
+                  }, '\u2715')
+                ))
+              ),
+
+          // ── Hinweis auf die alte Notizen-Seite (nur wenn dort etwas liegt) ──
+          oldNotesCount > 0 && window.KRS_HUB_NOTIZEN_URL && React.createElement('p', { className: 'merk-empty', style: { marginTop: '20px' } },
+            'Aus dem früheren Modul „Notizen & Aufgaben“ ',
+            React.createElement('a', {
+              href: window.KRS_HUB_NOTIZEN_URL, target: '_blank', rel: 'noopener noreferrer',
+              'data-testid': 'merk-old-notes'
+            }, 'liegen dort noch ' + oldNotesCount + (oldNotesCount === 1 ? ' Notiz' : ' Notizen')),
+            '. Die Seite bleibt erreichbar, neue Merkposten gehören hierher.'
+          )
+        )
+      );
+    }
+
+    function PostList({ posts, setPosts, channelId, dataService, user, allUsers, onOpenThread, hasMore, onLoadMore, loadingMore, onForward, onSave, onTask, savedPosts, onDragDrop, readReceiptsEnabled }) {
       const [newPostTitle, setNewPostTitle] = useState('');
       const [newPostContent, setNewPostContent] = useState('');
       const [showPostEmoji, setShowPostEmoji] = useState(false);
@@ -7088,7 +7392,8 @@
               !isEditing && React.createElement(React.Fragment, null,
               React.createElement('div', { className: 'post-actions-inline' },
                 // Lesezeichen
-                onSave && React.createElement('button', { className: 'post-action-btn', onClick: () => onSave(post), title: isSaved ? 'Lesezeichen entfernen' : 'Nachricht speichern', 'aria-label': isSaved ? 'Lesezeichen entfernen' : 'Nachricht speichern', style: { color: isSaved ? 'var(--accent)' : 'var(--text-muted)' } }, isSaved ? '🔖' : '🔗'),
+                onSave && React.createElement('button', { className: 'post-action-btn', onClick: () => onSave(post), title: isSaved ? 'Lesezeichen entfernen' : 'Nachricht speichern', 'aria-label': isSaved ? 'Lesezeichen entfernen' : 'Nachricht speichern', style: { color: isSaved ? 'var(--accent)' : 'var(--text-muted)' } }, isSaved ? '\uD83D\uDD16' : '\uD83D\uDD17'),
+                onTask && React.createElement('button', { className: 'post-action-btn', 'data-testid': 'post-task-btn-inline', onClick: () => onTask(post), title: 'Als Aufgabe merken', 'aria-label': 'Als Aufgabe merken' }, '\u2705'),
                 // Weiterleiten
                 onForward && React.createElement('button', { className: 'post-action-btn', onClick: () => onForward(post), title: 'Weiterleiten', 'aria-label': 'Nachricht weiterleiten' }, '↪'),
                 // Pin: Admin oder Autor darf pinnen
@@ -7106,7 +7411,9 @@
                   'aria-expanded': openPostMenu === post.id ? 'true' : 'false'
                 }, '•••'),
                 openPostMenu === post.id && React.createElement('div', { className: 'post-actions-popover', role: 'menu', 'aria-label': 'Beitragsaktionen' },
-                  onSave && React.createElement('button', { role: 'menuitem', onClick: () => { setOpenPostMenu(null); onSave(post); } }, React.createElement('span', null, isSaved ? '🔖' : '🔗'), isSaved ? 'Lesezeichen entfernen' : 'Speichern'),
+                  onSave && React.createElement('button', { role: 'menuitem', onClick: () => { setOpenPostMenu(null); onSave(post); } }, React.createElement('span', null, isSaved ? '\uD83D\uDD16' : '\uD83D\uDD17'), isSaved ? 'Lesezeichen entfernen' : 'Speichern'),
+                  // v4.25.0 — macht aus einem Beitrag einen Merkposten mit Häkchen.
+                  onTask && React.createElement('button', { role: 'menuitem', 'data-testid': 'post-task-btn', onClick: () => { setOpenPostMenu(null); onTask(post); } }, React.createElement('span', null, '\u2705'), 'Als Aufgabe merken'),
                   onForward && React.createElement('button', { role: 'menuitem', onClick: () => { setOpenPostMenu(null); onForward(post); } }, React.createElement('span', null, '↪'), 'Weiterleiten'),
                   canPin && React.createElement('button', { role: 'menuitem', onClick: () => { setOpenPostMenu(null); handleTogglePin(post); } }, React.createElement('span', null, '📌'), post.is_pinned ? 'Loslösen' : 'Anheften'),
                   isOwner && React.createElement('button', { role: 'menuitem', onClick: () => { setOpenPostMenu(null); handleEditPost(post); } }, React.createElement('span', null, '✏️'), 'Bearbeiten'),
@@ -9324,6 +9631,12 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.25.0', date: '17.09.2026', items: [
+        'Chats waren auf dem Handy nicht bedienbar: es stand nur \u201eW\u00e4hle einen Chat\u201c da, und die Chatliste lie\u00df sich nicht \u00f6ffnen. Jetzt gibt es oben einen \u2630-Knopf',
+        'Im KRS Hub zeigt Connect keine eigene Leiste mehr \u2014 unten steht nur noch die Hub-Leiste mit \u201eConnect\u201c und \u201eApps\u201c. Foren, Chats, Merkliste, Einstellungen und Profil stecken im \u2630-Men\u00fc',
+        'Neu: die Merkliste. \u00dcber das \u22ef-Men\u00fc eines Beitrags \u2192 \u201eAls Aufgabe merken\u201c wird daraus ein Punkt zum Abhaken, mit optionalem Termin. Eigene Punkte lassen sich dort auch direkt eintippen',
+        '\u201eGespeicherte Nachrichten\u201c hei\u00dfen jetzt Merkliste und stehen in derselben Ansicht wie die Aufgaben'
+      ] },
       { v: '4.24.0', date: '17.09.2026', items: [
         'Antworten lesen ist wieder möglich: das Schreibfeld startet jetzt einzeilig statt aufgeklappt — vorher belegten Formatierleiste, Feld, Hinweiszeile und Senden-Knopf mehr als die halbe Höhe des Handys, und man bekam sie nicht wieder klein',
         'Formatierung (fett, kursiv, Farbe, Listen, Link) steckt beim Antworten hinter dem Knopf „Aa“ — einmal tippen, wenn du sie brauchst',
@@ -9870,6 +10183,10 @@
       const [isDemo, setIsDemo] = useState(true);
       const [user, setUser] = useState(null);
       const [view, setView] = useState('teams');
+      // v4.25.0 — Merkliste (Aufgaben aus der Tabelle `tasks`)
+      const [tasks, setTasks] = useState([]);
+      const [tasksLoading, setTasksLoading] = useState(false);
+      const [oldNotesCount, setOldNotesCount] = useState(0);
       const [allUsers, setAllUsers] = useState([]);
       const [loadingUsers, setLoadingUsers] = useState(false);
       const [loadingMore, setLoadingMore] = useState(false);
@@ -10063,10 +10380,66 @@
           if (user?.id && dataService && !dataService.isDemo) {
             dataService.updateUserPreference(user.id, 'saved_posts', next);
           }
-          showToast(exists ? 'Lesezeichen entfernt' : 'Nachricht gespeichert 🔖', 'success');
+          showToast(exists ? 'Lesezeichen entfernt' : 'Nachricht gespeichert \uD83D\uDD16', 'success');
           return next;
         });
       }, [selectedChannel, user, dataService]);
+
+      // v4.25.0: Ansichtswechsel schliesst immer das ☰-Menü. Sonst blieb der
+      // graue Schleier über der neuen Ansicht liegen und man musste ihn erst
+      // wegtippen, bevor ein Beitrag reagierte.
+      useEffect(() => { setMobileSidebarOpen(false); }, [view]);
+
+      // ── v4.25.0: Merkliste ──
+      const reloadTasks = useCallback(async () => {
+        if (!dataService) return;
+        setTasksLoading(true);
+        try {
+          const rows = await dataService.getTasks();
+          setTasks(rows);
+        } finally { setTasksLoading(false); }
+      }, [dataService]);
+
+      // Beim Öffnen der Merkliste laden — nicht beim App-Start: wer sie nie
+      // öffnet, soll dafür auch keine Abfrage auslösen (die Datenbank läuft auf
+      // dem Free-Plan, siehe HANDOVER Abschnitt 0P).
+      useEffect(() => {
+        if (view !== 'saved' || !dataService) return;
+        reloadTasks();
+        dataService.getNotesCount().then(setOldNotesCount).catch(() => {});
+      }, [view, dataService, reloadTasks]);
+
+      const handleAddTask = useCallback(async (title, due) => {
+        const row = await dataService.addTask(title, due);
+        if (row) {
+          setTasks(prev => [row, ...prev]);
+          showToast('Auf die Merkliste gesetzt', 'success');
+        }
+        return row;
+      }, [dataService]);
+
+      const handleToggleTask = useCallback(async (task) => {
+        const next = !task.done;
+        setTasks(prev => prev.map(t => t.id === task.id ? { ...t, done: next } : t));
+        const ok = await dataService.setTaskDone(task.id, next);
+        if (!ok) setTasks(prev => prev.map(t => t.id === task.id ? { ...t, done: task.done } : t));
+      }, [dataService]);
+
+      const handleDeleteTask = useCallback(async (task) => {
+        const before = tasks;
+        setTasks(prev => prev.filter(t => t.id !== task.id));
+        const ok = await dataService.deleteTask(task.id);
+        if (!ok) setTasks(before);
+      }, [dataService, tasks]);
+
+      // „Als Aufgabe merken“ am Beitrag: Titel des Beitrags (oder die ersten
+      // 60 Zeichen) plus Kanalname, damit man später weiß, worum es ging.
+      const handleTaskFromPost = useCallback(async (post) => {
+        const raw = (post.title || htmlToText(post.content) || '').trim();
+        const kurz = raw.length > 70 ? raw.slice(0, 70).trimEnd() + '\u2026' : raw;
+        const kanal = selectedChannel?.name ? ' (# ' + selectedChannel.name + ')' : '';
+        await handleAddTask((kurz || 'Beitrag') + kanal, null);
+      }, [handleAddTask, selectedChannel]);
 
       // (loadingUsers, postsLoading, hasMore*, loadingMore, mobileSidebarOpen,
       //  showCreateTeam, showTeamMembers, userTeamRole — jetzt oben in App oder in Custom Hooks)
@@ -10969,10 +11342,53 @@
         return React.createElement(UserSelection, { users: allUsers.length > 0 ? allUsers : MOCK_USERS, onUserSelected: handleUserSelected, loading: loadingUsers });
       }
 
+      // v4.25.0 — Navigationsblock im ☰-Menü (nur mobil, nur im Hub-Einbau).
+      // Ersetzt Connects eigene untere Leiste: der Wechsel Foren/Chats steht
+      // oben, alles Seltene (Merkliste, Einstellungen, Profil, Admin) darunter.
+      // Damit bleibt auf dem Handy genau EINE Leiste im Bild — die des Hubs
+      // mit „Connect“ und „Apps“ (Rückmeldung Norbert, 17.09.2026).
+      const drawerNav = window.__krsIsEmbedded ? React.createElement('div', { className: 'drawer-nav', role: 'navigation', 'aria-label': 'Bereich wechseln' },
+        React.createElement('button', {
+          className: view === 'teams' ? 'active' : '',
+          'data-testid': 'drawer-nav-teams',
+          'aria-current': view === 'teams' ? 'page' : undefined,
+          onClick: () => { setView('teams'); setMobileSidebarOpen(false); }
+        }, '\uD83D\uDCCB', ' Foren'),
+        React.createElement('button', {
+          className: view === 'chat' ? 'active' : '',
+          'data-testid': 'drawer-nav-chat',
+          'aria-current': view === 'chat' ? 'page' : undefined,
+          onClick: () => { setView('chat'); setMobileSidebarOpen(false); }
+        }, '\uD83D\uDCAC', ' Chats',
+          unreadChatCount > 0 && React.createElement('span', { className: 'nav-badge' }, unreadChatCount > 9 ? '9+' : unreadChatCount)
+        ),
+        React.createElement('button', {
+          className: 'wide' + (view === 'saved' ? ' active' : ''),
+          'data-testid': 'drawer-nav-merkliste',
+          onClick: () => { setView('saved'); setMobileSidebarOpen(false); }
+        }, '\uD83D\uDD16', ' Merkliste'),
+        React.createElement('button', {
+          className: 'wide',
+          'data-testid': 'drawer-nav-settings',
+          onClick: () => { setMobileSidebarOpen(false); openModal('settings'); }
+        }, '\u2699\uFE0F', ' Einstellungen'),
+        React.createElement('button', {
+          className: 'wide',
+          'data-testid': 'drawer-nav-profile',
+          onClick: () => { setMobileSidebarOpen(false); setShowProfile(true); }
+        }, '\uD83D\uDC64', ' Profil'),
+        isAdminRole(user) && React.createElement('button', {
+          className: 'wide',
+          'data-testid': 'drawer-nav-admin',
+          onClick: () => { setMobileSidebarOpen(false); setShowAdmin(true); }
+        }, '\uD83D\uDEE0\uFE0F', ' Administration')
+      ) : null;
+
       // === TEAMS VIEW ===
       const teamsView = React.createElement(React.Fragment, null,
         mobileSidebarOpen && React.createElement('div', { className: 'mobile-overlay visible', onClick: () => setMobileSidebarOpen(false) }),
         React.createElement('div', { className: 'team-drawer' + (mobileSidebarOpen ? ' mobile-open' : '') },
+          drawerNav,
         React.createElement('div', { className: 'sidebar-content sidebar-teams' },
           React.createElement('div', { className: 'sidebar-header', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
             React.createElement('h2', null, 'Teams'),
@@ -11205,7 +11621,7 @@
             React.createElement('div', { className: 'content-body' },
               postsLoading
                 ? React.createElement(SkeletonPosts, { count: 4 })
-                : React.createElement(PostList, { posts, setPosts, channelId: selectedChannel?.id, dataService, user, allUsers, onOpenThread: setOpenThread, hasMore: hasMorePosts, onLoadMore: loadMorePosts, loadingMore, onForward: setShowForwardModal, onSave: toggleSavePost, savedPosts, readReceiptsEnabled })
+                : React.createElement(PostList, { posts, setPosts, channelId: selectedChannel?.id, dataService, user, allUsers, onOpenThread: setOpenThread, hasMore: hasMorePosts, onLoadMore: loadMorePosts, loadingMore, onForward: setShowForwardModal, onSave: toggleSavePost, onTask: handleTaskFromPost, savedPosts, readReceiptsEnabled })
             )
           )
         )
@@ -11214,15 +11630,30 @@
       // === CHAT VIEW ===
       const chatView = React.createElement(React.Fragment, null,
         mobileSidebarOpen && React.createElement('div', { className: 'mobile-overlay visible', onClick: () => setMobileSidebarOpen(false) }),
+        // v4.25.0 — Kopfzeile nur mobil: ohne sie war die Chatliste auf dem Handy
+        // unerreichbar (Drawer ausserhalb des Bildschirms, kein ☰-Knopf) — man sah
+        // dauerhaft „Wähle einen Chat“ und kam nicht weiter.
+        React.createElement('div', { className: 'mobile-view-header' },
+          React.createElement('button', {
+            className: 'mobile-menu-btn',
+            onClick: () => setMobileSidebarOpen(true),
+            'data-testid': 'chat-open-list',
+            'aria-label': 'Chatliste öffnen',
+            style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '22px', color: 'var(--text-secondary)' }
+          }, '\u2630'),
+          React.createElement('h1', null, selectedConversation ? ((selectedConversation.name || (selectedConversation.user || {}).display_name) || 'Chat') : 'Chats'),
+          React.createElement('span', { className: 'spacer' })
+        ),
         React.createElement('div', { className: 'sidebar-content' + (mobileSidebarOpen ? ' mobile-open' : ''), style: { borderRight: '1px solid var(--border)' } },
+          drawerNav,
           // v4.10.0: Gespeichert & gepinnt — eigener Abschnitt oben in der Chat-Spalte
           React.createElement('button', {
             className: 'saved-section-btn',
             onClick: () => setView('saved'),
-            title: 'Gespeicherte & gepinnte Nachrichten',
-            'aria-label': 'Gespeicherte Nachrichten öffnen'
+            title: 'Merkliste: Aufgaben und gespeicherte Beiträge',
+            'aria-label': 'Merkliste öffnen'
           },
-            React.createElement('span', null, '🔖 Gespeichert & gepinnt'),
+            React.createElement('span', null, '\uD83D\uDD16 Merkliste'),
             savedPosts.length > 0 && React.createElement('span', { className: 'saved-section-count' }, savedPosts.length)
           ),
           React.createElement(ConversationList, {
@@ -11407,6 +11838,19 @@
               React.createElement('span', { dangerouslySetInnerHTML: { __html: Icons.chat } }),
               unreadChatCount > 0 && React.createElement('span', { className: 'nav-badge' }, unreadChatCount > 9 ? '9+' : unreadChatCount)
             ),
+            // v4.25.0 — Merkliste: Aufgaben + gespeicherte Beiträge. Steht hier,
+            // weil sie Connect-Inhalt ist (keine Hub-App): was man sich merkt,
+            // entsteht beim Lesen der Beiträge.
+            React.createElement('button', {
+              className: 'nav-item' + (view === 'saved' ? ' active' : ''),
+              onClick: () => setView('saved'),
+              title: 'Merkliste',
+              'aria-label': 'Merkliste',
+              'data-testid': 'nav-merkliste',
+              'aria-current': view === 'saved' ? 'page' : undefined
+            },
+              React.createElement('span', { style: { fontSize: '18px', lineHeight: 1 } }, '\uD83D\uDD16')
+            ),
             // v4.10.0: Suche & Gespeichert sind in die Ansichten gewandert (🔍 neben Überschrift, 🔖 oben in der Chat-Spalte)
             // TENANT-SPEC.md Sprint-S2-Punkt 8: nur rendern, wenn links.nextcloudUrl gesetzt ist.
             // v4.18.0: Direktlink statt Modal — ein Klick öffnet die Nextcloud der Schule in neuem Tab.
@@ -11501,36 +11945,25 @@
         ),
           // Profile Panel
           showProfile && user && React.createElement(ProfileModal, { user, onClose: () => setShowProfile(false), onAvatarUpload: handleAvatarUpload, onLogout: () => { setShowProfile(false); handleLogout(); } }),
+        // v4.25.0 — Merkliste und Suche haben keine eigene Spalte. Ohne diesen
+        // Mini-Drawer würde das ☰ dort ins Leere greifen und man käme im
+        // Hub-Einbau (ohne Connect-Leiste) nicht mehr heraus.
+        drawerNav && view !== 'teams' && view !== 'chat' && React.createElement(React.Fragment, null,
+          mobileSidebarOpen && React.createElement('div', { className: 'mobile-overlay visible', onClick: () => setMobileSidebarOpen(false) }),
+          React.createElement('div', { className: 'sidebar-content mobile-drawer-only' + (mobileSidebarOpen ? ' mobile-open' : '') }, drawerNav)
+        ),
         // Main content: Teams oder Chat
         React.createElement('main', { id: 'main', className: 'main', tabIndex: -1 },
           view === 'teams' ? React.createElement(ErrorBoundary, { fallbackMessage: 'Der Teams-Bereich hatte einen Fehler.' }, teamsView)
             : view === 'chat' ? React.createElement(ErrorBoundary, { fallbackMessage: 'Der Chat-Bereich hatte einen Fehler.' }, chatView)
-            : view === 'saved' ? React.createElement('div', { style: { flex: 1, display: 'flex', flexDirection: 'column' } },
-                React.createElement('div', { className: 'content-header' },
-                  React.createElement('h1', null, '🔖 Gespeicherte Nachrichten')
-                ),
-                React.createElement('div', { className: 'content-body', style: { padding: '16px' } },
-                  savedPosts.length === 0
-                    ? React.createElement('div', { style: { textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' } },
-                        React.createElement('div', { style: { fontSize: '48px', marginBottom: '12px' } }, '🔖'),
-                        React.createElement('p', { style: { fontSize: '15px' } }, 'Noch keine Nachrichten gespeichert.'),
-                        React.createElement('p', { style: { fontSize: '13px', marginTop: '8px' } }, 'Klicke auf 🔗 bei einem Beitrag, um ihn hier zu speichern.')
-                      )
-                    : savedPosts.map((sp, idx) =>
-                        React.createElement('div', { key: sp.id || idx, style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', marginBottom: '8px' } },
-                          React.createElement('div', null,
-                            React.createElement('div', { style: { fontSize: '14px', fontWeight: '500', color: 'var(--text-primary)' } }, sp.title || '(Kein Titel)'),
-                            React.createElement('div', { style: { fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' } }, (sp.channel ? '# ' + sp.channel : '') + (sp.savedAt ? ' · ' + new Date(sp.savedAt).toLocaleDateString('de-DE') : ''))
-                          ),
-                          React.createElement('button', {
-                            onClick: () => toggleSavePost(sp),
-                            title: 'Entfernen',
-                            style: { background: 'none', border: 'none', cursor: 'pointer', padding: '8px', color: 'var(--text-muted)', fontSize: '14px' }
-                          }, '✕')
-                        )
-                      )
-                )
-              )
+            : view === 'saved' ? React.createElement(MerklisteView, {
+                tasks, tasksLoading, savedPosts, oldNotesCount,
+                onAddTask: handleAddTask,
+                onToggleTask: handleToggleTask,
+                onDeleteTask: handleDeleteTask,
+                onRemoveSaved: toggleSavePost,
+                onOpenMenu: () => setMobileSidebarOpen(true)
+              })
             : React.createElement(SearchView, { dataService, user, allUsers, teams })
         ),
         // Thread overlay (nur in Teams-View)
