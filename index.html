@@ -6001,7 +6001,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.26.0';
+    window.KRS_VERSION = '4.27.0';
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
     // Playwright den Klick-Handler prüfen kann, ohne wirklich zu navigieren.
     // Aus tenant.js (TENANT-SPEC.md 2.4) — leer, wenn hub.enabled:false.
@@ -9676,6 +9676,9 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.27.0', date: '18.09.2026', items: [
+        'Im \u2630-Men\u00fc steht oben \u201eApps \u2014 zur\u00fcck zum Hub\u201c. Daf\u00fcr verschwindet die Hub-Leiste am unteren Rand, solange Connect offen ist: eine Leiste weniger, mehr Platz f\u00fcr Beitr\u00e4ge'
+      ] },
       { v: '4.26.0', date: '18.09.2026', items: [
         'iPad hochkant: Teams und Kan\u00e4le stecken jetzt im \u2630-Men\u00fc statt in zwei Dauerspalten \u2014 vorher blieben von 834 Pixeln nur 404 f\u00fcr den eigentlichen Inhalt, jetzt die volle Breite',
         'Alle Kn\u00f6pfe sind auf Tablets mindestens 44 Pixel gro\u00df (vorher teils 32\u201336) \u2014 Zahnrad, Profil, \u201e+\u201c und Hilfe lie\u00dfen sich mit dem Finger schlecht treffen',
@@ -11398,7 +11401,25 @@
       // oben, alles Seltene (Merkliste, Einstellungen, Profil, Admin) darunter.
       // Damit bleibt auf dem Handy genau EINE Leiste im Bild — die des Hubs
       // mit „Connect“ und „Apps“ (Rückmeldung Norbert, 17.09.2026).
+      // v4.27.0 — Zurück zum Hub: dessen untere Leiste blendet sich aus, solange
+      // Connect offen ist (Hub v3.19.0, spart auf dem Handy 56 px). Der Weg zurück
+      // läuft über eine Nachricht an die Hülle — Ziel-Origin aus KRS_HUB_URL,
+      // nicht '*', damit die Nachricht nicht an beliebige Fenster geht.
+      const zurueckZumHub = () => {
+        try {
+          const ziel = window.KRS_HUB_URL ? new URL(window.KRS_HUB_URL, window.location.href).origin : window.location.origin;
+          window.parent.postMessage({ type: 'KRS_HUB_NAVIGATE', moduleId: null }, ziel);
+        } catch (e) {
+          try { window.parent.postMessage({ type: 'KRS_HUB_NAVIGATE', moduleId: null }, window.location.origin); } catch (err) {}
+        }
+      };
+
       const drawerNav = window.__krsIsEmbedded ? React.createElement('div', { className: 'drawer-nav', role: 'navigation', 'aria-label': 'Bereich wechseln' },
+        React.createElement('button', {
+          className: 'wide',
+          'data-testid': 'drawer-nav-apps',
+          onClick: () => { setMobileSidebarOpen(false); zurueckZumHub(); }
+        }, '\u25A6', ' Apps — zur\u00fcck zum Hub'),
         React.createElement('button', {
           className: view === 'teams' ? 'active' : '',
           'data-testid': 'drawer-nav-teams',
