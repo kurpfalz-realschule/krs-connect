@@ -3402,11 +3402,13 @@
           return null;
         }
 
-        // Compress images before upload
-        if (file.type.startsWith('image/')) {
-          file = await compressImage(file);
-        }
+        window.__krsActiveUploads = (window.__krsActiveUploads || 0) + 1;
         try {
+          // Komprimierung gehört bereits zum laufenden Upload: währenddessen darf
+          // ein Hintergrund-Update den Entwurf nicht durch Reload verlieren.
+          if (file.type.startsWith('image/')) {
+            file = await compressImage(file);
+          }
           // Storage-Quota-Check (Free Tier: 1 GB)
           try {
             const { data: storageFiles } = await this.sb.storage.from('images').list('uploads', { limit: 1000 });
@@ -3450,6 +3452,8 @@
           }
           showToast(msg, 'error');
           return null;
+        } finally {
+          window.__krsActiveUploads = Math.max(0, (window.__krsActiveUploads || 1) - 1);
         }
       }
 
@@ -5043,24 +5047,74 @@
         if (window.__KRS_FORCE_DEMO) return; // im Test-/Demo-Modus nicht pollen
         const current = window.KRS_VERSION;
         let stopped = false;
-        const check = async () => {
+        let hiddenAt = null;
+        const hasUnsavedWork = () => {
+          const hasText = Array.from(document.querySelectorAll('input, textarea, [contenteditable]')).some((el) => {
+            if (el.matches('[contenteditable]')) return (el.textContent || '').trim().length > 0;
+            const type = (el.getAttribute('type') || 'text').toLowerCase();
+            if (['button', 'submit', 'reset', 'checkbox', 'radio', 'hidden', 'range', 'color'].includes(type)) return false;
+            return String(el.value || '').trim().length > 0;
+          });
+          const hasOpenDialog = Array.from(document.querySelectorAll('dialog[open], [role="dialog"], [aria-modal="true"], .modal-overlay, .feedback-overlay')).some((el) => {
+            if (el.matches('.krsc-panel:not(.krsc-open)')) return false;
+            if (el.hidden || el.getAttribute('aria-hidden') === 'true') return false;
+            const style = getComputedStyle(el);
+            return style.display !== 'none' && style.visibility !== 'hidden';
+          });
+          const hasUpload = (window.__krsActiveUploads || 0) > 0 || !!document.querySelector('[data-uploading="true"], .upload-progress');
+          return hasText || hasOpenDialog || hasUpload;
+        };
+        const check = async ({ allowAutoReload = false } = {}) => {
           try {
             const res = await fetch('index.html?_=' + Date.now(), { cache: 'no-store' });
             if (!res.ok) return;
             const txt = await res.text();
             const m = txt.match(/KRS_VERSION\s*=\s*'([^']+)'/);
             const remote = m && m[1];
-            if (!stopped && remote && remote !== current) setNewVersion(remote);
+            if (stopped || !remote) return;
+            if (remote === current) {
+              try { sessionStorage.removeItem('krs_autoreload_for'); } catch (e) {}
+              setNewVersion(null);
+              return;
+            }
+            if (allowAutoReload && !hasUnsavedWork()) {
+              let alreadyTried = false;
+              try { alreadyTried = sessionStorage.getItem('krs_autoreload_for') === remote; } catch (e) {}
+              if (!alreadyTried) {
+                try { sessionStorage.setItem('krs_autoreload_for', remote); } catch (e) {}
+                location.reload();
+                return;
+              }
+            }
+            setDismissed(false);
+            setNewVersion(remote);
           } catch (e) { /* offline / CDN — still ignorieren */ }
         };
         check();
         const id = setInterval(check, 5 * 60 * 1000); // alle 5 Minuten
         const onFocus = () => check();
+        const onVisibility = () => {
+          if (document.visibilityState === 'hidden') {
+            hiddenAt = Date.now();
+            return;
+          }
+          if (document.visibilityState === 'visible') {
+            const backgroundMs = hiddenAt == null ? 0 : Date.now() - hiddenAt;
+            hiddenAt = null;
+            check({ allowAutoReload: backgroundMs >= 60 * 1000 });
+          }
+        };
         window.addEventListener('focus', onFocus);
-        return () => { stopped = true; clearInterval(id); window.removeEventListener('focus', onFocus); };
+        document.addEventListener('visibilitychange', onVisibility);
+        return () => {
+          stopped = true;
+          clearInterval(id);
+          window.removeEventListener('focus', onFocus);
+          document.removeEventListener('visibilitychange', onVisibility);
+        };
       }, []);
       if (!newVersion || dismissed) return null;
-      return React.createElement('div', { className: 'update-banner', role: 'alert' },
+      return React.createElement('div', { className: 'update-banner', role: 'alert', 'data-testid': 'update-banner' },
         React.createElement('span', null, '🔄 Neue Version ' + newVersion + ' verfügbar — du nutzt v' + window.KRS_VERSION + '.'),
         React.createElement('button', { onClick: () => location.reload() }, 'Jetzt aktualisieren'),
         React.createElement('button', { className: 'later', onClick: () => setDismissed(true) }, 'Später')
@@ -6028,7 +6082,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.29.0';
+    window.KRS_VERSION = '4.30.0';
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
     // Playwright den Klick-Handler prüfen kann, ohne wirklich zu navigieren.
     // Aus tenant.js (TENANT-SPEC.md 2.4) — leer, wenn hub.enabled:false.
@@ -6445,7 +6499,11 @@
         React.createElement('p', {
           id: 'login-error', role: 'alert', 'aria-live': 'assertive',
           style: { color: 'var(--danger)', marginTop: error ? '10px' : 0, fontSize: '13px', maxWidth: '320px', textAlign: 'center', minHeight: 0 }
-        }, error || '')
+        }, error || ''),
+        React.createElement('div', {
+          'data-testid': 'version-badge',
+          style: { marginTop: '14px', color: 'var(--text-muted)', fontSize: '11px', textAlign: 'center' }
+        }, 'v' + window.KRS_VERSION)
       );
     }
 
@@ -9703,6 +9761,11 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.30.0', date: '21.09.2026', items: [
+        'Nach mindestens einer Minute im Hintergrund lädt Connect eine inzwischen veröffentlichte Version beim Zurückkehren automatisch — ohne zusätzlichen Tipp',
+        'Offene Texte, Dialoge und laufende Uploads bleiben geschützt: Dann erscheint weiterhin nur der bekannte Update-Hinweis',
+        'Die Versionsnummer steht jetzt schon auf dem Anmeldebildschirm'
+      ] },
       { v: '4.29.0', date: '21.09.2026', items: [
         'Auf dem iPhone sprang die Ansicht nicht mehr von selbst zur Seite: Eingabefelder haben jetzt \u00fcberall 16\u00a0px Schrift, deshalb zoomt iOS beim Antippen nicht mehr hinein \u2014 die R\u00e4nder bleiben, wo sie hingeh\u00f6ren',
         'Im \u2630-Schubfach klappen die Kan\u00e4le jetzt direkt unter ihrem Team auf (\u25b8/\u25be) \u2014 vorher standen sie als eigener Block ganz unten und waren ohne Scrollen nicht zu sehen'
@@ -12143,7 +12206,6 @@
             : p));
         } }),
         // Feedback Modal
-        React.createElement(UpdateBanner, null),
         topModal === 'feedback' && React.createElement(FeedbackModal, { user, dataService, onClose: backModal, canGoBack, onOpenBoard: () => openModal('feedbackBoard') }),
         topModal === 'feedbackBoard' && React.createElement(FeedbackBoardModal, { dataService, isAdmin: isAdminRole(user), onClose: backModal, canGoBack, onNewFeedback: () => openModal('feedback') }),
         // v4.18.0: FilesPlaceholderModal entfernt — Dateiablage ist jetzt Direktlink (siehe Sidebar-Button oben).
@@ -12196,7 +12258,10 @@
     // ============================================================
     const root = ReactDOM.createRoot(document.getElementById('app'));
     root.render(React.createElement(ErrorBoundary, { fallbackMessage: 'Die App hatte einen Fehler. Bitte lade die Seite neu.' },
-      React.createElement(App)
+      React.createElement(React.Fragment, null,
+        React.createElement(UpdateBanner),
+        React.createElement(App)
+      )
     ));
   </script>
 <!-- A2b · Barrierefreiheit: globaler Focus-Trap + Fokus-Return (WCAG 2.1.2 / 2.4.3) -->
