@@ -17,7 +17,7 @@
 //   APNS_TEAM_ID       — 10 Zeichen, Apple Team ID
 //   APNS_PRIVATE_KEY   — Inhalt der .p8-Datei, mit -----BEGIN PRIVATE KEY-----
 //   APNS_TOPIC         — de.realschuleschriesheim.krs
-//   APNS_ENV           — "sandbox" (Xcode-Build) oder "production" (TestFlight/Store)
+//   APNS_ENV           — dauerhaft "production"; Sandbox wird pro Geraetetoken erkannt
 //
 // Deploy: supabase functions deploy notify-push --no-verify-jwt
 //   (--no-verify-jwt: der Webhook hat kein User-JWT; Schutz ist HOOK_SECRET.)
