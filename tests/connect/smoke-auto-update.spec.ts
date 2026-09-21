@@ -118,8 +118,15 @@ test.describe('KRS Connect — automatische Aktualisierung', () => {
   });
 
   test('Anmeldebildschirm zeigt die laufende Version', async ({ page }) => {
-    await prepare(page, '4.30.0');
-    await expect(page.getByTestId('version-badge')).toHaveText('v4.30.0');
+    // Die Version wird aus window.KRS_VERSION gelesen statt fest verdrahtet:
+    // vorher stand hier '4.30.0', wodurch der Test bei JEDEM Release rot wurde,
+    // ohne dass am Verhalten etwas kaputt war (gefunden beim Sprung auf v4.31.0).
+    // Geprüft wird die Aussage, auf die es ankommt: Das Abzeichen zeigt genau
+    // die laufende Version — der Fünf-Sekunden-Check am Gerät.
+    await prepare(page, '9.9.9');
+    const laufend = await page.evaluate(() => (window as any).KRS_VERSION);
+    expect(laufend).toMatch(/^\d+\.\d+\.\d+$/);
+    await expect(page.getByTestId('version-badge')).toHaveText('v' + laufend);
   });
 
   test('Demo-Modus pollt die Remote-Version nicht', async ({ page }) => {

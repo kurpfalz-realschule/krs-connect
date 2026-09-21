@@ -4375,31 +4375,36 @@
         }
       }
 
+      // v4.31.0 (O1, R8/R11): Die frühere Heuristik suchte eine „gemeinsame
+      // Konversation" der beiden Personen — OHNE auf is_group=false zu filtern
+      // und OHNE die Mitgliederzahl zu prüfen. Waren beide in derselben Gruppe
+      // („Musik-Fachschaft"), kam DIESE GRUPPE zurück, etikettiert als
+      // is_group:false. Wer glaubte, privat zu schreiben, schrieb an alle
+      // Gruppenmitglieder. Das ist jetzt Sache des Servers: die RPC
+      // get_or_create_dm() findet eine bestehende 1:1-Konversation nur dann,
+      // wenn is_group=false ist UND sie genau diese zwei Mitglieder hat, und
+      // legt sonst Konversation samt beider Mitgliedszeilen in EINER
+      // Transaktion an (Paar-Schlüssel conversations.dm_key + Lock gegen das
+      // Rennen zweier gleichzeitiger Aufrufe).
+      // userId1 ist immer die angemeldete Person; die RPC leitet sie
+      // serverseitig aus der Sitzung ab und traut dem Client hier nicht.
       async createConversation(userId1, userId2) {
         if (this.isDemo) {
           return { id: 'new-' + Date.now(), is_group: false };
         }
         try {
-          // Prüfe ob schon eine Konversation zwischen den beiden existiert
-          const { data: memberships1 } = await this.sb.from('conversation_members').select('conversation_id').eq('user_id', userId1);
-          const { data: memberships2 } = await this.sb.from('conversation_members').select('conversation_id').eq('user_id', userId2);
-          if (memberships1?.length && memberships2?.length) {
-            const ids1 = new Set(memberships1.map(m => m.conversation_id));
-            const common = memberships2.find(m => ids1.has(m.conversation_id));
-            if (common) return { id: common.conversation_id, is_group: false };
-          }
-          // Neue Konversation erstellen
-          const { data: conv, error: convErr } = await this.sb.from('conversations').insert({ is_group: false }).select().single();
-          if (convErr) throw convErr;
-          // Beide User als Mitglieder hinzufügen
-          const { error: memErr } = await this.sb.from('conversation_members').insert([
-            { conversation_id: conv.id, user_id: userId1 },
-            { conversation_id: conv.id, user_id: userId2 }
-          ]);
-          if (memErr) throw memErr;
-          return conv;
+          const { data, error } = await this.sb.rpc('get_or_create_dm', { p_other_user_id: userId2 });
+          if (error) throw error;
+          const row = Array.isArray(data) ? data[0] : data;
+          if (!row || row.conversation_id == null) throw new Error('Kein Chat zurückgegeben');
+          // is_group kommt aus der Antwort und wird nicht mehr geraten.
+          return { id: row.conversation_id, is_group: row.is_group === true };
         } catch (err) {
           console.error('createConversation error:', err);
+          // Kein stiller Fehlschlag: bisher passierte beim Scheitern sichtbar nichts.
+          if (typeof window.showToast === 'function') {
+            window.showToast('Der Chat konnte nicht ge\u00f6ffnet werden. Bitte pr\u00fcfe deine Internetverbindung und versuche es erneut.', 'error');
+          }
           return null;
         }
       }
@@ -6082,7 +6087,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.30.0';
+    window.KRS_VERSION = '4.31.0';
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
     // Playwright den Klick-Handler prüfen kann, ohne wirklich zu navigieren.
     // Aus tenant.js (TENANT-SPEC.md 2.4) — leer, wenn hub.enabled:false.
@@ -9761,6 +9766,11 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.31.0', date: '21.09.2026', items: [
+        'Eine Nachricht an eine einzelne Person landet wieder bei dieser Person: Wer \u201e+\u201c dr\u00fcckt und einen Namen w\u00e4hlt, bekommt jetzt zuverl\u00e4ssig einen Einzelchat \u2014 vorher konnte stattdessen ein gemeinsamer Gruppenchat ge\u00f6ffnet werden, der wie ein Einzelchat aussah',
+        'Bestehende Einzelchats werden sicher wiedergefunden statt doppelt angelegt',
+        'Serverseitig abgesichert: Wer nicht selbst in einem Chat ist, kann niemanden mehr hineinsetzen \u2014 auch sich selbst nicht'
+      ] },
       { v: '4.30.0', date: '21.09.2026', items: [
         'Nach mindestens einer Minute im Hintergrund lädt Connect eine inzwischen veröffentlichte Version beim Zurückkehren automatisch — ohne zusätzlichen Tipp',
         'Offene Texte, Dialoge und laufende Uploads bleiben geschützt: Dann erscheint weiterhin nur der bekannte Update-Hinweis',
