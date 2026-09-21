@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <!-- Tenant-Konfiguration (TENANT-SPEC.md): MUSS das erste Script sein, synchron,
        vor jedem anderen Code — setzt window.TENANT/window.T, Branding-CSS-Variablen,
        CSP (Report-Only) und den Framing-Schutz, bevor irgendetwas anderes lädt. -->
@@ -1379,6 +1379,11 @@
       .beta-feedback-btn { padding: 4px 6px; font-size: 11px; }
     }
 
+    /* v4.29.0 — Kanäle als Akkordeon unter dem Team (nur Handy/Tablet-Hochformat).
+       Am Rechner bleibt die eigene Kanal-Spalte, dort ist Platz dafür. */
+    .team-children { display: none; }
+    .team-expand-chevron { flex-shrink: 0; font-size: 11px; color: var(--text-muted); width: 12px; text-align: center; }
+
     @media (max-width: 768px), (max-width: 1024px) and (orientation: portrait) {
       .app-layout { flex-direction: column; height: 100vh; height: 100dvh; }
       .sidebar { width: 100%; height: 56px; flex-direction: row; padding: 0 8px; gap: 4px; order: 2; border-top: 1px solid var(--border); border-right: none; }
@@ -1408,6 +1413,28 @@
       .content-header { position: sticky; top: 0; z-index: 10; padding: 10px 12px; }
       .content-header h1 { font-size: 17px; line-height: 1.25; }
       .content-body { padding: 12px; gap: 12px; }
+      /* v4.29.0 — iOS zoomt die ganze Seite, sobald ein Textfeld mit weniger als
+         16 px Schrift den Fokus bekommt. Danach sitzt alles verschoben und muss
+         von Hand zurechtgerückt werden (Rückmeldung Norbert, 21.09.2026). Die
+         frühere Einzelregel zielte auf `.chat-input-bar textarea` — dort steht
+         aber ein <input>, sie griff also nie. 16 px verhindert den Zoom. */
+      input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),
+      textarea, select, .rich-editor, [contenteditable="true"] { font-size: 16px; }
+      /* Nichts darf breiter werden als der Bildschirm — sonst lässt sich die
+         Seite seitlich schieben und die Ränder stimmen nicht mehr. */
+      html, body { max-width: 100%; overflow-x: hidden; }
+      .content-header h1, .post-title, .list-item-text { overflow-wrap: anywhere; }
+      /* Notch und Home-Leiste freihalten (greift nur, wo es sie gibt). */
+      .app-layout { padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
+
+      /* v4.29.0 — Kanäle stehen jetzt direkt unter ihrem Team. Der eigene
+         Kanal-Block ganz unten im Schubfach entfällt dadurch. */
+      .team-drawer .sidebar-channels { display: none; }
+      .team-children { display: block; padding: 2px 0 6px 10px; border-left: 2px solid var(--border); margin: 0 0 4px 16px; }
+      .team-children .list-item { font-size: 15px; min-height: 44px; }
+      .team-children-tools { display: flex; gap: 6px; padding: 4px 0 2px; }
+      .team-children-empty { font-size: 13px; color: var(--text-muted); padding: 6px 2px; }
+
       .team-tabs { padding: 2px 8px 0; gap: 0; }
       .team-tab { flex: 1; padding: 7px 6px; font-size: 13px; }
       .team-tab-icon { display: none; }
@@ -6001,7 +6028,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.28.0';
+    window.KRS_VERSION = '4.29.0';
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
     // Playwright den Klick-Handler prüfen kann, ohne wirklich zu navigieren.
     // Aus tenant.js (TENANT-SPEC.md 2.4) — leer, wenn hub.enabled:false.
@@ -9676,6 +9703,10 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.29.0', date: '21.09.2026', items: [
+        'Auf dem iPhone sprang die Ansicht nicht mehr von selbst zur Seite: Eingabefelder haben jetzt \u00fcberall 16\u00a0px Schrift, deshalb zoomt iOS beim Antippen nicht mehr hinein \u2014 die R\u00e4nder bleiben, wo sie hingeh\u00f6ren',
+        'Im \u2630-Schubfach klappen die Kan\u00e4le jetzt direkt unter ihrem Team auf (\u25b8/\u25be) \u2014 vorher standen sie als eigener Block ganz unten und waren ohne Scrollen nicht zu sehen'
+      ] },
       { v: '4.28.0', date: '18.09.2026', items: [
         'Das Haus-Symbol oben in der Leiste f\u00fchrt jetzt auch aus dem Hub heraus zur\u00fcck zur App-\u00dcbersicht \u2014 n\u00f6tig, seit der Hub seine eigene Leiste ausblendet, solange Connect l\u00e4uft'
       ] },
@@ -10058,6 +10089,9 @@
       const [showCreateTeam, setShowCreateTeam] = useState(false);
       const [showTeamMembers, setShowTeamMembers] = useState(false);
       const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+      // v4.29.0 — welches Team im Handy-Schubfach aufgeklappt ist. Am Rechner
+      // ohne Wirkung (dort steht die Kanal-Spalte daneben).
+      const [expandedTeamId, setExpandedTeamId] = useState(null);
       const [showHelp, setShowHelp] = useState(false);
       const [showCreateChannel, setShowCreateChannel] = useState(false);
       const [channelContextMenu, setChannelContextMenu] = useState(null); // { channel, x, y }
@@ -10080,6 +10114,7 @@
         showProfile, setShowProfile, showPrivacy, setShowPrivacy,
         showOnboarding, setShowOnboarding, showCreateTeam, setShowCreateTeam,
         showTeamMembers, setShowTeamMembers, mobileSidebarOpen, setMobileSidebarOpen,
+        expandedTeamId, setExpandedTeamId,
         showHelp, setShowHelp, showCreateChannel, setShowCreateChannel,
         channelContextMenu, setChannelContextMenu, editingChannel, setEditingChannel,
         showForwardModal, setShowForwardModal, showAdmin, setShowAdmin,
@@ -10286,6 +10321,7 @@
         showProfile, setShowProfile, showPrivacy, setShowPrivacy,
         showOnboarding, setShowOnboarding, showCreateTeam, setShowCreateTeam,
         showTeamMembers, setShowTeamMembers, mobileSidebarOpen, setMobileSidebarOpen,
+        expandedTeamId, setExpandedTeamId,
         showHelp, setShowHelp, showCreateChannel, setShowCreateChannel,
         channelContextMenu, setChannelContextMenu, editingChannel, setEditingChannel,
         showForwardModal, setShowForwardModal, showAdmin, setShowAdmin,
@@ -11191,6 +11227,7 @@
 
       const handleTeamSelect = async (team) => {
         setSelectedTeam(team);
+        setExpandedTeamId(team.id); // v4.29.0: Kanäle direkt darunter aufklappen
         setTeamTab('posts'); // v4.12.0: Teamwechsel startet immer bei den Beiträgen
         const channelsData = await dataService.getChannels(team.id);
         setChannels(channelsData);
@@ -11495,14 +11532,23 @@
               const visibleTeams = teams.filter(t => !hiddenTeams.has(t.id));
               const hiddenTeamsList = teams.filter(t => hiddenTeams.has(t.id));
               return React.createElement(React.Fragment, null,
-                visibleTeams.map(team =>
-                  React.createElement('div', { key: team.id, className: 'team-item', 'data-testid': 'team-visible' },
+                visibleTeams.map(team => {
+                  const isExpanded = expandedTeamId === team.id && selectedTeam?.id === team.id;
+                  return React.createElement('div', { key: team.id, className: 'team-group' },
+                  React.createElement('div', { className: 'team-item', 'data-testid': 'team-visible' },
                     React.createElement('button', {
                       className: 'list-item' + (selectedTeam?.id === team.id ? ' active' : ''),
-                      onClick: () => handleTeamSelect(team),
+                      onClick: () => {
+                        // v4.29.0: nochmal auf das offene Team tippen klappt es zu.
+                        if (isExpanded) { setExpandedTeamId(null); return; }
+                        handleTeamSelect(team);
+                      },
                       'aria-current': selectedTeam?.id === team.id ? 'page' : undefined,
+                      'aria-expanded': isExpanded,
+                      'data-testid': 'team-toggle',
                       style: { display: 'flex', gap: '8px', alignItems: 'center', width: '100%' }
                     },
+                      React.createElement('span', { className: 'team-expand-chevron', 'aria-hidden': 'true' }, isExpanded ? '▾' : '▸'),
                       React.createElement('div', { style: { width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: team.icon_color, borderRadius: 'var(--radius)', color: 'white', fontSize: '12px', fontWeight: '600' } }, team.icon_text),
                       React.createElement('span', { className: 'list-item-text' }, team.name),
                       // v4.19.0: sichtbarer Status — 🔕 neben stummgeschalteten Teams (immer sichtbar, nicht nur bei Hover)
@@ -11523,8 +11569,45 @@
                       'data-testid': 'team-mute-btn'
                     }, mutedTeams.has(team.id) ? '🔕' : '🔔'),
                     React.createElement('button', { className: 'team-hide-btn', onClick: (e) => { e.stopPropagation(); handleToggleTeamHidden(team.id); }, title: 'Forum ausblenden', 'data-testid': 'team-hide' }, '👁')
+                  ),
+                  // v4.29.0 — Kanäle des aufgeklappten Teams direkt darunter.
+                  // Nur im Handy-Layout sichtbar (CSS `.team-children`), am
+                  // Rechner steht weiterhin die eigene Kanal-Spalte daneben.
+                  isExpanded && React.createElement('div', { className: 'team-children', 'data-testid': 'team-children' },
+                    channels.length === 0
+                      ? React.createElement('div', { className: 'team-children-empty' }, 'Noch keine Kanäle in diesem Team.')
+                      : channels.map(ch => {
+                          const unreadCount = unreadPostChannels.get(ch.id) || 0;
+                          return React.createElement('button', {
+                            key: ch.id,
+                            className: 'list-item' + (selectedChannel?.id === ch.id ? ' active' : ''),
+                            'data-testid': 'team-child-channel',
+                            onClick: () => handleChannelSelect(ch),
+                            'aria-current': selectedChannel?.id === ch.id ? 'page' : undefined,
+                            style: { display: 'flex', gap: '8px', alignItems: 'center', width: '100%' }
+                          },
+                            React.createElement('span', { style: { fontSize: '12px' } }, '#'),
+                            React.createElement('span', { className: 'list-item-text' + (unreadCount > 0 ? ' channel-unread' : '') }, ch.name),
+                            unreadCount > 0 && !mutedTeams.has(team.id) && React.createElement('span', { className: 'unread-badge', style: { marginLeft: 'auto' } }, unreadCount)
+                          );
+                        }),
+                    (canManageTeam(user, team) || userTeamRole === 'admin') && React.createElement('div', { className: 'team-children-tools' },
+                      React.createElement('button', {
+                        className: 'new-chat-btn',
+                        onClick: () => setShowTeamMembers(true),
+                        title: 'Team verwalten (Mitglieder, archivieren, löschen)',
+                        'aria-label': 'Team verwalten'
+                      }, '⚙'),
+                      React.createElement('button', {
+                        className: 'new-chat-btn',
+                        onClick: () => setShowCreateChannel(true),
+                        title: 'Neuen Kanal erstellen',
+                        'aria-label': 'Neuen Kanal erstellen'
+                      }, '+')
+                    )
                   )
-                ),
+                  );
+                }),
                 hiddenTeamsList.length > 0 && React.createElement('div', { style: { marginTop: '4px' } },
                   React.createElement('button', { className: 'hidden-teams-toggle', 'data-testid': 'hidden-teams-toggle', onClick: () => setShowHiddenTeams(prev => !prev) },
                     React.createElement('span', null, showHiddenTeams ? '▾' : '▸'),
