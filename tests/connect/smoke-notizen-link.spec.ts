@@ -9,7 +9,7 @@ import { test, expect, openConnect } from '../fixtures/connect';
  * Connect-Leiste) mit teils denselben Zielen. Rückmeldung Norbert
  * (17.09.2026): „Wichtig ist eigentlich der Switch zwischen Connect und Hub.
  * Im Hub sind alle Apps. Connect sollte aufgeräumt sein mit maximaler
- * Fokussierung auf Inhalte.“ Seitdem zeigt Connect nur noch Foren und Chats;
+ * Fokussierung auf Inhalte.“ Seitdem zeigt Connect nur noch Teams und Chats;
  * Notizen erreicht man über den Hub (Kachel „Notizen & Aufgaben“).
  */
 test.describe('KRS Connect — Notizen liegt im Hub, nicht in Connect', () => {

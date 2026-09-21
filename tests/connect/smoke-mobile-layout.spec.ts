@@ -33,7 +33,7 @@ test.describe('Mobile-Layout (Demo)', () => {
     // v4.24.0: Dateiablage und Notizen stehen NICHT mehr in Connects Leiste —
     // beides sind Hub-Apps und liegen dort als Kachel. Auf dem Handy standen
     // sonst zwei Navigationsleisten mit denselben Zielen übereinander
-    // (Hub-Tabs + Connect-Leiste). Connect zeigt hier nur noch Foren und Chats.
+    // (Hub-Tabs + Connect-Leiste). Connect zeigt hier nur noch Teams und Chats.
     await expect(page.locator('[aria-label="Dateiablage (Nextcloud)"]')).toHaveCount(0);
     await expect(page.getByTestId('nav-notizen')).toHaveCount(0);
     // Hilfe und der zweite Abmeldeweg sind mobil ausgeblendet. Abmelden bleibt

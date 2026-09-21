@@ -1268,6 +1268,20 @@
       }
     }
 
+    /* S12 (22.09.2026, R15): Zitatbalken ueber einer Chat-Antwort. */
+    .chat-reply-quote { display: flex; align-items: flex-start; gap: 6px; padding: 4px 8px; margin-bottom: 4px; border-left: 3px solid var(--accent); background: rgba(127,127,127,0.08); border-radius: 4px; font-size: 12px; line-height: 1.4; cursor: pointer; max-width: 100%; }
+    .chat-bubble.own .chat-reply-quote { border-left-color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.12); }
+    .chat-reply-quote-author { font-weight: 600; flex-shrink: 0; }
+    .chat-reply-quote-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.85; }
+    .chat-reply-quote-deleted { font-style: italic; opacity: 0.7; }
+    /* Kurzer Blitz, wenn man auf einen Zitatbalken tippt und zur Originalnachricht springt. */
+    @keyframes krsChatMsgFlash { 0% { background: var(--accent-light, rgba(99,102,241,0.25)); } 100% { background: transparent; } }
+    .chat-msg-highlight .chat-bubble { animation: krsChatMsgFlash 1.4s ease-out; }
+    /* Bezugs-Balken ueber dem Eingabefeld, solange eine Antwort vorbereitet wird. */
+    .chat-reply-bar { display: flex; align-items: center; gap: 8px; padding: 6px 16px; border-top: 1px solid var(--border); background: var(--bg-secondary); font-size: 12px; }
+    .chat-reply-bar-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); }
+    .chat-reply-bar-close { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 15px; padding: 4px; min-width: 30px; min-height: 30px; flex-shrink: 0; }
+
     .chat-input-bar { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); align-items: flex-end; }
     .chat-input-bar input { flex: 1; padding: 10px 14px; border-radius: 20px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); font-size: 14px; }
     .chat-input-bar input:focus { outline: 2px solid #1D4ED8; outline-offset: 2px; border-color: var(--accent); }
@@ -1486,7 +1500,7 @@
       .mobile-view-header .spacer { flex: 1; }
 
       /* v4.25.0 — im Hub: Connects eigene Leiste entfällt komplett. Der
-         Wechsel Foren/Chats und alles Seltene stecken im ☰-Menü, der Wechsel
+         Wechsel Teams/Chats und alles Seltene stecken im ☰-Menü, der Wechsel
          Connect/Apps in der Hub-Leiste darunter. Standalone (ohne Hub) bleibt
          die Leiste, sonst gaebe es dort gar keine Navigation. */
       html.krs-embedded .sidebar { display: none; }
@@ -1827,23 +1841,35 @@
       async function resolveStorageUrl(ref) {
         var path = storagePath(ref);
         var sb = window.__krsSb;
-        if (!path || !sb || !sb.storage) return ref;              // Demo / Nicht-Storage
+        // Echte Durchreichfaelle bleiben, wie sie sind: data:/blob:/fremde URL
+        // (storagePath gibt dann null) oder Demo ohne Client.
+        if (!path) return ref;
+        if (!sb || !sb.storage) return ref;
         var now = Date.now();
         var hit = cache.get(path);
         if (hit && hit.exp > now + 60000) return hit.url;         // >1 min Restlaufzeit
-        try {
-          var res = await sb.storage.from('images').createSignedUrl(path, TTL);
-          var signed = res && res.data && res.data.signedUrl;
-          if ((res && res.error) || !signed) return ref;
-          cache.set(path, { url: signed, exp: now + TTL * 1000 });
-          return signed;
-        } catch (e) {
-          return ref;
+        // S1/O2 (21.09.2026): Ab hier ist klar, dass es ein echter Storage-Pfad
+        // ist. Schlaegt das Signieren fehl, ist das ein FEHLER, kein Durchreich-
+        // fall mehr — sonst landet der rohe Objekt-Pfad (z. B.
+        // "uploads/2026/elternbrief.pdf") als "URL" beim Aufrufer, ein fetch()
+        // darauf loest relativ zur App-Origin auf (404) und der Fehler
+        // verschwindet spurlos. Die Aufrufer faengen das jetzt ab.
+        var res = await sb.storage.from('images').createSignedUrl(path, TTL);
+        var signed = res && res.data && res.data.signedUrl;
+        if ((res && res.error) || !signed) {
+          throw new Error((res && res.error && res.error.message) || 'Signierte URL konnte nicht erstellt werden');
         }
+        cache.set(path, { url: signed, exp: now + TTL * 1000 });
+        return signed;
+      }
+
+      function isStorageUrl(url) {
+        return typeof url === 'string' && /\/storage\/v1\/object\/(sign|public|authenticated)\/images\//.test(url);
       }
 
       window.__krsStoragePath = storagePath;
       window.__krsResolveStorageUrl = resolveStorageUrl;
+      window.__krsIsStorageUrl = isStorageUrl;
     })();
   </script>
 
@@ -1898,7 +1924,15 @@
         var imgEl = document.createElement('img');
         imgEl.className = 'lightbox-img';
         // S1: privater Bucket → Signed URL auflösen (Fallback: Original).
-        if (window.__krsResolveStorageUrl) { window.__krsResolveStorageUrl(imgUrl).then(function(u){ imgEl.src = u; }); } else { imgEl.src = imgUrl; }
+        if (window.__krsResolveStorageUrl) {
+          window.__krsResolveStorageUrl(imgUrl).then(function(u){ imgEl.src = u; }).catch(function(){
+            // 9.1: resolveStorageUrl wirft jetzt bei echten Fehlern -- hier nicht
+            // crashen, sondern sichtbar "Bild nicht ladbar" statt einer Ausnahme.
+            imgEl.alt = 'Bild nicht ladbar';
+            imgEl.style.opacity = '0.5';
+            if (typeof window.showToast === 'function') window.showToast('Bild nicht ladbar', 'error');
+          });
+        } else { imgEl.src = imgUrl; }
         imgEl.alt = imgName;
         imgEl.onclick = function(e) { e.stopPropagation(); };
         ov.appendChild(imgEl);
@@ -1938,9 +1972,17 @@
           var dl = window.__krsDownloadFile;
           if (dl) { dl({ url: imgUrl, name: imgName || 'Bild' }); return; }
           // Datei-Viewer noch nicht geladen → wenigstens in neuem Tab öffnen.
-          var open1 = function(u){ window.open(u, '_blank', 'noopener'); };
-          if (window.__krsResolveStorageUrl) window.__krsResolveStorageUrl(imgUrl).then(open1).catch(function(){ open1(imgUrl); });
-          else open1(imgUrl);
+          // S1 (21.09.2026): Fenster SOFORT in der Nutzergeste öffnen, Inhalt
+          // nachreichen -- window.open() nach einem await wird vom Popup-Blocker
+          // verschluckt (Safari/Chrome), sichtbar passiert dann nichts.
+          if (!window.__krsResolveStorageUrl) { window.open(imgUrl, '_blank', 'noopener'); return; }
+          var w = window.open('', '_blank', 'noopener');
+          window.__krsResolveStorageUrl(imgUrl).then(function(u){
+            if (w) w.location = u; else window.open(u, '_blank', 'noopener');
+          }).catch(function(){
+            if (w) w.close();
+            if (typeof window.showToast === 'function') window.showToast('Bild konnte nicht geöffnet werden.', 'error');
+          });
         };
         caption.appendChild(dlLink);
         ov.appendChild(caption);
@@ -2209,15 +2251,24 @@
       }
       function forceDownload(file){
         var name = (file && file.name) || 'datei';
-        // S1: privater Bucket → Signed URL ziehen, dann laden.
+        // S1/O2 (21.09.2026): Notfall-Fenster SOFORT in der Nutzergeste reservieren
+        // (leer, about:blank) -- der Emergency-Pfad liegt sonst hinter mehreren
+        // await/then-Schritten, und window.open() dort wird vom Popup-Blocker
+        // verschluckt. Braucht der Haupt-Blob-Pfad das Fenster nicht, wird es
+        // wieder geschlossen.
+        var emergencyWin = window.open('', '_blank', 'noopener');
+        // S1: privater Bucket → Signed URL ziehen, dann laden. resolveStorageUrl
+        // wirft jetzt bei einem echten Fehler (9.1) -- das faengt der catch unten ab,
+        // statt (wie früher) stillschweigend mit dem rohen, falschen Pfad weiterzufetchen.
         var rp = window.__krsResolveStorageUrl ? window.__krsResolveStorageUrl(file.url) : Promise.resolve(file.url);
         var slow = setTimeout(function(){ _dlToast('„' + name + '" wird vorbereitet …', 'info'); }, 400);
-        rp.catch(function(){ return file.url; }).then(function(url){
+        rp.then(function(url){
           return fetch(url).then(function(r){
             if (!r.ok) throw new Error('HTTP ' + r.status);
             return r.blob();
           }).then(function(blob){
             clearTimeout(slow);
+            if (emergencyWin) emergencyWin.close();
             var u = URL.createObjectURL(blob);
             var a = document.createElement('a'); a.href = u; a.download = name;
             document.body.appendChild(a); a.click(); a.remove();
@@ -2225,10 +2276,25 @@
           }).catch(function(err){
             clearTimeout(slow);
             console.error('forceDownload fehlgeschlagen:', err);
-            // Notfall: serverseitiges Content-Disposition erzwingen und öffnen.
-            var w = window.open(_dlAppendParam(url, name), '_blank', 'noopener');
-            if (!w) _dlToast('„' + name + '" konnte nicht geladen werden. Bitte über „↗ Neuer Tab" versuchen.', 'error');
+            // Notfall: serverseitiges Content-Disposition erzwingen -- aber nur,
+            // wenn `url` wirklich eine Supabase-Storage-URL ist. Sonst hilft
+            // ?download= nichts (9.1 #2: die App-Origin-URL war der eigentliche
+            // dritte Fehlerweg), dann nur die Meldung zeigen.
+            if (window.__krsIsStorageUrl && window.__krsIsStorageUrl(url) && emergencyWin) {
+              emergencyWin.location = _dlAppendParam(url, name);
+              _dlToast('„' + name + '" wird geöffnet — bitte den Download im neuen Tab bestätigen.', 'info');
+            } else {
+              if (emergencyWin) emergencyWin.close();
+              _dlToast('„' + name + '" konnte nicht geladen werden. Bitte über „↗ Neuer Tab" versuchen.', 'error');
+            }
           });
+        }).catch(function(err){
+          // resolveStorageUrl selbst ist fehlgeschlagen (9.1 #1) -- kein fetch auf
+          // einen falschen Pfad, sofort sichtbar melden.
+          clearTimeout(slow);
+          console.error('forceDownload: Signieren fehlgeschlagen:', err);
+          if (emergencyWin) emergencyWin.close();
+          _dlToast('„' + name + '" konnte nicht geladen werden (Signierung fehlgeschlagen).', 'error');
         });
       }
       window.__krsDownloadFile = forceDownload;
@@ -2267,7 +2333,21 @@
         var dl = document.createElement('button'); dl.className = 'fv-btn'; dl.textContent = '⬇ Herunterladen'; dl.onclick = function(){ forceDownload(file); }; tools.appendChild(dl);
         if (window.__krsForwardFile) { var fw = document.createElement('button'); fw.className = 'fv-btn'; fw.textContent = '↪ Weiterleiten'; fw.onclick = function(){ close(); window.__krsForwardFile(file); }; tools.appendChild(fw); }
         var nt = document.createElement('a'); nt.className = 'fv-btn'; nt.href = file.url; nt.target = '_blank'; nt.rel = 'noopener'; nt.textContent = '↗ Neuer Tab';
-        nt.onclick = function(e){ if (window.__krsResolveStorageUrl) { e.preventDefault(); window.__krsResolveStorageUrl(file.url).then(function(u){ window.open(u, '_blank', 'noopener'); }); } };
+        // S1 (21.09.2026): Fenster SOFORT in der Nutzergeste öffnen (synchron im
+        // Klick), Inhalt erst danach nachreichen. window.open() NACH einem await
+        // (wie vorher) wird von Safari/Chrome als Popup geblockt -- sichtbar
+        // passierte dann gar nichts (Tanjas Meldung R1-R3).
+        nt.onclick = function(e){
+          if (!window.__krsResolveStorageUrl) return; // normaler <a href> greift
+          e.preventDefault();
+          var w = window.open('', '_blank', 'noopener');
+          window.__krsResolveStorageUrl(file.url).then(function(u){
+            if (w) w.location = u; else window.open(u, '_blank', 'noopener');
+          }).catch(function(){
+            if (w) w.close();
+            if (typeof window.showToast === 'function') window.showToast('Datei konnte nicht geöffnet werden.', 'error');
+          });
+        };
         tools.appendChild(nt);
         var cl = document.createElement('button'); cl.className = 'fv-btn fv-close'; cl.setAttribute('aria-label', 'Schließen'); cl.textContent = '✕'; cl.onclick = close; tools.appendChild(cl);
         head.appendChild(tools);
@@ -3138,16 +3218,53 @@
         }
       }
 
+      // S5 (21.09.2026, Spezifikation 9.2/O3): Team-Titel & Co. bearbeiten.
+      // Laut Messung in der Produktiv-DB (pg_policies) darf ein Team-Admin
+      // `teams` bereits per RLS aktualisieren -- es fehlte nur diese
+      // Oberfläche, keine Migration nötig.
+      async updateTeam(teamId, fields) {
+        // Nur die vier erlaubten Felder senden (RLS ist zeilen-, nicht
+        // spaltenbezogen) -- ein update() mit weiteren Schlüsseln aus dem
+        // Formularzustand könnte sonst auch category/created_by/archived_at
+        // überschreiben.
+        const payload = {
+          name: fields.name,
+          description: fields.description === '' ? null : fields.description,
+          icon_text: fields.icon_text === '' ? null : fields.icon_text,
+          icon_color: fields.icon_color
+        };
+        if (this.isDemo) {
+          const t = MOCK_TEAMS.find(x => x.id === teamId);
+          if (t) Object.assign(t, payload);
+          return true;
+        }
+        try {
+          const { error } = await this.sb.from('teams').update(payload).eq('id', teamId);
+          if (error) throw error;
+          return true;
+        } catch (err) {
+          console.error('updateTeam error:', err);
+          this._teamMutationError(err, 'bearbeiten');
+          return false;
+        }
+      }
+
       // ── Channel Management ──────────────────────────
       async createChannel(teamId, name, description = '') {
         if (this.isDemo) {
-          const newCh = { id: 'ch-' + Date.now(), name, description, team_id: teamId, is_default: false, unread: 0 };
           if (!MOCK_CHANNELS[teamId]) MOCK_CHANNELS[teamId] = [];
+          const nextPos = MOCK_CHANNELS[teamId].length;
+          const newCh = { id: 'ch-' + Date.now(), name, description, team_id: teamId, is_default: false, unread: 0, position: nextPos };
           MOCK_CHANNELS[teamId].push(newCh);
           return newCh;
         }
         try {
-          const { data, error } = await this.sb.from('channels').insert({ team_id: teamId, name, description, is_default: false }).select().single();
+          // S10 (22.09.2026): naechste freie Position je Team ermitteln, damit
+          // ein neu angelegter Kanal ans Ende der (von Admins sortierbaren)
+          // Liste rutscht statt vorne/mittig aufzutauchen.
+          const { data: maxRow } = await this.sb.from('channels').select('position').eq('team_id', teamId).order('position', { ascending: false, nullsFirst: false }).limit(1).maybeSingle();
+          const nextPos = (maxRow && typeof maxRow.position === 'number') ? maxRow.position + 1 : 0;
+          const { data, error } = await this.sb.from('channels').insert({ team_id: teamId, name, description, is_default: false, position: nextPos }).select().single();
           if (error) throw error;
           return data;
         } catch (err) {
@@ -3201,10 +3318,13 @@
       async getChannels(teamId) {
         if (this.isDemo) {
           const channels = MOCK_CHANNELS[teamId] || [{ id: `default-${teamId}`, name: 'Allgemein', team_id: teamId }];
-          return channels.map(ch => ({ ...ch }));
+          channels.forEach((ch, i) => { if (typeof ch.position !== 'number') ch.position = i; });
+          return channels.map(ch => ({ ...ch })).sort((a, b) => (a.position - b.position) || a.name.localeCompare(b.name));
         }
         try {
-          const { data, error } = await this.sb.from('channels').select('*').eq('team_id', teamId).order('name');
+          // S10 (22.09.2026, R14): sortierbare Kanalliste -- position zuerst,
+          // Name als Tie-Breaker (neue/nicht-migrierte Zeilen ohne position ans Ende).
+          const { data, error } = await this.sb.from('channels').select('*').eq('team_id', teamId).order('position', { ascending: true, nullsFirst: false }).order('name');
           if (error) throw error;
           return data || [];
         } catch (err) {
@@ -4261,8 +4381,17 @@
       async getMessages(conversationId, limit = 50, offset = 0) {
         if (this.isDemo) return [...(MOCK_MESSAGES[conversationId] || [])];
         try {
-          // Lade die letzten N Nachrichten (neueste zuerst holen, dann umdrehen für Anzeige)
-          const { data, error } = await this.sb.from('messages').select('*, sender:users(*)').eq('conversation_id', conversationId).order('created_at', { ascending: false }).range(offset, offset + limit - 1);
+          // Lade die letzten N Nachrichten (neueste zuerst holen, dann umdrehen für Anzeige).
+          // S12 (22.09.2026, R15): reply_to eingebettet -- liefert den AKTUELLEN
+          // Stand der Originalnachricht (Name, Text, Bild, is_deleted), nicht
+          // eine beim Antworten gespeicherte Kopie. Nur nicht-geloeschte
+          // Nachrichten in der Hauptliste (is_deleted=false); eine geloeschte
+          // Originalnachricht bleibt trotzdem ueber den Embed auffindbar,
+          // damit der Zitatbalken "Nachricht gelöscht" zeigen kann.
+          const { data, error } = await this.sb.from('messages')
+            .select('*, sender:users(*), reply_to:reply_to_id(id, content, image_url, is_deleted, sender:sender_id(display_name))')
+            .eq('conversation_id', conversationId).eq('is_deleted', false)
+            .order('created_at', { ascending: false }).range(offset, offset + limit - 1);
           if (error) throw error;
           return (data || []).reverse();
         } catch (err) {
@@ -4271,18 +4400,22 @@
         }
       }
 
-      async sendMessage(conversationId, senderId, content, imageUrl = null) {
+      async sendMessage(conversationId, senderId, content, imageUrl = null, replyToId = null) {
         if (this.isDemo) {
           const sender = MOCK_USERS.find(u => u.id === senderId);
-          const msg = { id: 'm' + Date.now(), conversation_id: conversationId, sender, content, image_url: imageUrl, created_at: new Date().toLocaleString('de-DE') };
           if (!MOCK_MESSAGES[conversationId]) MOCK_MESSAGES[conversationId] = [];
+          // S12: im Demo-Modus die Original-Nachricht direkt aus dem lokalen
+          // Verlauf spiegeln (kein Server-Embed vorhanden).
+          const replyTo = replyToId ? MOCK_MESSAGES[conversationId].find(m => m.id === replyToId) || null : null;
+          const msg = { id: 'm' + Date.now(), conversation_id: conversationId, sender, content, image_url: imageUrl, reply_to_id: replyToId || null, reply_to: replyTo, created_at: new Date().toLocaleString('de-DE') };
           MOCK_MESSAGES[conversationId].push(msg);
           return msg;
         }
         try {
           const insertObj = { conversation_id: conversationId, sender_id: senderId, content: content || '' };
           if (imageUrl) insertObj.image_url = imageUrl;
-          const { data, error } = await this.sb.from('messages').insert(insertObj).select('*, sender:users(*)').single();
+          if (replyToId) insertObj.reply_to_id = replyToId;
+          const { data, error } = await this.sb.from('messages').insert(insertObj).select('*, sender:users(*), reply_to:reply_to_id(id, content, image_url, is_deleted, sender:sender_id(display_name))').single();
           if (error) throw error;
           return data;
         } catch (err) {
@@ -4320,7 +4453,14 @@
           return false;
         }
         try {
-          const { error } = await this.sb.from('messages').delete().eq('id', messageId);
+          // S12 (22.09.2026): Softdelete statt DELETE, siehe Migration
+          // 2026-09-22_S12-chat-antwort.sql -- sonst reisst ein hartes DELETE
+          // per ON DELETE SET NULL die reply_to_id-Referenz aller Antworten
+          // mit, und "Nachricht gelöscht" liesse sich im Zitatbalken nicht
+          // mehr darstellen. Die Zeile bleibt bewusst per RLS lesbar
+          // (dieselbe messages_update_own-Policy erlaubt dieses UPDATE
+          // bereits, keine Policy-Aenderung noetig), nur ohne Inhalt.
+          const { error } = await this.sb.from('messages').update({ is_deleted: true, content: '', image_url: null }).eq('id', messageId);
           if (error) throw error;
           return true;
         } catch (err) { console.error('deleteMessage error:', err); showToast('Nachricht konnte nicht gelöscht werden. Bitte versuche es erneut.', 'error'); return false; }
@@ -4457,6 +4597,16 @@
                 msg.sender = sender;
               } catch (e) {
                 msg.sender = { display_name: 'Unbekannt', avatar_color: '#757575' };
+              }
+            }
+            if (msg.reply_to_id && !msg.reply_to) {
+              try {
+                const { data: replyTo } = await this.sb.from('messages')
+                  .select('id, content, image_url, is_deleted, sender:sender_id(display_name)')
+                  .eq('id', msg.reply_to_id).single();
+                msg.reply_to = replyTo || null;
+              } catch (e) {
+                msg.reply_to = null;
               }
             }
             return msg;
@@ -5311,7 +5461,11 @@
         let alive = true;
         if (!ref) { setUrl(null); return; }
         if (!window.__krsResolveStorageUrl) { setUrl(ref); return; }
-        window.__krsResolveStorageUrl(ref).then(function (u) { if (alive) setUrl(u); });
+        window.__krsResolveStorageUrl(ref).then(function (u) { if (alive) setUrl(u); }).catch(function () {
+          // 9.1: resolveStorageUrl wirft jetzt bei echten Fehlern -- hier nicht
+          // crashen (unhandled rejection), sondern "Bild nicht ladbar" (kein src).
+          if (alive) setUrl(null);
+        });
         return function () { alive = false; };
       }, [ref]);
       return url;
@@ -5357,6 +5511,107 @@
         return s.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
       }
     }
+
+    // S2 (21.09.2026): EINE gemeinsame Leer-Pruefung fuer Knopf UND Sendefunktion.
+    // Vorher pruefte der Knopf das HTML des Editors (!input.trim()), handleSend()
+    // dagegen den TEXT (htmlToText(input).trim()) -- beide konnten auseinanderlaufen
+    // (z. B. bei reinem Markup ohne sichtbaren Text). Jetzt beide auf Basis von
+    // htmlToText, wie in handleSend() ohnehin schon verwendet.
+    function istComposerLeer(html, dateien) {
+      return !htmlToText(html).trim() && (!dateien || dateien.length === 0);
+    }
+
+    // S12 (22.09.2026, R15): Vorschau einer zitierten Chat-Nachricht.
+    // `ref` ist entweder der reply_to-Embed einer geladenen Nachricht
+    // ({id, content, image_url, is_deleted, sender:{display_name}}) oder
+    // die volle Original-Nachricht (waehrend man gerade antwortet).
+    function chatQuotePreview(ref) {
+      if (!ref) return null;
+      const author = (ref.sender && ref.sender.display_name) || 'Unbekannt';
+      if (ref.is_deleted) return { author, text: 'Nachricht gelöscht', deleted: true };
+      const isFileOnly = ref.content && (ref.content.indexOf('📎 ') === 0 || ref.content === '📷 Bild');
+      if (isFileOnly || (!ref.content && ref.image_url)) {
+        // Dateiname statt Text zitieren (Sprint 9d, Randfall 2) -- die
+        // Kurzfassung "📎 N Dateien" im content-Feld nennt keinen Namen,
+        // der steckt nur im image_url-JSON.
+        let label = null;
+        try {
+          const arr = JSON.parse(ref.image_url);
+          if (Array.isArray(arr) && arr.length) label = '📎 ' + arr[0].name + (arr.length > 1 ? ' +' + (arr.length - 1) : '');
+        } catch (e) {}
+        return { author, text: label || ref.content || '📷 Bild' };
+      }
+      const text = htmlToText(ref.content || '').trim();
+      return { author, text: text || '…' };
+    }
+
+    // S2: haengt ein Sendeversuch nie mehr unbegrenzt (Supabase kann auf dem
+    // Free-Plan zeitweise einfrieren, HANDOVER.md Abschnitt 0P) -- nach `ms`
+    // wird verworfen, der Knopf wird wieder frei, der Text bleibt stehen.
+    function withTimeout(promise, ms, label) {
+      return new Promise(function (resolve, reject) {
+        var t = setTimeout(function () {
+          reject(new Error((label || 'Vorgang') + ' hat zu lange gedauert.'));
+        }, ms);
+        promise.then(function (v) { clearTimeout(t); resolve(v); }, function (e) { clearTimeout(t); reject(e); });
+      });
+    }
+
+    // S11 (22.09.2026): ungesendete Texte je Ziel (Kanal, Antwort-Thread)
+    // ueberleben Reload/Tab-Wechsel. NICHT fuer Direktnachrichten (ChatPanel) --
+    // solange O1 nicht in dieser Datei als erledigt vermerkt ist, bleibt das so
+    // (Sprint 9c, Punkt 4). Jeder Zugriff in try/catch: im privaten Modus wirft
+    // localStorage, das darf die App nie zum Absturz bringen.
+    var KRS_DRAFT_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+    function krsDraftKey(typ, zielId) { return 'krs-draft-' + typ + '-' + zielId; }
+    function krsDraftIsEmpty(data) {
+      if (!data) return true;
+      return Object.keys(data).every(function (k) {
+        var v = data[k];
+        return !v || (typeof v === 'string' && !htmlToText(v).trim());
+      });
+    }
+    function loadDraft(typ, zielId) {
+      try {
+        var raw = localStorage.getItem(krsDraftKey(typ, zielId));
+        if (!raw) return null;
+        var d = JSON.parse(raw);
+        if (!d || typeof d !== 'object' || !d.savedAt || (Date.now() - d.savedAt) > KRS_DRAFT_MAX_AGE_MS) {
+          localStorage.removeItem(krsDraftKey(typ, zielId));
+          return null;
+        }
+        return d;
+      } catch (e) { return null; }
+    }
+    function saveDraft(typ, zielId, data) {
+      try {
+        if (krsDraftIsEmpty(data)) { localStorage.removeItem(krsDraftKey(typ, zielId)); return; }
+        var payload = Object.assign({}, data, { savedAt: Date.now() });
+        localStorage.setItem(krsDraftKey(typ, zielId), JSON.stringify(payload));
+      } catch (e) { /* privater Modus o.ae. -- Entwurf geht verloren, kein Absturz */ }
+    }
+    function clearDraft(typ, zielId) {
+      try { localStorage.removeItem(krsDraftKey(typ, zielId)); } catch (e) {}
+    }
+    // Einmal beim App-Start: alte (>14 Tage) und leere Entwuerfe aus allen
+    // Zielen entfernen, damit der Speicher nicht vollzulaeuft (S11, Aufgabe 3).
+    function cleanupOldDrafts() {
+      try {
+        var toRemove = [];
+        for (var i = 0; i < localStorage.length; i++) {
+          var key = localStorage.key(i);
+          if (!key || key.indexOf('krs-draft-') !== 0) continue;
+          try {
+            var d = JSON.parse(localStorage.getItem(key));
+            if (!d || typeof d !== 'object' || !d.savedAt || (Date.now() - d.savedAt) > KRS_DRAFT_MAX_AGE_MS || krsDraftIsEmpty(d)) {
+              toRemove.push(key);
+            }
+          } catch (e) { toRemove.push(key); }
+        }
+        toRemove.forEach(function (key) { try { localStorage.removeItem(key); } catch (e) {} });
+      } catch (e) {}
+    }
+    cleanupOldDrafts();
 
     // Default-/Müll-Farben aus Word/Outlook, die wir verwerfen (= keine echte Hervorhebung)
     const PASTE_DEFAULT_COLORS = ['black','#000','#000000','windowtext','inherit','initial','currentcolor','auto','rgb(0,0,0)','rgb(0, 0, 0)'];
@@ -6087,7 +6342,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.31.0';
+    window.KRS_VERSION = '4.32.0';
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
     // Playwright den Klick-Handler prüfen kann, ohne wirklich zu navigieren.
     // Aus tenant.js (TENANT-SPEC.md 2.4) — leer, wenn hub.enabled:false.
@@ -7113,6 +7368,30 @@
       const [openPostMenu, setOpenPostMenu] = useState(null); // postId or null
       // readReceiptsEnabled kommt jetzt als Prop von App (Single Source of Truth)
 
+      // S11 (22.09.2026): Entwurf dieses Kanals laden, sobald er gewechselt wird.
+      const draftLoadedForChannel = useRef(null);
+      useEffect(() => {
+        if (draftLoadedForChannel.current === channelId) return;
+        draftLoadedForChannel.current = channelId;
+        const d = loadDraft('channel', channelId);
+        if (d) {
+          setNewPostTitle(d.title || '');
+          setNewPostContent(d.content || '');
+          if (!krsDraftIsEmpty(d)) setShowPostForm(true);
+        } else {
+          setNewPostTitle('');
+          setNewPostContent('');
+        }
+      }, [channelId]);
+
+      // Gebremst speichern (max. alle 500ms) -- nicht bei jedem Tastendruck.
+      useEffect(() => {
+        const t = setTimeout(() => {
+          saveDraft('channel', channelId, { title: newPostTitle, content: newPostContent });
+        }, 500);
+        return () => clearTimeout(t);
+      }, [channelId, newPostTitle, newPostContent]);
+
       useEffect(() => {
         if (openPostMenu === null) return;
         const closeOnOutsideClick = (event) => {
@@ -7386,6 +7665,7 @@
             setIsUrgent(false);
             clearAllFiles();
             setShowPostForm(false);
+            clearDraft('channel', channelId);
           } else {
             setPostError('Post konnte nicht erstellt werden.');
           }
@@ -7640,6 +7920,23 @@
       const [replyFiles, setReplyFiles] = useState([]); // Array of { file, preview }
       const replyFileRef = useRef(null);
 
+      // S11 (22.09.2026): Entwurf dieser Antwort laden, sobald der Thread
+      // (anderer Ursprungsbeitrag) wechselt; gebremst (500ms) speichern.
+      const draftLoadedForPost = useRef(null);
+      useEffect(() => {
+        if (draftLoadedForPost.current === post.id) return;
+        draftLoadedForPost.current = post.id;
+        const d = loadDraft('reply', post.id);
+        setReplyContent(d ? (d.content || '') : '');
+      }, [post.id]);
+
+      useEffect(() => {
+        const t = setTimeout(() => {
+          saveDraft('reply', post.id, { content: replyContent });
+        }, 500);
+        return () => clearTimeout(t);
+      }, [post.id, replyContent]);
+
       const handleReplyFileSelect = (e) => {
         const newFiles = Array.from(e.target.files);
         const valid = [];
@@ -7657,25 +7954,33 @@
       const handleSendReply = async (e, overrideContent) => {
         if (e) e.preventDefault();
         const rawReply = typeof overrideContent === 'string' ? overrideContent : replyContent;
-        if (!htmlToText(rawReply).trim() && replyFiles.length === 0) return;
+        // S2: dieselbe gemeinsame Leer-Pruefung wie im Chat-Composer.
+        if (istComposerLeer(rawReply, replyFiles) || saving) return;
         setSaving(true);
         try {
           let fileUrls = [];
           for (const sf of replyFiles) {
-            const url = await dataService.uploadFile(sf.file);
+            // S2: 60s Zeitlimit -- sonst haengt der Knopf, wenn Supabase einfriert.
+            const url = await withTimeout(dataService.uploadFile(sf.file), 60000, 'Datei-Upload');
             if (url) fileUrls.push({ url, name: sf.file.name, type: sf.file.type, size: sf.file.size });
           }
-          if (replyFiles.length > 0 && fileUrls.length === 0) { showToast('Dateien konnten nicht hochgeladen werden.', 'error'); setSaving(false); return; }
+          if (replyFiles.length > 0 && fileUrls.length === 0) { showToast('Dateien konnten nicht hochgeladen werden.', 'error'); return; }
           const imageUrlValue = fileUrls.length > 0 ? JSON.stringify(fileUrls) : null;
           const contentText = (htmlToText(rawReply).trim() ? rawReply : '') || (fileUrls.length > 0 ? ('📎 ' + fileUrls.length + ' Datei' + (fileUrls.length > 1 ? 'en' : '')) : '');
-          const created = await dataService.createReply(post.id, post.channel_id || 1, user.id, contentText, imageUrlValue);
+          const created = await withTimeout(dataService.createReply(post.id, post.channel_id || 1, user.id, contentText, imageUrlValue), 20000, 'Senden');
           // Demo-Modus hat keine Realtime-Subscription → Antwort optimistisch anhängen.
           if (created && onReplyCreated) onReplyCreated(created);
           setReplyContent('');
+          clearDraft('reply', post.id);
           replyFiles.forEach(f => { if (f.preview) URL.revokeObjectURL(f.preview); });
           setReplyFiles([]);
-        } catch (err) { console.error('reply error', err); showToast('Antwort konnte nicht gesendet werden.', 'error'); }
-        setSaving(false);
+        } catch (err) {
+          console.error('reply error', err);
+          // S2: Text bleibt stehen (kein setReplyContent('')).
+          showToast('Antwort konnte nicht gesendet werden.', 'error');
+        } finally {
+          setSaving(false);
+        }
       };
 
       return React.createElement('div', { className: 'thread-container', onClick: onClose },
@@ -7745,7 +8050,7 @@
                     onClose: () => setShowReplyEmoji(false),
                     position: { top: '50%', left: '50%' }
                   }),
-                  React.createElement('button', { type: 'submit', disabled: saving, className: 'composer-send-btn', 'data-testid': 'reply-send-btn' },
+                  React.createElement('button', { type: 'submit', disabled: saving || istComposerLeer(replyContent, replyFiles), className: 'composer-send-btn', 'data-testid': 'reply-send-btn', title: saving ? 'Wird gesendet …' : (istComposerLeer(replyContent, replyFiles) ? 'Bitte erst eine Antwort eingeben' : 'Senden') },
                     React.createElement('span', null, saving ? 'Wird gesendet...' : 'Senden'),
                     React.createElement('span', { style: { width: '15px', height: '15px', display: 'inline-flex' }, dangerouslySetInnerHTML: { __html: Icons.send } })
                   )
@@ -7850,6 +8155,112 @@
       );
     }
 
+    // S5 (21.09.2026, Spezifikation 9.2): Team-Titel & Co. bearbeiten.
+    // Validierung: Name Pflicht (1-60 Zeichen, getrimmt), Beschreibung optional
+    // (max 200 Zeichen, leer -> null), Icon optional (max 4 Zeichen, Array.from
+    // wegen Emoji/Mehrbyte-Zeichen), Icon-Farbe aus TEAM_COLORS.
+    function EditTeamModal({ team, onClose, onSave }) {
+      const [name, setName] = useState(team.name || '');
+      const [description, setDescription] = useState(team.description || '');
+      const [iconText, setIconText] = useState(team.icon_text || '');
+      const [iconColor, setIconColor] = useState(team.icon_color || TEAM_COLORS[0]);
+      const [saving, setSaving] = useState(false);
+      const [error, setError] = useState('');
+
+      const trimmedName = name.trim();
+      const iconLen = Array.from(iconText).length;
+      const nameValid = trimmedName.length >= 1 && trimmedName.length <= 60;
+      const descValid = description.length <= 200;
+      const iconValid = iconLen <= 4;
+      const formValid = nameValid && descValid && iconValid;
+
+      const handleSave = async (e) => {
+        e.preventDefault();
+        if (!formValid) return;
+        setError('');
+        setSaving(true);
+        try {
+          const ok = await onSave({
+            name: trimmedName,
+            description: description.trim(),
+            icon_text: iconText.trim(),
+            icon_color: iconColor
+          });
+          if (!ok) setError('Speichern fehlgeschlagen.');
+        } catch (err) {
+          setError(err.message || 'Fehler beim Speichern');
+        } finally {
+          setSaving(false);
+        }
+      };
+
+      return React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Team bearbeiten', onClick: onClose },
+        React.createElement('div', { className: 'modal', onClick: e => e.stopPropagation() },
+          React.createElement('div', { className: 'modal-header' },
+            React.createElement('h3', null, 'Team bearbeiten')
+          ),
+          React.createElement('form', { onSubmit: handleSave, className: 'modal-body' },
+            error && React.createElement('div', { role: 'alert', 'aria-live': 'assertive', style: { background: 'var(--danger-bg, #fee)', color: 'var(--danger, #c33)', padding: '10px 12px', borderRadius: 'var(--radius)', marginBottom: '15px', fontSize: '13px' } }, error),
+            React.createElement('div', { className: 'form-group' },
+              React.createElement('label', { className: 'form-label', htmlFor: 'krs-team-edit-name' }, 'Team-Name'),
+              React.createElement('input', {
+                id: 'krs-team-edit-name',
+                type: 'text',
+                className: 'form-input',
+                value: name,
+                onChange: e => setName(e.target.value),
+                autoFocus: true,
+                maxLength: 60
+              }),
+              !nameValid && React.createElement('div', { style: { fontSize: '11px', color: 'var(--danger, #c33)', marginTop: '4px' } }, 'Name muss 1–60 Zeichen lang sein.')
+            ),
+            React.createElement('div', { className: 'form-group' },
+              React.createElement('label', { className: 'form-label', htmlFor: 'krs-team-edit-beschreibung' }, 'Beschreibung (optional)'),
+              React.createElement('input', {
+                id: 'krs-team-edit-beschreibung',
+                type: 'text',
+                className: 'form-input',
+                value: description,
+                onChange: e => setDescription(e.target.value),
+                maxLength: 200
+              }),
+              !descValid && React.createElement('div', { style: { fontSize: '11px', color: 'var(--danger, #c33)', marginTop: '4px' } }, 'Beschreibung darf max. 200 Zeichen haben.')
+            ),
+            React.createElement('div', { className: 'form-group' },
+              React.createElement('label', { className: 'form-label', htmlFor: 'krs-team-edit-icon' }, 'Icon (max. 4 Zeichen)'),
+              React.createElement('input', {
+                id: 'krs-team-edit-icon',
+                type: 'text',
+                className: 'form-input',
+                value: iconText,
+                onChange: e => setIconText(e.target.value),
+                placeholder: 'z.B. MU oder 🎵'
+              }),
+              !iconValid && React.createElement('div', { style: { fontSize: '11px', color: 'var(--danger, #c33)', marginTop: '4px' } }, 'Icon darf max. 4 Zeichen haben.')
+            ),
+            React.createElement('div', { className: 'form-group' },
+              React.createElement('label', { className: 'form-label' }, 'Icon-Farbe'),
+              React.createElement('div', { className: 'color-picker' },
+                TEAM_COLORS.map(color =>
+                  React.createElement('button', {
+                    key: color,
+                    type: 'button',
+                    className: 'color-swatch' + (iconColor === color ? ' selected' : ''),
+                    style: { background: color },
+                    onClick: () => setIconColor(color)
+                  })
+                )
+              )
+            )
+          ),
+          React.createElement('div', { className: 'modal-footer' },
+            React.createElement('button', { type: 'button', className: 'btn-secondary', onClick: onClose }, 'Abbrechen'),
+            React.createElement('button', { type: 'button', className: 'btn-primary', disabled: saving || !formValid, onClick: handleSave }, saving ? 'Wird gespeichert...' : 'Speichern')
+          )
+        )
+      );
+    }
+
     // #15: Mehrere Teams gleichzeitig löschen (Schuljahresende-Aufräumen, nur globaler Admin)
     function BulkDeleteTeamsModal({ teams, archivedTeams, dataService, onClose, onDeleted }) {
       const all = [...(teams || []), ...(archivedTeams || []).map(t => ({ ...t, _archived: true }))];
@@ -7903,13 +8314,14 @@
       );
     }
 
-    function TeamMembersModal({ teamId, dataService, onClose, onMembersUpdated, currentUser, isAdmin, onArchive, onDelete, isGlobalAdmin, teamName }) {
+    function TeamMembersModal({ teamId, team, dataService, onClose, onMembersUpdated, currentUser, isAdmin, onArchive, onDelete, isGlobalAdmin, teamName, onUpdate }) {
       const [members, setMembers] = useState([]);
       const [availableUsers, setAvailableUsers] = useState([]);
       const [loading, setLoading] = useState(true);
       const [allUsers, setAllUsers] = useState([]);
       const [searchTerm, setSearchTerm] = useState('');
       const [error, setError] = useState('');
+      const [showEditTeam, setShowEditTeam] = useState(false);
 
       useEffect(() => {
         const loadData = async () => {
@@ -7973,7 +8385,8 @@
         }
       };
 
-      return React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Mitgliederverwaltung', onClick: onClose },
+      return React.createElement(React.Fragment, null,
+        React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Mitgliederverwaltung', onClick: onClose },
         React.createElement('div', { className: 'modal', onClick: e => e.stopPropagation(), style: { width: '480px' } },
           React.createElement('div', { className: 'modal-header' },
             React.createElement('h3', null, 'Mitgliederverwaltung')
@@ -8050,6 +8463,13 @@
             },
               React.createElement('h4', { style: { fontSize: '14px', fontWeight: '600', marginBottom: '10px' } }, 'Team-Verwaltung'),
               React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px' } },
+                onUpdate && React.createElement('button', {
+                  type: 'button',
+                  className: 'btn-secondary',
+                  'data-testid': 'team-edit-btn',
+                  onClick: () => setShowEditTeam(true),
+                  title: 'Team-Titel, Beschreibung, Icon bearbeiten'
+                }, '✏️ Bearbeiten'),
                 onArchive && React.createElement('button', {
                   type: 'button',
                   className: 'btn-secondary',
@@ -8073,6 +8493,16 @@
             React.createElement('button', { type: 'button', className: 'btn-secondary', onClick: onClose }, 'Schließen')
           )
         )
+      ),
+        showEditTeam && team && React.createElement(EditTeamModal, {
+          team,
+          onClose: () => setShowEditTeam(false),
+          onSave: async (fields) => {
+            const ok = await onUpdate(team.id, fields);
+            if (ok) setShowEditTeam(false);
+            return ok;
+          }
+        })
       );
     }
 
@@ -8281,6 +8711,16 @@
       const [msgReactions, setMsgReactions] = useState(new Map()); // #11: Map<msgId,[{emoji,users,count}]>
       const [reactionPickerMsgId, setReactionPickerMsgId] = useState(null);
       const [chatDragActive, setChatDragActive] = useState(false); // Drag&Drop-Overlay im Chat
+      // S12 (22.09.2026, R15): Nachricht, auf die gerade geantwortet wird
+      // (volle Original-Nachricht fuer den Bezugs-Balken ueber dem Eingabefeld).
+      const [replyingTo, setReplyingTo] = useState(null);
+      const scrollToChatMessage = (id) => {
+        const el = document.getElementById('krs-msg-' + id);
+        if (!el) return;
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('chat-msg-highlight');
+        setTimeout(() => el.classList.remove('chat-msg-highlight'), 1500);
+      };
       // Feedback #3 (Stresstest 09.07.): Gruppenmitglieder ansehen & hinzufügen
       const [showGroupMembers, setShowGroupMembers] = useState(false);
       const [groupMemberIds, setGroupMemberIds] = useState([]);
@@ -8488,22 +8928,25 @@
       const handleSend = async (e, overrideContent) => {
         if (e) e.preventDefault();
         const rawInput = typeof overrideContent === 'string' ? overrideContent : input;
-        if ((!htmlToText(rawInput).trim() && chatFiles.length === 0) || sending) return;
+        if (istComposerLeer(rawInput, chatFiles) || sending) return;
         setSending(true);
         try {
           let fileUrls = [];
           if (chatFiles.length > 0) {
             showToast(chatFiles.length > 1 ? 'Dateien werden hochgeladen…' : 'Datei wird hochgeladen…', 'info');
             // Parallel statt nacheinander → spürbar schneller bei mehreren Dateien.
+            // S2: 60s Zeitlimit je Datei-Upload -- sonst haengt der Knopf auf
+            // ewig, wenn Supabase (Free-Plan) einfriert.
             const results = await Promise.all(chatFiles.map(async sf => {
-              const url = await dataService.uploadFile(sf.file);
+              const url = await withTimeout(dataService.uploadFile(sf.file), 60000, 'Datei-Upload');
               return url ? { url, name: sf.file.name, type: sf.file.type, size: sf.file.size } : null;
             }));
             fileUrls = results.filter(Boolean);
           }
           const imageUrlValue = fileUrls.length > 0 ? JSON.stringify(fileUrls) : null;
           const contentText = (htmlToText(rawInput).trim() ? rawInput : '') || (fileUrls.length > 0 ? ('📎 ' + fileUrls.length + ' Datei' + (fileUrls.length > 1 ? 'en' : '')) : '');
-          const sentMsg = await dataService.sendMessage(conversation.id, currentUser.id, contentText, imageUrlValue);
+          // S2: 20s Zeitlimit fuers Senden selbst -- gleicher Grund.
+          const sentMsg = await withTimeout(dataService.sendMessage(conversation.id, currentUser.id, contentText, imageUrlValue, replyingTo ? replyingTo.id : null), 20000, 'Senden');
           if (sentMsg && setMessages) {
             setMessages(prev => {
               if (prev.some(m => m.id === sentMsg.id)) return prev;
@@ -8516,11 +8959,18 @@
           }
           setInput('');
           clearChatFiles();
+          setReplyingTo(null);
         } catch (err) {
           console.error('Send failed:', err);
+          // S2: der getippte Text bleibt stehen (kein setInput('')) -- weder
+          // bei einem echten Fehler noch beim Zeitlimit geht er verloren.
           showToast('Nachricht konnte nicht gesendet werden. Bitte pr\u00fcfe deine Verbindung.', 'error');
+        } finally {
+          // S2: IMMER freigeben, auch nach Zeitlimit -- vorher stand das nach
+          // dem try/catch (lief effektiv wie finally), aber weniger robust
+          // gegen kuenftige Aenderungen (ein return im catch haette es geschluckt).
+          setSending(false);
         }
-        setSending(false);
       };
 
       const handleEditMsg = (msg) => { setEditingMsgId(msg.id); setEditMsgContent(msg.content || ''); };
@@ -8590,10 +9040,25 @@
             const isFileOnly = msg.content && (msg.content.startsWith('📎 ') || msg.content === '📷 Bild');
             return React.createElement('div', {
               key: msg.id,
+              id: 'krs-msg-' + msg.id,
               className: 'chat-msg ' + (own ? 'own' : 'other')
             },
               !own && React.createElement(Avatar, { user: msg.sender, size: 28 }),
               React.createElement('div', { className: 'chat-bubble ' + (own ? 'own' : 'other'), style: { position: 'relative' } },
+                // S12 (22.09.2026, R15): flacher Zitatbalken -- keine
+                // Einrueckungsebene, ein Tipp springt zur Originalnachricht.
+                msg.reply_to_id && (() => {
+                  const q = chatQuotePreview(msg.reply_to);
+                  if (!q) return null;
+                  return React.createElement('div', {
+                    className: 'chat-reply-quote', 'data-testid': 'chat-reply-quote',
+                    onClick: () => scrollToChatMessage(msg.reply_to_id),
+                    title: 'Zur Originalnachricht springen'
+                  },
+                    React.createElement('span', { className: 'chat-reply-quote-author' }, q.author + ':'),
+                    React.createElement('span', { className: 'chat-reply-quote-text' + (q.deleted ? ' chat-reply-quote-deleted' : '') }, q.text)
+                  );
+                })(),
                 msg.image_url && React.createElement(AttachmentBlock, { image_url: msg.image_url, compact: true }),
                 editing
                   ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } },
@@ -8611,9 +9076,10 @@
                     )
                   : (msg.content && !isFileOnly && React.createElement('div', { className: 'chat-text', dangerouslySetInnerHTML: { __html: sanitizeHtml(msg.content) } })),
                 !editing && React.createElement('div', { className: 'chat-time' }, formatDate(msg.created_at), msg.edited_at && ' (bearbeitet)'),
-                own && !editing && React.createElement('div', { className: 'chat-msg-actions' },
-                  !isFileOnly && React.createElement('button', { type: 'button', onClick: () => handleEditMsg(msg), title: 'Bearbeiten', 'aria-label': 'Nachricht bearbeiten', style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', padding: '4px', minWidth: '30px', minHeight: '30px' } }, '✏️'),
-                  React.createElement('button', { type: 'button', onClick: () => handleDeleteMsg(msg.id), title: 'Löschen', 'aria-label': 'Nachricht löschen', style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', padding: '4px', minWidth: '30px', minHeight: '30px' } }, '🗑️')
+                !editing && React.createElement('div', { className: 'chat-msg-actions' },
+                  React.createElement('button', { type: 'button', 'data-testid': 'chat-reply-btn', onClick: () => setReplyingTo(msg), title: 'Antworten', 'aria-label': 'Auf Nachricht antworten', style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', padding: '4px', minWidth: '30px', minHeight: '30px' } }, '↩'),
+                  own && !isFileOnly && React.createElement('button', { type: 'button', onClick: () => handleEditMsg(msg), title: 'Bearbeiten', 'aria-label': 'Nachricht bearbeiten', style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', padding: '4px', minWidth: '30px', minHeight: '30px' } }, '✏️'),
+                  own && React.createElement('button', { type: 'button', onClick: () => handleDeleteMsg(msg.id), title: 'Löschen', 'aria-label': 'Nachricht löschen', style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', padding: '4px', minWidth: '30px', minHeight: '30px' } }, '🗑️')
                 ),
                 // #11: Reaktionen — Chips + „Reagieren"-Button
                 !editing && React.createElement('div', { className: 'chat-reactions', 'data-testid': 'chat-reactions', style: { display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px', alignItems: 'center' } },
@@ -8672,6 +9138,15 @@
           ),
           chatFiles.length > 1 && React.createElement('button', { type: 'button', onClick: clearChatFiles, style: { fontSize: '10px', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' } }, 'Alle entfernen')
         ),
+        replyingTo && (() => {
+          const q = chatQuotePreview(replyingTo);
+          if (!q) return null;
+          return React.createElement('div', { className: 'chat-reply-bar', 'data-testid': 'chat-reply-bar' },
+            React.createElement('span', { 'aria-hidden': 'true' }, '↩'),
+            React.createElement('span', { className: 'chat-reply-bar-text' }, q.author + ': ' + q.text),
+            React.createElement('button', { type: 'button', className: 'chat-reply-bar-close', onClick: () => setReplyingTo(null), title: 'Antwort verwerfen', 'aria-label': 'Antwort-Bezug verwerfen' }, '✕')
+          );
+        })(),
         React.createElement('form', { className: 'chat-input-bar', onSubmit: handleSend },
           React.createElement('input', { ref: chatFileRef, type: 'file', multiple: true, accept: 'image/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt', onChange: handleChatFileSelect, style: { display: 'none' } }),
           React.createElement('button', { type: 'button', onClick: () => chatFileRef.current?.click(), title: 'Dateien senden (max. 10)', 'aria-label': 'Dateien senden', className: 'chat-image-btn', style: { background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: '18px', cursor: 'pointer', padding: '6px 10px', color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', minHeight: '36px' } },
@@ -8706,8 +9181,10 @@
           React.createElement('button', {
             type: 'submit',
             className: 'chat-send-btn',
-            disabled: sending || (!input.trim() && chatFiles.length === 0),
+            disabled: sending || istComposerLeer(input, chatFiles),
             'aria-label': 'Nachricht senden',
+            // S2 #4: solange gesperrt, sagt der Knopf sichtbar warum.
+            title: sending ? 'Wird gesendet …' : (istComposerLeer(input, chatFiles) ? 'Bitte erst eine Nachricht eingeben' : 'Senden'),
             dangerouslySetInnerHTML: { __html: Icons.send }
           })
         ),
@@ -9766,6 +10243,15 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.32.0', date: '22.09.2026', items: [
+        '„Neuer Tab“ und der Download-Notfallpfad öffnen das Fenster jetzt sofort beim Klick — vorher blockierten Safari/Chrome das Fenster oft unbemerkt, weil es erst nach einer Wartezeit geöffnet wurde',
+        'Der Senden-Knopf bleibt nach einer hängenden oder fehlgeschlagenen Nachricht nicht mehr dauerhaft gesperrt: 20 Sekunden Zeitlimit, sichtbare Fehlermeldung, der getippte Text bleibt erhalten',
+        '„Foren“ heißen wieder „Teams“ — in der gesamten Oberfläche',
+        'Team-Titel, Beschreibung und Symbol lassen sich jetzt direkt in der Team-Verwaltung bearbeiten',
+        'Kanäle lassen sich per Rechtsklick/Kontextmenü neu anordnen (Pfeil hoch/runter) — auch auf iPad/Handy',
+        'Angefangene Beiträge, Antworten und Chat-Nachrichten gehen nicht mehr verloren: der Entwurf bleibt 14 Tage lang erhalten, auch nach einem Absturz oder Tab-Wechsel',
+        'Chat-Nachrichten lassen sich jetzt zitieren („↩ Antworten“): ein Tipp auf das Zitat springt zur Originalnachricht; gelöschte Originale zeigen „Nachricht gelöscht“ statt zu verschwinden'
+      ] },
       { v: '4.31.0', date: '21.09.2026', items: [
         'Eine Nachricht an eine einzelne Person landet wieder bei dieser Person: Wer \u201e+\u201c dr\u00fcckt und einen Namen w\u00e4hlt, bekommt jetzt zuverl\u00e4ssig einen Einzelchat \u2014 vorher konnte stattdessen ein gemeinsamer Gruppenchat ge\u00f6ffnet werden, der wie ein Einzelchat aussah',
         'Bestehende Einzelchats werden sicher wiedergefunden statt doppelt angelegt',
@@ -10494,6 +10980,30 @@
         setChannelContextMenu({ channel: ch, x, y, trigger: e.currentTarget });
       }, [user, selectedTeam, userTeamRole]);
 
+      // S10 (22.09.2026, R14): Kanal in der Team-Liste nach oben/unten
+      // verschieben -- tauscht die `position`-Werte der beiden Nachbarn.
+      const handleMoveChannel = useCallback(async (channel, direction) => {
+        const list = channels;
+        const idx = list.findIndex(c => c.id === channel.id);
+        if (idx === -1) return;
+        const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+        if (swapIdx < 0 || swapIdx >= list.length) return;
+        const a = list[idx], b = list[swapIdx];
+        const posA = typeof a.position === 'number' ? a.position : idx;
+        const posB = typeof b.position === 'number' ? b.position : swapIdx;
+        const reordered = [...list];
+        [reordered[idx], reordered[swapIdx]] = [reordered[swapIdx], reordered[idx]];
+        setChannels(reordered);
+        const [okA, okB] = await Promise.all([
+          dataService.updateChannel(a.id, { position: posB }),
+          dataService.updateChannel(b.id, { position: posA })
+        ]);
+        if (!okA || !okB) {
+          setChannels(list);
+          showToast('Reihenfolge konnte nicht gespeichert werden.', 'error');
+        }
+      }, [channels]);
+
       // Forward post to another channel or DM
       const handleForwardPost = useCallback(async (payload, target) => {
         // target: { type: 'channel' | 'dm', id }   payload: Post-Objekt ODER { __file }
@@ -10744,7 +11254,7 @@
             setUserTeamRole('admin'); // Demo: always admin
           }
         }
-        // Ausgeblendete Foren laden (persistiert) — Sprint 4
+        // Ausgeblendete Teams laden (persistiert) — Sprint 4
         try {
           const hiddenT = await dataService.getHiddenIds('team', selectedUser.id);
           if (hiddenT && hiddenT.size) setHiddenTeams(hiddenT);
@@ -11017,7 +11527,9 @@
               });
             },
             onUpdate: updatedMsg => {
-              if (!cancelled) setChatMessages(prev => prev.map(m => m.id === updatedMsg.id ? { ...m, ...updatedMsg } : m));
+              if (!cancelled) setChatMessages(prev => updatedMsg.is_deleted
+                ? prev.filter(m => m.id !== updatedMsg.id)
+                : prev.map(m => m.id === updatedMsg.id ? { ...m, ...updatedMsg } : m));
             },
             onDelete: deletedMsg => {
               if (!cancelled) setChatMessages(prev => prev.filter(m => m.id !== deletedMsg.id));
@@ -11269,7 +11781,7 @@
       const handleToggleTeamHidden = useCallback((teamId) => {
         const willHide = !hiddenTeams.has(teamId);
         applyTeamHidden(teamId, willHide);
-        showToast(willHide ? 'Forum ausgeblendet' : 'Forum wieder eingeblendet', 'info',
+        showToast(willHide ? 'Team ausgeblendet' : 'Team wieder eingeblendet', 'info',
           { label: 'Rückgängig', onClick: () => applyTeamHidden(teamId, !willHide) });
       }, [hiddenTeams, applyTeamHidden]);
 
@@ -11378,6 +11890,18 @@
       };
 
       // ── Team-Archivierung (#8) ──────────────────────────
+      // S5 (21.09.2026): Team bearbeiten -- aktualisiert Teamliste, Kopfzeile
+      // und ☰-Schubfach sofort, ohne Neuladen (alle drei lesen aus `teams`
+      // bzw. `selectedTeam`).
+      const handleUpdateTeam = async (teamId, fields) => {
+        const ok = await dataService.updateTeam(teamId, fields);
+        if (!ok) return false;
+        setTeams(prev => prev.map(t => t.id === teamId ? { ...t, ...fields } : t));
+        setSelectedTeam(prev => (prev && prev.id === teamId) ? { ...prev, ...fields } : prev);
+        showToast('Team „' + (fields.name || '') + '" aktualisiert', 'success');
+        return true;
+      };
+
       const handleArchiveTeam = async (teamId) => {
         const ok = await dataService.archiveTeam(teamId);
         if (!ok) return;
@@ -11510,7 +12034,7 @@
       }
 
       // v4.25.0 — Navigationsblock im ☰-Menü (nur mobil, nur im Hub-Einbau).
-      // Ersetzt Connects eigene untere Leiste: der Wechsel Foren/Chats steht
+      // Ersetzt Connects eigene untere Leiste: der Wechsel Teams/Chats steht
       // oben, alles Seltene (Merkliste, Einstellungen, Profil, Admin) darunter.
       // Damit bleibt auf dem Handy genau EINE Leiste im Bild — die des Hubs
       // mit „Connect“ und „Apps“ (Rückmeldung Norbert, 17.09.2026).
@@ -11538,7 +12062,7 @@
           'data-testid': 'drawer-nav-teams',
           'aria-current': view === 'teams' ? 'page' : undefined,
           onClick: () => { setView('teams'); setMobileSidebarOpen(false); }
-        }, '\uD83D\uDCCB', ' Foren'),
+        }, '\uD83D\uDCCB', ' Teams'),
         React.createElement('button', {
           className: view === 'chat' ? 'active' : '',
           'data-testid': 'drawer-nav-chat',
@@ -11641,7 +12165,7 @@
                       'aria-label': mutedTeams.has(team.id) ? 'Stummschaltung aufheben' : 'Team stummschalten',
                       'data-testid': 'team-mute-btn'
                     }, mutedTeams.has(team.id) ? '🔕' : '🔔'),
-                    React.createElement('button', { className: 'team-hide-btn', onClick: (e) => { e.stopPropagation(); handleToggleTeamHidden(team.id); }, title: 'Forum ausblenden', 'data-testid': 'team-hide' }, '👁')
+                    React.createElement('button', { className: 'team-hide-btn', onClick: (e) => { e.stopPropagation(); handleToggleTeamHidden(team.id); }, title: 'Team ausblenden', 'data-testid': 'team-hide' }, '👁')
                   ),
                   // v4.29.0 — Kanäle des aufgeklappten Teams direkt darunter.
                   // Nur im Handy-Layout sichtbar (CSS `.team-children`), am
@@ -11656,6 +12180,9 @@
                             className: 'list-item' + (selectedChannel?.id === ch.id ? ' active' : ''),
                             'data-testid': 'team-child-channel',
                             onClick: () => handleChannelSelect(ch),
+                            onContextMenu: (e) => handleChannelContextMenu(e, ch),
+                            onKeyDown: (e) => { if ((canManageTeam(user, team) || userTeamRole === 'admin') && (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10'))) handleChannelContextMenu(e, ch); },
+                            'aria-haspopup': (canManageTeam(user, team) || userTeamRole === 'admin') ? 'menu' : undefined,
                             'aria-current': selectedChannel?.id === ch.id ? 'page' : undefined,
                             style: { display: 'flex', gap: '8px', alignItems: 'center', width: '100%' }
                           },
@@ -11788,7 +12315,10 @@
           // Mobiler Einstieg, wenn noch kein Kanal gewählt ist: ohne diesen
           // Button käme man auf dem Handy nicht an den Teams-/Kanäle-Drawer.
           !selectedChannel && React.createElement('div', { style: { padding: '16px' } },
-            React.createElement('button', { className: 'mobile-menu-btn', onClick: () => setMobileSidebarOpen(true), style: { display: 'none', alignItems: 'center', gap: '8px', padding: '10px 14px', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', color: 'var(--text-primary)', fontSize: '15px' } }, '☰ Team & Kanal wählen')
+            React.createElement('button', { className: 'mobile-menu-btn', onClick: () => setMobileSidebarOpen(true), style: { display: 'none', alignItems: 'center', gap: '8px', padding: '10px 14px', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', color: 'var(--text-primary)', fontSize: '15px' } },
+              '☰ Team & Kanal wählen',
+              (unreadChatCount + Array.from(unreadPostChannels.values()).reduce((a, b) => a + b, 0)) > 0 && React.createElement('span', { className: 'nav-badge', style: { marginLeft: '4px' } }, (unreadChatCount + Array.from(unreadPostChannels.values()).reduce((a, b) => a + b, 0)) > 9 ? '9+' : (unreadChatCount + Array.from(unreadPostChannels.values()).reduce((a, b) => a + b, 0)))
+            )
           ),
           // v4.12.0: Tab-Leiste pro Team — Beiträge | Dateiablage (Links) | Termine
           selectedTeam && React.createElement('div', { className: 'team-tabs', role: 'tablist', 'aria-label': 'Team-Bereiche' },
@@ -11835,7 +12365,10 @@
           teamTab === 'posts' && selectedChannel && React.createElement(React.Fragment, null,
             React.createElement('div', { className: 'content-header', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
               React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
-                React.createElement('button', { className: 'mobile-menu-btn', onClick: () => setMobileSidebarOpen(true), style: { display: 'none', background: 'none', border: 'none', cursor: 'pointer', fontSize: '24px', color: 'var(--text-secondary)' } }, '\u2630'),
+                React.createElement('button', { className: 'mobile-menu-btn', onClick: () => setMobileSidebarOpen(true), style: { display: 'none', background: 'none', border: 'none', cursor: 'pointer', fontSize: '24px', color: 'var(--text-secondary)', position: 'relative' } },
+                  '\u2630',
+                  (unreadChatCount + Array.from(unreadPostChannels.values()).reduce((a, b) => a + b, 0)) > 0 && React.createElement('span', { className: 'nav-badge', style: { position: 'absolute', top: '-2px', right: '-6px', fontSize: '10px' } }, (unreadChatCount + Array.from(unreadPostChannels.values()).reduce((a, b) => a + b, 0)) > 9 ? '9+' : (unreadChatCount + Array.from(unreadPostChannels.values()).reduce((a, b) => a + b, 0))),
+                ),
                 React.createElement('h1', null, '# ' + selectedChannel.name)
               ),
               selectedTeam && React.createElement('button', {
@@ -11870,8 +12403,11 @@
             onClick: () => setMobileSidebarOpen(true),
             'data-testid': 'chat-open-list',
             'aria-label': 'Chatliste öffnen',
-            style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '22px', color: 'var(--text-secondary)' }
-          }, '\u2630'),
+            style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '22px', color: 'var(--text-secondary)', position: 'relative' }
+          },
+            '\u2630',
+            (unreadChatCount + Array.from(unreadPostChannels.values()).reduce((a, b) => a + b, 0)) > 0 && React.createElement('span', { className: 'nav-badge', style: { position: 'absolute', top: '-2px', right: '-6px', fontSize: '10px' } }, (unreadChatCount + Array.from(unreadPostChannels.values()).reduce((a, b) => a + b, 0)) > 9 ? '9+' : (unreadChatCount + Array.from(unreadPostChannels.values()).reduce((a, b) => a + b, 0)))
+          ),
           React.createElement('h1', null, selectedConversation ? ((selectedConversation.name || (selectedConversation.user || {}).display_name) || 'Chat') : 'Chats'),
           React.createElement('span', { className: 'spacer' })
         ),
@@ -11932,6 +12468,7 @@
         }),
         showTeamMembers && selectedTeam && React.createElement(TeamMembersModal, {
           teamId: selectedTeam.id,
+          team: selectedTeam,
           dataService,
           onClose: () => setShowTeamMembers(false),
           onMembersUpdated: () => {},
@@ -11940,7 +12477,8 @@
           isGlobalAdmin: isAdminRole(user),
           teamName: selectedTeam.name,
           onArchive: handleArchiveTeam,
-          onDelete: handleDeleteTeam
+          onDelete: handleDeleteTeam,
+          onUpdate: handleUpdateTeam
         }),
         // Channel erstellen Dialog
         // v4.19.1: echtes <form onSubmit> statt onKeyDown==='Enter' auf dem Input.
@@ -12013,6 +12551,15 @@
                 role: 'menu', 'aria-label': 'Kanal-Aktionen', onKeyDown: onMenuKey,
                 ref: (el) => { if (el) { const first = el.querySelector('[role="menuitem"]'); if (first) requestAnimationFrame(() => { try { first.focus(); } catch (e) {} }); } }
               },
+              (() => {
+                const idx = channels.findIndex(c => c.id === channelContextMenu.channel.id);
+                const isFirst = idx <= 0;
+                const isLast = idx === -1 || idx >= channels.length - 1;
+                return React.createElement(React.Fragment, null,
+                  !isFirst && React.createElement('button', { role: 'menuitem', 'data-testid': 'channel-move-up', onClick: () => { handleMoveChannel(channelContextMenu.channel, 'up'); closeMenu(); } }, '↑', ' Nach oben'),
+                  !isLast && React.createElement('button', { role: 'menuitem', 'data-testid': 'channel-move-down', onClick: () => { handleMoveChannel(channelContextMenu.channel, 'down'); closeMenu(); } }, '↓', ' Nach unten')
+                );
+              })(),
               React.createElement('button', { role: 'menuitem', onClick: () => { setEditingChannel(channelContextMenu.channel); setChannelContextMenu(null); } }, '✏️', ' Umbenennen'),
               !channelContextMenu.channel.is_default && React.createElement('button', { role: 'menuitem', className: 'danger', onClick: () => { if (confirm('Kanal „' + channelContextMenu.channel.name + '" wirklich löschen? Alle Beiträge gehen verloren.')) handleDeleteChannel(channelContextMenu.channel); else setChannelContextMenu(null); } }, '🗑', ' Löschen')
             )
@@ -12106,7 +12653,7 @@
             ),
             // v4.24.0 — „Notizen & Aufgaben“ und „Dateiablage“ sind hier entfernt,
             // solange die Schule den Hub nutzt: beides sind Hub-Apps und stehen
-            // dort als Kachel. Connect zeigt nur noch, was Connect ist — Foren
+            // dort als Kachel. Connect zeigt nur noch, was Connect ist — Teams
             // und Chats (Rueckmeldung Norbert, 17.09.2026: „Connect sollte
             // aufgeraeumt sein mit maximaler Fokussierung auf Inhalte“).
             // Schulen ohne Hub behalten den Dateiablage-Link (siehe oben).

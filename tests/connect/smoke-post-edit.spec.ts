@@ -1,7 +1,7 @@
 import { test, expect } from '../fixtures/connect';
 
 /**
- * Fix #6 — Forenbeitrag bearbeiten (robust).
+ * Fix #6 — Team-Beitrag bearbeiten (robust).
  *
  * DataService.updatePost im Demo-Modus: ändert Inhalt/Titel und setzt edited_at
  * (Grundlage für das "(bearbeitet)"-Label). Die Live-Variante speichert

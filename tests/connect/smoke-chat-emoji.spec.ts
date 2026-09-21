@@ -3,7 +3,7 @@ import { test, expect } from '../fixtures/connect';
 /**
  * #10 — Emojis im Chat-Composer
  *
- * Die vorhandene EmojiPicker-Komponente (bisher nur im Forum) ist jetzt auch im
+ * Die vorhandene EmojiPicker-Komponente (bisher nur im Team) ist jetzt auch im
  * Chat-Eingabefeld verfügbar. Test: Picker öffnet, ausgewähltes Emoji landet im
  * Nachrichten-Input.
  */
