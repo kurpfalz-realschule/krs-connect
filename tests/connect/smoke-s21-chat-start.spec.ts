@@ -1,5 +1,18 @@
 import { test, expect, openConnect } from '../fixtures/connect.ts';
 
+// Versionen nie hart vergleichen — sonst wird dieser Test bei jedem Release rot
+// (gleiche Falle wie frueher in smoke-auto-update.spec.ts).
+function semverGte(a: string, b: string): boolean {
+  const pa = String(a).split('.').map(Number);
+  const pb = String(b).split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    const x = pa[i] || 0, y = pb[i] || 0;
+    if (x !== y) return x > y;
+  }
+  return true;
+}
+
+
 /**
  * S21 (v4.36.0): Kollegium-Prefix + Chat-Start auto-select
  */
@@ -65,6 +78,7 @@ test.describe('S21 Chat-Start & Kollegium-Prefix', () => {
 
     // Version
     const ver = await page.evaluate(() => (window as any).KRS_VERSION);
-    expect(ver).toBe('4.36.0');
+    expect(ver).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(semverGte(ver, '4.36.0'), `KRS_VERSION ${ver} ist aelter als 4.36.0`).toBe(true);
   });
 });

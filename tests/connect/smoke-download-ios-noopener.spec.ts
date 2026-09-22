@@ -1,5 +1,18 @@
 import { test, expect, openConnect } from '../fixtures/connect.ts';
 
+// Versionen nie hart vergleichen — sonst wird dieser Test bei jedem Release rot
+// (gleiche Falle wie frueher in smoke-auto-update.spec.ts).
+function semverGte(a: string, b: string): boolean {
+  const pa = String(a).split('.').map(Number);
+  const pb = String(b).split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    const x = pa[i] || 0, y = pb[i] || 0;
+    if (x !== y) return x > y;
+  }
+  return true;
+}
+
+
 /**
  * 0AU / v4.37.0 — iPhone Download: kein noopener-null-Trap mehr.
  * Statische + Hook-Prüfungen (echte iOS-Safari-Downloads bleiben Geräte-Retest).
@@ -16,7 +29,8 @@ test.describe('0AU Download iOS / noopener-Trap', () => {
     expect(hooks.dl).toBe('function');
     expect(hooks.openBlank).toBe('function');
     expect(hooks.isIOS).toBe('function');
-    expect(hooks.version).toBe('4.37.0');
+    expect(hooks.version).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(semverGte(String(hooks.version), '4.37.0'), `KRS_VERSION ${hooks.version} ist aelter als 4.37.0`).toBe(true);
   });
 
   test('__krsOpenBlankForNav öffnet ohne noopener-Feature (Rückgabe nutzbar)', async ({ connectPage: page }) => {
