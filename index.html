@@ -2059,12 +2059,20 @@
           // S1 (21.09.2026): Fenster SOFORT in der Nutzergeste öffnen, Inhalt
           // nachreichen -- window.open() nach einem await wird vom Popup-Blocker
           // verschluckt (Safari/Chrome), sichtbar passiert dann nichts.
-          if (!window.__krsResolveStorageUrl) { window.open(imgUrl, '_blank', 'noopener'); return; }
-          var w = window.open('', '_blank', 'noopener');
+          // 0AU/v4.37.0: kein 'noopener' beim Reservieren — sonst liefert open() null
+          // und location= läuft nie (iPhone Safari / Web Clip).
+          var openBlank = window.__krsOpenBlankForNav || function(){ var ww = window.open('', '_blank'); try { if (ww) ww.opener = null; } catch (e) {} return ww; };
+          if (!window.__krsResolveStorageUrl) {
+            var w0 = openBlank();
+            if (w0) w0.location = imgUrl; else if (typeof window.showToast === 'function') window.showToast('Popup blockiert — bitte Download im Datei-Viewer nutzen.', 'error');
+            return;
+          }
+          var w = openBlank();
           window.__krsResolveStorageUrl(imgUrl).then(function(u){
-            if (w) w.location = u; else window.open(u, '_blank', 'noopener');
+            if (w) w.location = u;
+            else if (typeof window.showToast === 'function') window.showToast('Popup blockiert — bitte Download im Datei-Viewer nutzen.', 'error');
           }).catch(function(){
-            if (w) w.close();
+            if (w) try { w.close(); } catch (e) {}
             if (typeof window.showToast === 'function') window.showToast('Bild konnte nicht geöffnet werden.', 'error');
           });
         };
@@ -2333,51 +2341,115 @@
           return u.toString();
         } catch (e) { return url; }
       }
+      // 0AU / v4.37.0 — iPhone/iPadOS + Safari/Web-Clip Download-Fix
+      // Ursache: window.open('', '_blank', 'noopener') liefert in modernen Browsern
+      // oft null → Blob-<a download> macht auf iOS nichts, und emergencyWin.location
+      // läuft nie (stiller Fail / about:blank).
+      function _dlIsIOS(){
+        try {
+          var ua = navigator.userAgent || '';
+          if (/iPad|iPhone|iPod/.test(ua)) return true;
+          // iPadOS 13+ meldet sich oft als MacIntel mit Touch
+          if (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1) return true;
+          return false;
+        } catch (e) { return false; }
+      }
+      function _dlOpenBlankForNav(){
+        // KEIN 'noopener' hier — sonst ist der Rückgabewert null und wir können
+        // das Fenster später nicht mehr navigieren. opener danach auf null setzen.
+        var w = window.open('', '_blank');
+        try { if (w) w.opener = null; } catch (e) {}
+        return w;
+      }
+      window.__krsOpenBlankForNav = _dlOpenBlankForNav;
+      window.__krsIsIOSDownload = _dlIsIOS;
       function forceDownload(file){
         var name = (file && file.name) || 'datei';
-        // S1/O2 (21.09.2026): Notfall-Fenster SOFORT in der Nutzergeste reservieren
-        // (leer, about:blank) -- der Emergency-Pfad liegt sonst hinter mehreren
-        // await/then-Schritten, und window.open() dort wird vom Popup-Blocker
-        // verschluckt. Braucht der Haupt-Blob-Pfad das Fenster nicht, wird es
-        // wieder geschlossen.
-        var emergencyWin = window.open('', '_blank', 'noopener');
-        // S1: privater Bucket → Signed URL ziehen, dann laden. resolveStorageUrl
-        // wirft jetzt bei einem echten Fehler (9.1) -- das faengt der catch unten ab,
-        // statt (wie früher) stillschweigend mit dem rohen, falschen Pfad weiterzufetchen.
+        var isIOS = _dlIsIOS();
+        // Fenster SOFORT in der Nutzergeste reservieren (ohne noopener).
+        var emergencyWin = _dlOpenBlankForNav();
+        // S1: privater Bucket → Signed URL (wirft bei Fehler; S8.4: 15s Sign-Timeout).
         var rp = window.__krsResolveStorageUrl ? window.__krsResolveStorageUrl(file.url) : Promise.resolve(file.url);
         var slow = setTimeout(function(){ _dlToast('„' + name + '" wird vorbereitet …', 'info'); }, 400);
+
+        function navigateDownload(url){
+          var target = _dlAppendParam(url, name);
+          if (emergencyWin) {
+            try { emergencyWin.location = target; } catch (e) {
+              try { emergencyWin.location.href = target; } catch (e2) {}
+            }
+            _dlToast('„' + name + '" wird geöffnet — bitte den Download im neuen Tab bestätigen.', 'info');
+            return true;
+          }
+          // Same-Tab-Fallback (Web Clip / Popup blockiert)
+          try {
+            _dlToast('„' + name + '" — Popup blockiert, öffne Download in diesem Tab …', 'info');
+            window.location.assign(target);
+            return true;
+          } catch (e) { return false; }
+        }
+
+        function tryShare(blob){
+          if (!isIOS || !navigator.share || typeof navigator.canShare !== 'function') return Promise.resolve(false);
+          try {
+            var f = new File([blob], name, { type: blob.type || 'application/octet-stream' });
+            if (!navigator.canShare({ files: [f] })) return Promise.resolve(false);
+            return navigator.share({ files: [f], title: name }).then(function(){ return true; }).catch(function(){ return false; });
+          } catch (e) { return Promise.resolve(false); }
+        }
+
         rp.then(function(url){
+          // iOS/iPadOS: Signed URL + ?download= (Content-Disposition) im reservierten
+          // Fenster — blob + <a download> ist unter Safari/Web Clip oft wirkungslos.
+          if (isIOS && window.__krsIsStorageUrl && window.__krsIsStorageUrl(url)) {
+            clearTimeout(slow);
+            if (navigateDownload(url)) return;
+          }
+
           return fetch(url).then(function(r){
             if (!r.ok) throw new Error('HTTP ' + r.status);
             return r.blob();
           }).then(function(blob){
             clearTimeout(slow);
-            if (emergencyWin) emergencyWin.close();
-            var u = URL.createObjectURL(blob);
-            var a = document.createElement('a'); a.href = u; a.download = name;
-            document.body.appendChild(a); a.click(); a.remove();
-            setTimeout(function(){ URL.revokeObjectURL(u); }, 5000);
+            return tryShare(blob).then(function(shared){
+              if (shared) {
+                if (emergencyWin) try { emergencyWin.close(); } catch (e) {}
+                return;
+              }
+              if (isIOS) {
+                if (window.__krsIsStorageUrl && window.__krsIsStorageUrl(url) && navigateDownload(url)) return;
+                var u = URL.createObjectURL(blob);
+                if (emergencyWin) {
+                  try { emergencyWin.location = u; } catch (e) {}
+                  _dlToast('„' + name + '" wird geöffnet — bitte teilen/sichern im neuen Tab.', 'info');
+                } else {
+                  var a = document.createElement('a'); a.href = u; a.download = name;
+                  document.body.appendChild(a); a.click(); a.remove();
+                  _dlToast('„' + name + '" — falls nichts passiert, „↗ Neuer Tab" nutzen.', 'error');
+                }
+                setTimeout(function(){ URL.revokeObjectURL(u); }, 60000);
+                return;
+              }
+              // Desktop: blob + <a download>
+              if (emergencyWin) try { emergencyWin.close(); } catch (e) {}
+              var u2 = URL.createObjectURL(blob);
+              var a2 = document.createElement('a'); a2.href = u2; a2.download = name;
+              document.body.appendChild(a2); a2.click(); a2.remove();
+              setTimeout(function(){ URL.revokeObjectURL(u2); }, 5000);
+            });
           }).catch(function(err){
             clearTimeout(slow);
             console.error('forceDownload fehlgeschlagen:', err);
-            // Notfall: serverseitiges Content-Disposition erzwingen -- aber nur,
-            // wenn `url` wirklich eine Supabase-Storage-URL ist. Sonst hilft
-            // ?download= nichts (9.1 #2: die App-Origin-URL war der eigentliche
-            // dritte Fehlerweg), dann nur die Meldung zeigen.
-            if (window.__krsIsStorageUrl && window.__krsIsStorageUrl(url) && emergencyWin) {
-              emergencyWin.location = _dlAppendParam(url, name);
-              _dlToast('„' + name + '" wird geöffnet — bitte den Download im neuen Tab bestätigen.', 'info');
-            } else {
-              if (emergencyWin) emergencyWin.close();
-              _dlToast('„' + name + '" konnte nicht geladen werden. Bitte über „↗ Neuer Tab" versuchen.', 'error');
+            if (window.__krsIsStorageUrl && window.__krsIsStorageUrl(url)) {
+              if (navigateDownload(url)) return;
             }
+            if (emergencyWin) try { emergencyWin.close(); } catch (e) {}
+            _dlToast('„' + name + '" konnte nicht geladen werden. Bitte über „↗ Neuer Tab" versuchen.', 'error');
           });
         }).catch(function(err){
-          // resolveStorageUrl selbst ist fehlgeschlagen (9.1 #1) -- kein fetch auf
-          // einen falschen Pfad, sofort sichtbar melden.
           clearTimeout(slow);
           console.error('forceDownload: Signieren fehlgeschlagen:', err);
-          if (emergencyWin) emergencyWin.close();
+          if (emergencyWin) try { emergencyWin.close(); } catch (e) {}
           _dlToast('„' + name + '" konnte nicht geladen werden (Signierung fehlgeschlagen).', 'error');
         });
       }
@@ -2424,11 +2496,14 @@
         nt.onclick = function(e){
           if (!window.__krsResolveStorageUrl) return; // normaler <a href> greift
           e.preventDefault();
-          var w = window.open('', '_blank', 'noopener');
+          // 0AU/v4.37.0: ohne noopener reservieren (sonst null → stiller Fail)
+          var openBlank = window.__krsOpenBlankForNav || function(){ var ww = window.open('', '_blank'); try { if (ww) ww.opener = null; } catch (e) {} return ww; };
+          var w = openBlank();
           window.__krsResolveStorageUrl(file.url).then(function(u){
-            if (w) w.location = u; else window.open(u, '_blank', 'noopener');
+            if (w) w.location = u;
+            else if (typeof window.showToast === 'function') window.showToast('Popup blockiert — Datei konnte nicht in neuem Tab geöffnet werden.', 'error');
           }).catch(function(){
-            if (w) w.close();
+            if (w) try { w.close(); } catch (e) {}
             if (typeof window.showToast === 'function') window.showToast('Datei konnte nicht geöffnet werden.', 'error');
           });
         };
@@ -6437,7 +6512,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.36.0';
+    window.KRS_VERSION = '4.37.0';
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
     // Playwright den Klick-Handler prüfen kann, ohne wirklich zu navigieren.
     // Aus tenant.js (TENANT-SPEC.md 2.4) — leer, wenn hub.enabled:false.
@@ -10412,6 +10487,10 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.37.0', date: '22.09.2026', items: [
+        'Download auf dem iPhone (Safari / Web Clip): Datei öffnet sich wieder — der Notfall-Tab wurde vorher mit „noopener“ geöffnet und war danach leer/nutzlos',
+        '„↗ Neuer Tab“ und Lightbox-Download nutzen denselben sicheren Fenster-Pfad (ohne stillen Fehlschlag)'
+      ]},
       { v: '4.36.0', date: '22.09.2026', items: [
         'Beim Öffnen von Chats wird automatisch der zuletzt aktive sichtbare Chat gewählt — kein leerer „Wähle einen Chat…“-Zustand mehr, wenn Chats existieren',
         'Team „Kollegium allgemein“ (und andere Namen, die mit „Kollegium“ beginnen) steht wie „Kollegium“ fest oben in der Team-Liste'
