@@ -5,9 +5,9 @@ test.describe('KRS Connect — Smoke: Teams & Channels', () => {
     // Hauptlayout sollte sichtbar sein
     await expect(page.locator('aside, .sidebar, .app-layout, nav').first())
       .toBeVisible({ timeout: 10_000 });
-    // Team "Kollegium" oder "Allgemein" sollte als Text vorhanden sein
-    const teamText = page.getByText(/Kollegium|Allgemein|Team/i).first();
-    await expect(teamText).toBeVisible({ timeout: 8_000 });
+    // Team "Kollegium" o.ä. in der Teamliste — nicht die S19-Topnav-Beschriftung
+    // "Teams" (die am Desktop im DOM bleibt, aber display:none hat).
+    await expect(page.locator('[data-testid="team-visible"]').first()).toBeVisible({ timeout: 8_000 });
   });
 
   test('Beitrag schreiben: Compact-Bar öffnet Editor', async ({ connectPage: page }) => {

@@ -1211,6 +1211,8 @@
        Drawer ausserhalb des Bildschirms, und es gab keinen ☰-Knopf, der sie
        oeffnet — man sah nur „Wähle einen Chat“ und kam nicht weiter. */
     .mobile-view-header { display: none; }
+    /* S19 (22.09.2026): Teams|Chats|Hub-Leiste — am Rechner unsichtbar. */
+    .mobile-topnav { display: none; }
     /* ══ Merkliste (v4.25.0) ══ */
     .merk-form { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
     .merk-form input[type="text"] { flex: 1 1 220px; min-width: 0; min-height: 44px; padding: 8px 12px; font-size: 15px; font-family: inherit; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-primary); color: var(--text-primary); }
@@ -1400,6 +1402,10 @@
 
     @media (max-width: 768px), (max-width: 1024px) and (orientation: portrait) {
       .app-layout { flex-direction: column; height: 100vh; height: 100dvh; }
+      /* S17 (22.09.2026): .app-layout wird hier auf column gestellt — .main blieb
+         auf row. Die Kopfzeile der Chat-Ansicht stand dadurch als senkrechte
+         Spalte links neben dem Chat (gemessen 179px von 393px). */
+      .main { flex-direction: column; min-width: 0; }
       .sidebar { width: 100%; height: 56px; flex-direction: row; padding: 0 8px; gap: 4px; order: 2; border-top: 1px solid var(--border); border-right: none; }
       .sidebar-nav { flex-direction: row; flex: 1; justify-content: space-around; }
       .sidebar-nav button { font-size: 11px; padding: 6px 8px; }
@@ -1477,6 +1483,13 @@
       .chat-messages { padding: 8px; }
       .chat-input-bar { padding: 8px; }
       .chat-input-bar textarea { font-size: 16px; } /* Verhindert iOS-Zoom */
+      /* S17 Aufgabe 4 (22.09.2026): Mit dem .main-Fix stehen im Chat zwei
+         Zeilen mit demselben Namen — .mobile-view-header und .chat-header
+         direkt darunter. Nur den Namen ausblenden, NICHT die ganze
+         .chat-header: darin steckt bei Gruppenchats „Mitglieder · verwalten"
+         (data-testid group-members-btn) und bei Einzelchats der Online-Punkt
+         — beides bleibt der einzige Weg auf dem Handy und muss stehen bleiben. */
+      .chat-panel > .chat-header .chat-header-name { display: none; }
       .mobile-menu-btn {
         display: flex !important;
         align-items: center;
@@ -1529,6 +1542,47 @@
       }
       .drawer-nav button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
       .drawer-nav button.wide { flex: 1 1 100%; justify-content: flex-start; font-weight: 500; }
+
+      /* S19 (22.09.2026): immer sichtbare Leiste Teams|Chats|Hub (max. 44px). */
+      .mobile-topnav {
+        display: flex; align-items: center; gap: 8px;
+        order: -1; flex: 0 0 auto; height: 44px; max-height: 44px;
+        padding: 0 8px; box-sizing: border-box;
+        border-bottom: 1px solid var(--border);
+        background: var(--bg-secondary);
+        min-width: 0; width: 100%;
+      }
+      .mobile-topnav .mobile-topnav-switch {
+        display: flex; align-items: stretch; gap: 0;
+        flex: 1 1 auto; min-width: 0; height: 36px;
+        border: 1px solid var(--border); border-radius: var(--radius);
+        overflow: hidden; background: var(--bg-tertiary);
+      }
+      .mobile-topnav .mobile-topnav-switch button {
+        flex: 1 1 0; min-width: 0; min-height: 36px; height: 36px;
+        display: flex; align-items: center; justify-content: center; gap: 4px;
+        padding: 0 8px; font-size: 14px; font-weight: 600;
+        border: none; background: transparent; color: var(--text-secondary);
+        cursor: pointer; position: relative; white-space: nowrap;
+      }
+      .mobile-topnav .mobile-topnav-switch button.active {
+        background: var(--accent); color: #fff;
+      }
+      .mobile-topnav .mobile-topnav-switch .topnav-label { overflow: hidden; text-overflow: ellipsis; }
+      .mobile-topnav .mobile-topnav-hub {
+        flex: 0 0 auto; min-width: 44px; min-height: 36px; height: 36px;
+        display: flex; align-items: center; justify-content: center; gap: 4px;
+        padding: 0 10px; font-size: 14px; font-weight: 600;
+        border: 1px solid var(--border); border-radius: var(--radius);
+        background: var(--bg-tertiary); color: var(--text-secondary);
+        cursor: pointer; white-space: nowrap;
+      }
+      @media (max-width: 380px) {
+        .mobile-topnav .mobile-topnav-switch .topnav-icon { display: none; }
+        .mobile-topnav .mobile-topnav-hub .topnav-label { display: none; }
+        .mobile-topnav .mobile-topnav-switch button { padding: 0 6px; font-size: 13px; }
+        .mobile-topnav { gap: 6px; padding: 0 6px; }
+      }
     }
 
     /* Toast System */
@@ -6363,7 +6417,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.33.0';
+    window.KRS_VERSION = '4.34.0';
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
     // Playwright den Klick-Handler prüfen kann, ohne wirklich zu navigieren.
     // Aus tenant.js (TENANT-SPEC.md 2.4) — leer, wenn hub.enabled:false.
@@ -10286,6 +10340,10 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.34.0', date: '22.09.2026', items: [
+        'Chat auf dem Handy nutzt wieder die volle Breite — die Kopfzeile stand vorher als senkrechte Spalte links neben dem Chat (iPhone: Eingabe „ein Buchstabe pro Zeile")',
+        'Oben in Connect stehen jetzt dauerhaft Teams | Chats und der Weg zurück zum Hub — ohne erst das ☰ zu öffnen; Merkliste, Einstellungen, Profil und Administration bleiben im Menü'
+      ] },
       { v: '4.33.0', date: '22.09.2026', items: [
         'Im Bearbeiten-Dialog eines Beitrags lässt sich jetzt gezielt nur ein einzelner Anhang entfernen (✕ mit Rückfrage) — vorher musste man den ganzen Beitrag löschen und neu schreiben, um eine falsche Datei wieder loszuwerden',
         'Der Ungelesen-Punkt an einem Kanal oder Team bleibt nicht mehr hängen, obwohl er schon gelesen wurde — vor allem auf dem iPhone beim Zurückwechseln aus einer anderen App'
@@ -12143,26 +12201,68 @@
         }
       };
 
-      const drawerNav = window.__krsIsEmbedded ? React.createElement('div', { className: 'drawer-nav', role: 'navigation', 'aria-label': 'Bereich wechseln' },
+      // S19 (22.09.2026): Teams|Chats|Hub stehen in der oberen Leiste.
+      // Im ☰ bleiben nur noch die seltenen Einträge (Merkliste, Einstellungen,
+      // Profil, Administration). data-testid drawer-nav-teams/chat/apps wandern
+      // auf die Leiste — bestehende und künftige Tests zeigen weiter dorthin.
+      const totalUnreadBadge = unreadChatCount + Array.from(unreadPostChannels.values()).reduce((a, b) => a + b, 0);
+      const hubErreichbar = !!(window.__krsIsEmbedded || (window.KRS_HUB_URL && String(window.KRS_HUB_URL).trim()));
+      const mobileTopNav = React.createElement('div', {
+        className: 'mobile-topnav',
+        role: 'navigation',
+        'aria-label': 'Bereich wechseln',
+        'data-testid': 'mobile-topnav'
+      },
         React.createElement('button', {
-          className: 'wide',
-          'data-testid': 'drawer-nav-apps',
-          onClick: () => { setMobileSidebarOpen(false); zurueckZumHub(); }
-        }, '\u25A6', ' Apps — zur\u00fcck zum Hub'),
-        React.createElement('button', {
-          className: view === 'teams' ? 'active' : '',
-          'data-testid': 'drawer-nav-teams',
-          'aria-current': view === 'teams' ? 'page' : undefined,
-          onClick: () => { setView('teams'); setMobileSidebarOpen(false); }
-        }, '\uD83D\uDCCB', ' Teams'),
-        React.createElement('button', {
-          className: view === 'chat' ? 'active' : '',
-          'data-testid': 'drawer-nav-chat',
-          'aria-current': view === 'chat' ? 'page' : undefined,
-          onClick: () => { setView('chat'); setMobileSidebarOpen(false); }
-        }, '\uD83D\uDCAC', ' Chats',
-          unreadChatCount > 0 && React.createElement('span', { className: 'nav-badge' }, unreadChatCount > 9 ? '9+' : unreadChatCount)
+          className: 'mobile-menu-btn',
+          onClick: () => setMobileSidebarOpen(true),
+          'aria-label': 'Menü öffnen',
+          'data-testid': 'mobile-topnav-menu',
+          style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '22px', color: 'var(--text-secondary)', position: 'relative', flex: '0 0 auto' }
+        },
+          '\u2630',
+          totalUnreadBadge > 0 && React.createElement('span', { className: 'nav-badge', style: { position: 'absolute', top: '-2px', right: '-6px', fontSize: '10px' } }, totalUnreadBadge > 9 ? '9+' : totalUnreadBadge)
         ),
+        React.createElement('div', { className: 'mobile-topnav-switch' },
+          React.createElement('button', {
+            className: view === 'teams' ? 'active' : '',
+            'data-testid': 'drawer-nav-teams',
+            'aria-current': view === 'teams' ? 'page' : undefined,
+            onClick: () => { setView('teams'); setMobileSidebarOpen(false); }
+          },
+            React.createElement('span', { className: 'topnav-icon', 'aria-hidden': 'true' }, '\uD83D\uDCCB'),
+            React.createElement('span', { className: 'topnav-label' }, 'Teams')
+          ),
+          React.createElement('button', {
+            className: view === 'chat' ? 'active' : '',
+            'data-testid': 'drawer-nav-chat',
+            'aria-current': view === 'chat' ? 'page' : undefined,
+            onClick: () => { setView('chat'); setMobileSidebarOpen(false); }
+          },
+            React.createElement('span', { className: 'topnav-icon', 'aria-hidden': 'true' }, '\uD83D\uDCAC'),
+            React.createElement('span', { className: 'topnav-label' }, 'Chats'),
+            unreadChatCount > 0 && React.createElement('span', { className: 'nav-badge' }, unreadChatCount > 9 ? '9+' : unreadChatCount)
+          )
+        ),
+        hubErreichbar && React.createElement('button', {
+          className: 'mobile-topnav-hub',
+          'data-testid': 'drawer-nav-apps',
+          'aria-label': 'Zurück zum Hub',
+          onClick: () => {
+            setMobileSidebarOpen(false);
+            if (window.__krsIsEmbedded) {
+              zurueckZumHub();
+            } else if (window.KRS_HUB_URL) {
+              window.location.href = window.KRS_HUB_URL;
+            }
+          }
+        },
+          React.createElement('span', { 'aria-hidden': 'true' }, '\u25A6'),
+          React.createElement('span', { className: 'topnav-label' }, 'Hub')
+        )
+      );
+
+      const drawerNav = window.__krsIsEmbedded ? React.createElement('div', { className: 'drawer-nav', role: 'navigation', 'aria-label': 'Weitere Bereiche' },
         React.createElement('button', {
           className: 'wide' + (view === 'saved' ? ' active' : ''),
           'data-testid': 'drawer-nav-merkliste',
@@ -12187,6 +12287,7 @@
 
       // === TEAMS VIEW ===
       const teamsView = React.createElement(React.Fragment, null,
+        mobileTopNav,
         mobileSidebarOpen && React.createElement('div', { className: 'mobile-overlay visible', onClick: () => setMobileSidebarOpen(false) }),
         React.createElement('div', { className: 'team-drawer' + (mobileSidebarOpen ? ' mobile-open' : '') },
           drawerNav,
@@ -12485,6 +12586,7 @@
 
       // === CHAT VIEW ===
       const chatView = React.createElement(React.Fragment, null,
+        mobileTopNav,
         mobileSidebarOpen && React.createElement('div', { className: 'mobile-overlay visible', onClick: () => setMobileSidebarOpen(false) }),
         // v4.25.0 — Kopfzeile nur mobil: ohne sie war die Chatliste auf dem Handy
         // unerreichbar (Drawer ausserhalb des Bildschirms, kein ☰-Knopf) — man sah
