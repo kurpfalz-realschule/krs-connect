@@ -6437,7 +6437,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.35.0';
+    window.KRS_VERSION = '4.36.0';
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
     // Playwright den Klick-Handler prüfen kann, ohne wirklich zu navigieren.
     // Aus tenant.js (TENANT-SPEC.md 2.4) — leer, wenn hub.enabled:false.
@@ -6447,9 +6447,10 @@
 
     // S13 / Norbert 22.09.2026: „Kollegium“ fest ganz oben für alle.
     // Erkennung über Namen (Kollegium / KRS Kollegium), case-insensitive.
+    // S21 (22.09.2026): zusätzlich Prefix „kollegium…“ (z. B. „Kollegium allgemein“)
     function isKollegiumTeam(team) {
       const n = String((team && team.name) || '').trim().toLowerCase();
-      return n === 'kollegium' || n === 'krs kollegium' || n.endsWith(' kollegium');
+      return n === 'kollegium' || n === 'krs kollegium' || n.endsWith(' kollegium') || n.startsWith('kollegium');
     }
     function sortTeamsKollegiumFirst(list) {
       const arr = Array.isArray(list) ? list.slice() : [];
@@ -6491,9 +6492,34 @@
         window.__KRS_RECOVERY = true;
       }
     } catch (e) {}
+    // S21: oberste sichtbare Conversation (gleiche Sortierung wie Sidebar)
+    function getTopVisibleConversation(conversations, hiddenSet) {
+      const hidden = hiddenSet instanceof Set ? hiddenSet : new Set(hiddenSet || []);
+      const sorted = sortConversationsByActivity(conversations || []);
+      for (let i = 0; i < sorted.length; i++) {
+        const c = sorted[i];
+        if (c && !hidden.has(c.id)) return c;
+      }
+      return null;
+    }
+    function readLastConversationId(userId) {
+      try {
+        if (userId == null) return null;
+        return localStorage.getItem('krs-last-conv-' + userId) || null;
+      } catch (e) { return null; }
+    }
+    function writeLastConversationId(userId, convId) {
+      try {
+        if (userId == null || convId == null) return;
+        localStorage.setItem('krs-last-conv-' + userId, String(convId));
+      } catch (e) {}
+    }
+
     // Für E2E-Tests: Sortier-Helfer der Chat-Übersicht exponieren
     window.__krsSortConversationsByActivity = sortConversationsByActivity;
     window.__krsUpdateConversationActivity = updateConversationActivity;
+    window.__krsIsKollegiumTeam = isKollegiumTeam;
+    window.__krsGetTopVisibleConversation = getTopVisibleConversation;
     const __KRS_QS = new URLSearchParams(typeof location !== 'undefined' ? location.search : '');
     window.__KRS_FORCE_DEMO = __KRS_QS.get('forceMode') === 'demo';
     window.__KRS_FORCE_USER = __KRS_QS.get('forceUser') || null; // optional: direktes Login als kuerzel
@@ -8837,7 +8863,7 @@
       );
     }
 
-    function ChatPanel({ conversation, messages, setMessages, setConversations, dataService, currentUser, onBack, onlineUsers, hasMore, onLoadMore, loadingMore }) {
+    function ChatPanel({ conversation, messages, setMessages, setConversations, dataService, currentUser, onBack, onlineUsers, hasMore, onLoadMore, loadingMore, hasVisibleConversations }) {
       const [input, setInput] = useState('');
       const [sending, setSending] = useState(false);
       const [chatFiles, setChatFiles] = useState([]);  // Array of { file, preview }
@@ -9134,8 +9160,15 @@
           && String(senderId) === String(currentUser.id);
       };
 
+      // S21: „Wähle einen Chat…“ nur, wenn wirklich keine sichtbare Conversation existiert.
+      // Gibt es sichtbare Chats, wählt App automatisch einen (useEffect) — kurz Loading statt Leerzustand.
       if (!conversation) {
-        return React.createElement('div', { className: 'chat-empty' },
+        if (hasVisibleConversations) {
+          return React.createElement('div', { className: 'chat-empty', 'data-testid': 'chat-empty-loading' },
+            React.createElement('div', null, 'Chat wird geladen…')
+          );
+        }
+        return React.createElement('div', { className: 'chat-empty', 'data-testid': 'chat-empty-none' },
           React.createElement('div', { style: { fontSize: '48px' } }, '💬'),
           React.createElement('div', null, 'Wähle einen Chat oder starte einen neuen')
         );
@@ -10379,6 +10412,10 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.36.0', date: '22.09.2026', items: [
+        'Beim Öffnen von Chats wird automatisch der zuletzt aktive sichtbare Chat gewählt — kein leerer „Wähle einen Chat…“-Zustand mehr, wenn Chats existieren',
+        'Team „Kollegium allgemein“ (und andere Namen, die mit „Kollegium“ beginnen) steht wie „Kollegium“ fest oben in der Team-Liste'
+      ]},
       { v: '4.35.0', date: '22.09.2026', items: [
         'Team „Kollegium“ steht für alle Personen ganz oben in der Team-Liste',
         'Einstellungen, Profil und Administration liegen mobil oben rechts im Konto-Menü (nicht mehr im ☰)',
@@ -11452,9 +11489,23 @@
         const convData = await dataService.getConversations(selectedUser.id);
         setConversations(convData || []);
         // Ausgeblendete Chats laden (persistiert)
+        let hiddenC = new Set();
         try {
-          const hiddenC = await dataService.getHiddenIds('conv', selectedUser.id);
+          hiddenC = await dataService.getHiddenIds('conv', selectedUser.id) || new Set();
           if (hiddenC && hiddenC.size) setHiddenConversations(hiddenC);
+        } catch (e) {}
+        // S21: optional schon beim Login ersten/zuletzt gewählten sichtbaren Chat setzen
+        try {
+          const lastId = readLastConversationId(selectedUser.id);
+          let pick = null;
+          if (lastId != null) {
+            pick = (convData || []).find(c => c && String(c.id) === String(lastId) && !hiddenC.has(c.id)) || null;
+          }
+          if (!pick) pick = getTopVisibleConversation(convData || [], hiddenC);
+          if (pick) {
+            setSelectedConversation(pick);
+            writeLastConversationId(selectedUser.id, pick.id);
+          }
         } catch (e) {}
         // Initialize unread chat count
         if (!dataService.isDemo && convData?.length > 0) {
@@ -11928,7 +11979,9 @@
       // Clear unread when opening a conversation
       // Phase 7.3: Handler memoizieren — verhindert Re-Renders bei Child-Komponenten
       const handleConversationSelect = useCallback((conv) => {
+        if (!conv) return;
         setSelectedConversation(conv);
+        writeLastConversationId(user?.id, conv.id);
         // Mark as read (Phase 6: Supabase + localStorage)
         dataService.markConversationRead(conv.id, user?.id);
         if (conv.unread > 0) {
@@ -11938,6 +11991,22 @@
           ));
         }
       }, [dataService, user?.id]);
+
+      // S21: Beim Wechsel zur Chat-Ansicht automatisch obersten sichtbaren Chat wählen
+      // (Sidebar-Sortierung lastActivityAt). Optional zuletzt geöffneter Chat aus localStorage.
+      useEffect(() => {
+        if (view !== 'chat') return;
+        if (selectedConversation) return;
+        if (!conversations || conversations.length === 0) return;
+        const hidden = hiddenConversations || new Set();
+        let pick = null;
+        const lastId = readLastConversationId(user?.id);
+        if (lastId != null) {
+          pick = conversations.find(c => c && String(c.id) === String(lastId) && !hidden.has(c.id)) || null;
+        }
+        if (!pick) pick = getTopVisibleConversation(conversations, hidden);
+        if (pick) handleConversationSelect(pick);
+      }, [view, selectedConversation, conversations, hiddenConversations, user?.id, handleConversationSelect]);
 
       // Clear unread posts when selecting a channel
       const handleChannelSelect = useCallback((ch) => {
@@ -12742,7 +12811,8 @@
             onlineUsers,
             hasMore: hasMoreMessages,
             onLoadMore: loadMoreMessages,
-            loadingMore
+            loadingMore,
+            hasVisibleConversations: (conversations || []).some(c => c && !(hiddenConversations || new Set()).has(c.id))
           })
         )
       );
