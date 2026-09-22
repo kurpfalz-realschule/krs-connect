@@ -1837,7 +1837,8 @@
       }
 
       // Liefert eine anzeigbare URL: Signed URL für Storage-Objekte, sonst die
-      // Original-Referenz. Wirft nie — im Fehlerfall Original zurück.
+      // Original-Referenz. Wirft nie durch — im Fehlerfall Original zurück, es sei
+      // denn das eigentliche Signieren schlaegt fehl oder haengt (siehe unten).
       async function resolveStorageUrl(ref) {
         var path = storagePath(ref);
         var sb = window.__krsSb;
@@ -1854,7 +1855,17 @@
         // "uploads/2026/elternbrief.pdf") als "URL" beim Aufrufer, ein fetch()
         // darauf loest relativ zur App-Origin auf (404) und der Fehler
         // verschwindet spurlos. Die Aufrufer faengen das jetzt ab.
-        var res = await sb.storage.from('images').createSignedUrl(path, TTL);
+        // S8.4 (22.09.2026, R-Gerätetest): 15s Zeitlimit -- ohne dieses haengt ein
+        // eingefrorenes Supabase (Free-Plan, siehe HANDOVER 0P) hier fuer immer,
+        // und das synchron geoeffnete Fenster bleibt bei about:blank stehen, ohne
+        // dass je ein Fehler beim Nutzer ankommt.
+        var signPromise = sb.storage.from('images').createSignedUrl(path, TTL);
+        var res = await Promise.race([
+          signPromise,
+          new Promise(function(_, reject){
+            setTimeout(function(){ reject(new Error('Zeitlimit beim Signieren (15s) — Supabase antwortet gerade nicht')); }, 15000);
+          })
+        ]);
         var signed = res && res.data && res.data.signedUrl;
         if ((res && res.error) || !signed) {
           throw new Error((res && res.error && res.error.message) || 'Signierte URL konnte nicht erstellt werden');
@@ -3604,21 +3615,31 @@
         }
       }
 
-      async updatePost(postId, content, title = null) {
+      // imageUrl: undefined = Anhänge unangetastet lassen (Standardfall reine
+      // Textbearbeitung); ein Wert (inkl. null) = Anhang-Liste ersetzen (S14, 22.09.2026).
+      async updatePost(postId, content, title = null, imageUrl = undefined) {
         if (this.isDemo) {
           for (const chPosts of Object.values(MOCK_POSTS)) {
             const post = chPosts.find(p => p.id === postId);
-            if (post) { post.content = content; post.title = title; post.edited_at = new Date().toISOString(); return post; }
+            if (post) {
+              post.content = content; post.title = title; post.edited_at = new Date().toISOString();
+              if (imageUrl !== undefined) post.image_url = imageUrl;
+              return post;
+            }
           }
           return null;
         }
         try {
           const nowIso = new Date().toISOString();
+          const payload = { content, title, edited_at: nowIso };
+          if (imageUrl !== undefined) payload.image_url = imageUrl;
           // Robust: falls die Spalte edited_at (noch) fehlt, ohne sie speichern,
           // damit Bearbeiten nie hart blockiert (siehe Befund 2026-06-20).
-          let resp = await this.sb.from('posts').update({ content, title, edited_at: nowIso }).eq('id', postId).select('*, author:users(*)').single();
+          let resp = await this.sb.from('posts').update(payload).eq('id', postId).select('*, author:users(*)').single();
           if (resp.error && /edited_at/i.test(resp.error.message || '')) {
-            resp = await this.sb.from('posts').update({ content, title }).eq('id', postId).select('*, author:users(*)').single();
+            const payloadOhneEdited = { content, title };
+            if (imageUrl !== undefined) payloadOhneEdited.image_url = imageUrl;
+            resp = await this.sb.from('posts').update(payloadOhneEdited).eq('id', postId).select('*, author:users(*)').single();
           }
           if (resp.error) throw resp.error;
           return resp.data;
@@ -6342,7 +6363,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.32.0';
+    window.KRS_VERSION = '4.33.0';
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
     // Playwright den Klick-Handler prüfen kann, ohne wirklich zu navigieren.
     // Aus tenant.js (TENANT-SPEC.md 2.4) — leer, wenn hub.enabled:false.
@@ -7360,6 +7381,7 @@
       const [editingPost, setEditingPost] = useState(null);
       const [editContent, setEditContent] = useState('');
       const [editTitle, setEditTitle] = useState('');
+      const [editAttachments, setEditAttachments] = useState([]); // S14 (22.09.2026): bearbeitbare Kopie der Anhänge
       const [emojiPickerPostId, setEmojiPickerPostId] = useState(null);
       const [dragOver, setDragOver] = useState(false);
       const [showPollCreator, setShowPollCreator] = useState(false);
@@ -7524,13 +7546,25 @@
         setEditingPost(post.id);
         setEditContent(post.content);
         setEditTitle(post.title || '');
+        setEditAttachments(_attParse(post.image_url)); // S14: bearbeitbare Kopie der Anhänge
+      };
+
+      // S14 (22.09.2026, R17): Nur den Anhang aus einem Beitrag entfernen, ohne den
+      // Text anzufassen. Mit Rückfrage; entfernt nur die Verknüpfung im Beitrag —
+      // die Datei bleibt im Storage-Bucket (kann von anderen Beiträgen/Weiterleitungen
+      // noch benutzt werden, siehe sprint sonnet teams 2.0.md Abschnitt "S14").
+      const handleRemoveEditAttachment = (idx) => {
+        const file = editAttachments[idx];
+        if (!confirm('Anhang "' + (file?.name || 'Datei') + '" aus diesem Beitrag entfernen?')) return;
+        setEditAttachments(prev => prev.filter((_, i) => i !== idx));
       };
 
       const handleSaveEdit = async (postId) => {
         try {
-          const updated = await dataService.updatePost(postId, editContent, editTitle || null);
+          const newImageUrl = editAttachments.length === 0 ? null : JSON.stringify(editAttachments);
+          const updated = await dataService.updatePost(postId, editContent, editTitle || null, newImageUrl);
           if (updated) {
-            setPosts(prev => prev.map(p => p.id === postId ? { ...p, content: editContent, title: editTitle || null, edited_at: new Date().toISOString() } : p));
+            setPosts(prev => prev.map(p => p.id === postId ? { ...p, content: editContent, title: editTitle || null, image_url: newImageUrl, edited_at: new Date().toISOString() } : p));
             showToast('Beitrag gespeichert', 'success');
           }
         } catch (err) { console.error('Edit error:', err); showToast('Beitrag konnte nicht gespeichert werden.', 'error'); }
@@ -7841,6 +7875,15 @@
               ? React.createElement('div', { style: { padding: '8px 0' } },
                   React.createElement('input', { type: 'text', value: editTitle, onChange: e => setEditTitle(e.target.value), placeholder: 'Titel (optional)', 'aria-label': 'Titel (optional)', style: { display: 'block', width: '100%', padding: '6px 8px', marginBottom: '6px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: '14px', fontWeight: '600' } }),
                   React.createElement(MentionTextarea, { value: editContent, onChange: setEditContent, allUsers: allUsers, style: { minHeight: '80px' } }),
+                  // S14 (22.09.2026): Anhänge im Bearbeiten-Dialog einzeln entfernbar —
+                  // nur die Verknüpfung verschwindet, der Text bleibt unangetastet.
+                  editAttachments.length > 0 && React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px', margin: '8px 0' } },
+                    editAttachments.map((file, i) => React.createElement('div', { key: i, style: { display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 8px', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '13px', minHeight: '32px' } },
+                      React.createElement('span', null, _attIcon(file)),
+                      React.createElement('span', { style: { maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, file.name || 'Datei'),
+                      React.createElement('button', { type: 'button', onClick: () => handleRemoveEditAttachment(i), title: 'Anhang entfernen', 'aria-label': 'Anhang entfernen', 'data-testid': 'edit-attachment-remove', style: { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '14px', minWidth: '28px', minHeight: '28px' } }, '✕')
+                    ))
+                  ),
                   React.createElement('div', { style: { display: 'flex', gap: '8px', marginTop: '8px' } },
                     React.createElement('button', { onClick: () => handleSaveEdit(post.id), style: { padding: '6px 14px', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: 'var(--radius)', cursor: 'pointer', fontSize: '13px' } }, 'Speichern'),
                     React.createElement('button', { onClick: () => setEditingPost(null), style: { padding: '6px 14px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', fontSize: '13px', color: 'var(--text-secondary)' } }, 'Abbrechen')
@@ -7852,7 +7895,7 @@
                   // Poll anzeigen falls vorhanden
                   post.poll_data && React.createElement(PollDisplay, { pollData: post.poll_data, postId: post.id, userId: user.id, dataService, onVoted: handlePollVote })
                 ),
-            post.image_url && React.createElement(AttachmentBlock, { image_url: post.image_url }),
+            !isEditing && post.image_url && React.createElement(AttachmentBlock, { image_url: post.image_url }),
             React.createElement('div', { className: 'post-reactions' },
               (post.reactions || []).map(r =>
                 React.createElement('button', {
@@ -10243,6 +10286,10 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.33.0', date: '22.09.2026', items: [
+        'Im Bearbeiten-Dialog eines Beitrags lässt sich jetzt gezielt nur ein einzelner Anhang entfernen (✕ mit Rückfrage) — vorher musste man den ganzen Beitrag löschen und neu schreiben, um eine falsche Datei wieder loszuwerden',
+        'Der Ungelesen-Punkt an einem Kanal oder Team bleibt nicht mehr hängen, obwohl er schon gelesen wurde — vor allem auf dem iPhone beim Zurückwechseln aus einer anderen App'
+      ] },
       { v: '4.32.0', date: '22.09.2026', items: [
         '„Neuer Tab“ und der Download-Notfallpfad öffnen das Fenster jetzt sofort beim Klick — vorher blockierten Safari/Chrome das Fenster oft unbemerkt, weil es erst nach einer Wartezeit geöffnet wurde',
         'Der Senden-Knopf bleibt nach einer hängenden oder fehlgeschlagenen Nachricht nicht mehr dauerhaft gesperrt: 20 Sekunden Zeitlimit, sichtbare Fehlermeldung, der getippte Text bleibt erhalten',
@@ -11236,8 +11283,13 @@
           if (!dataService.isDemo) {
             const allChannelIds = Array.from(ctMap.keys());
             const supaUnreads = await dataService.getChannelUnreadCounts(allChannelIds, selectedUser.id);
+            // S15/U2: den automatisch ausgewählten ersten Kanal aus der Badge-Map
+            // entfernen, BEVOR sie gesetzt wird — sonst blitzt der Punkt beim Start
+            // kurz auf, bevor der zentrale Effekt ihn wieder wegnimmt.
+            if (channelsData.length > 0) supaUnreads.delete(channelsData[0].id);
             if (supaUnreads.size > 0) setUnreadPostChannels(supaUnreads);
           } else if (initialUnreads.size > 0) {
+            if (channelsData.length > 0) initialUnreads.delete(channelsData[0].id);
             setUnreadPostChannels(initialUnreads);
           }
           if (channelsData.length > 0) {
@@ -11769,6 +11821,37 @@
         });
       }, [dataService, user?.id]);
 
+      // ── S15 (22.09.2026): Ungelesen-Punkt bleibt nicht mehr hängen ──
+      // Kontrakt: Ein Kanal gilt als bis jetzt gelesen, solange er ausgewählt UND
+      // document.visibilityState === 'visible' ist. Immer wenn dieser Zustand
+      // eintritt oder sich die Beitragsliste ändert, wird markChannelRead gerufen
+      // UND der Badge-Eintrag gelöscht. Zentrale Stelle statt vier verstreuter
+      // Aufrufe (U1–U4, siehe HANDOVER.md Abschnitt 0AD / sprint sonnet teams 2.0.md
+      // Abschnitt „S15"). Ein Kanal wird NIE als gelesen markiert, während er nicht
+      // sichtbar oder nicht ausgewählt ist.
+      const lastMarkedReadRef = useRef({ channelId: null, postsLength: -1 });
+      useEffect(() => {
+        const markiereWennSichtbar = () => {
+          if (!selectedChannel || !user || document.visibilityState !== 'visible') return;
+          const last = lastMarkedReadRef.current;
+          // Sparsam schreiben: nur wenn sich Kanal oder Beitragszahl seit dem letzten
+          // Markieren geändert haben — sonst schickt jedes 20-Sekunden-Nachladen einen
+          // unnötigen Upsert (Supabase Free-Plan, siehe HANDOVER.md Abschnitt 0P).
+          if (last.channelId === selectedChannel.id && last.postsLength === posts.length) return;
+          lastMarkedReadRef.current = { channelId: selectedChannel.id, postsLength: posts.length };
+          dataService.markChannelRead(selectedChannel.id, user.id);
+          setUnreadPostChannels(prev => {
+            if (!prev.has(selectedChannel.id)) return prev;
+            const next = new Map(prev);
+            next.delete(selectedChannel.id);
+            return next;
+          });
+        };
+        markiereWennSichtbar();
+        document.addEventListener('visibilitychange', markiereWennSichtbar);
+        return () => document.removeEventListener('visibilitychange', markiereWennSichtbar);
+      }, [selectedChannel?.id, user?.id, posts.length, dataService]);
+
       // ── Ausblenden persistierend (Sprint 4) ──
       // v4.23.0 — Setzen und Melden getrennt: `applyTeamHidden` haengt an keinem
       // Set, deshalb kann der Rueckgaengig-Knopf im Toast sie gefahrlos spaeter
@@ -11831,6 +11914,15 @@
         });
         if (channelsData.length > 0) {
           setSelectedChannel(channelsData[0]);
+          // S15/U1: sofort markieren — der zentrale Effekt oben greift erst nach dem
+          // Rendern, ohne das hier würde der Punkt am ersten Kanal kurz aufblitzen.
+          dataService.markChannelRead(channelsData[0].id, user?.id);
+          setUnreadPostChannels(prev => {
+            if (!prev.has(channelsData[0].id)) return prev;
+            const next = new Map(prev);
+            next.delete(channelsData[0].id);
+            return next;
+          });
         }
         // Check user's role in this team
         if (!dataService.isDemo) {

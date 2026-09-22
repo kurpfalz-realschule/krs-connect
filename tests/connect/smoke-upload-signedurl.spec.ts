@@ -79,4 +79,33 @@ test.describe('KRS Connect — S1 Signed-URL-Resolver (Demo-Modus)', () => {
     });
     expect(['blob-passthrough', 'no-dataservice']).toContain(out);
   });
+
+  // S8.4 (22.09.2026, echter Gerätetest, R-Meldung): "Neuer Tab" bei einem JPG
+  // öffnete eine Seite, die für immer bei about:blank hängen blieb. Ursache:
+  // resolveStorageUrl() wartete ohne jedes Zeitlimit auf createSignedUrl() -- ein
+  // eingefrorenes Supabase (Free-Plan, HANDOVER 0P) ließ das synchron geöffnete
+  // Fenster ewig leer stehen, ohne dass je ein Fehler beim Nutzer ankam. Jetzt:
+  // 15s Zeitlimit, danach lehnt das Promise ab (die drei Aufrufer schließen dann
+  // das Fenster und zeigen einen Toast).
+  test('resolveStorageUrl bricht nach 15s ab, wenn das Signieren hängt (S8.4-Regression)', async ({ connectPage: page }) => {
+    await page.evaluate(() => {
+      (window as any).__krsSb = {
+        storage: {
+          from: () => ({
+            createSignedUrl: () => new Promise(() => {}) // hängt für immer, wie ein eingefrorenes Supabase
+          })
+        }
+      };
+    });
+    await page.clock.install();
+    const resultPromise = page.evaluate(() =>
+      (window as any).__krsResolveStorageUrl('uploads/haengt.jpg')
+        .then(() => ({ ok: true, message: '' }))
+        .catch((e: any) => ({ ok: false, message: String(e && e.message) }))
+    );
+    await page.clock.fastForward('00:16');
+    const result = await resultPromise;
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain('Zeitlimit');
+  });
 });
