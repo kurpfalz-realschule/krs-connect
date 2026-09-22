@@ -1577,6 +1577,25 @@
         background: var(--bg-tertiary); color: var(--text-secondary);
         cursor: pointer; white-space: nowrap;
       }
+      .mobile-topnav .mobile-topnav-account {
+        position: relative; flex: 0 0 auto; margin-left: auto;
+      }
+      .mobile-topnav .mobile-topnav-account > button.account-trigger {
+        width: 36px; height: 36px; border-radius: 50%; border: none;
+        padding: 0; cursor: pointer; background: transparent;
+        display: flex; align-items: center; justify-content: center;
+      }
+      .mobile-account-menu {
+        position: absolute; right: 0; top: calc(100% + 6px); z-index: 80;
+        min-width: 200px; background: var(--bg-primary); border: 1px solid var(--border);
+        border-radius: 12px; box-shadow: 0 8px 24px rgba(15,23,42,.18); padding: 6px;
+      }
+      .mobile-account-menu button {
+        display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px;
+        padding: 8px 12px; border: none; background: none; border-radius: 8px;
+        font: inherit; font-size: 14px; color: var(--text-primary); cursor: pointer; text-align: left;
+      }
+      .mobile-account-menu button:hover { background: var(--bg-tertiary); }
       @media (max-width: 380px) {
         .mobile-topnav .mobile-topnav-switch .topnav-icon { display: none; }
         .mobile-topnav .mobile-topnav-hub .topnav-label { display: none; }
@@ -3180,7 +3199,8 @@
 
       async getTeams(userId) {
         // Aktive (nicht archivierte) Teams. Archivierte über getArchivedTeams().
-        if (this.isDemo) return MOCK_TEAMS.filter(t => !t.archived_at).map(t => ({ ...t, my_role: 'admin' }));
+        // S13: nach dem Laden „Kollegium“ fest nach oben (für alle gleich).
+        if (this.isDemo) return sortTeamsKollegiumFirst(MOCK_TEAMS.filter(t => !t.archived_at).map(t => ({ ...t, my_role: 'admin' })));
         try {
           if (userId) {
             // Nur Teams laden, in denen der User Mitglied ist
@@ -3190,11 +3210,11 @@
             const teamIds = memberships.map(m => m.team_id);
             const { data, error } = await this.sb.from('teams').select('*').in('id', teamIds).is('archived_at', null).order('category, name');
             if (error) throw error;
-            return this._attachMyRole(data || [], memberships);
+            return sortTeamsKollegiumFirst(this._attachMyRole(data || [], memberships));
           }
           const { data, error } = await this.sb.from('teams').select('*').is('archived_at', null).order('category, name');
           if (error) throw error;
-          return data || [];
+          return sortTeamsKollegiumFirst(data || []);
         } catch (err) {
           console.error('getTeams error:', err);
           return [];
@@ -6417,13 +6437,32 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.34.0';
+    window.KRS_VERSION = '4.35.0';
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
     // Playwright den Klick-Handler prüfen kann, ohne wirklich zu navigieren.
     // Aus tenant.js (TENANT-SPEC.md 2.4) — leer, wenn hub.enabled:false.
     window.KRS_HUB_URL = window.T ? window.T('hub.url', '') : '';
     window.KRS_HUB_NOTIZEN_URL = window.T ? window.T('hub.notizenUrl', '') : '';
     window.__KRS_HUB_ENABLED = !!(window.T && window.T('hub.enabled', false) === true);
+
+    // S13 / Norbert 22.09.2026: „Kollegium“ fest ganz oben für alle.
+    // Erkennung über Namen (Kollegium / KRS Kollegium), case-insensitive.
+    function isKollegiumTeam(team) {
+      const n = String((team && team.name) || '').trim().toLowerCase();
+      return n === 'kollegium' || n === 'krs kollegium' || n.endsWith(' kollegium');
+    }
+    function sortTeamsKollegiumFirst(list) {
+      const arr = Array.isArray(list) ? list.slice() : [];
+      arr.sort((a, b) => {
+        const ak = isKollegiumTeam(a) ? 0 : 1;
+        const bk = isKollegiumTeam(b) ? 0 : 1;
+        if (ak !== bk) return ak - bk;
+        return 0; // relative order of others preserved
+      });
+      return arr;
+    }
+
+
     // v4.16.0: Erkennung, ob Connect im Hub-iframe eingebettet läuft (dann
     // ergibt der 🏠-Button keinen Sinn — man ist ja schon im Hub). Als
     // Test-Hook exponiert; ein bereits (z. B. per page.addInitScript) gesetzter
@@ -10340,6 +10379,11 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.35.0', date: '22.09.2026', items: [
+        'Team „Kollegium“ steht für alle Personen ganz oben in der Team-Liste',
+        'Einstellungen, Profil und Administration liegen mobil oben rechts im Konto-Menü (nicht mehr im ☰)',
+        'Hub darf Connect auf Teams oder Chats schalten (für die gemeinsame Leiste)'
+      ]},
       { v: '4.34.0', date: '22.09.2026', items: [
         'Chat auf dem Handy nutzt wieder die volle Breite — die Kopfzeile stand vorher als senkrechte Spalte links neben dem Chat (iPhone: Eingabe „ein Buchstabe pro Zeile")',
         'Oben in Connect stehen jetzt dauerhaft Teams | Chats und der Weg zurück zum Hub — ohne erst das ☰ zu öffnen; Merkliste, Einstellungen, Profil und Administration bleiben im Menü'
@@ -10763,6 +10807,7 @@
       const [showForwardModal, setShowForwardModal] = useState(null); // post to forward
       const [showAdmin, setShowAdmin] = useState(false); // Phase 6: Admin-Panel
       const [showSettings, setShowSettings] = useState(false); // v4.10.0: Einstellungen-Panel (⚙️)
+      const [showAccountMenu, setShowAccountMenu] = useState(false); // v4.35.0: Konto-Menü oben rechts
       // v4.10.6: Globaler Modal-Zurück-Stack (Einstellungen-Familie). „Zurück" = eine Ebene hoch.
       const [modalStack, setModalStack] = useState([]);
       const openModal = useCallback((name) => setModalStack(s => (s[s.length - 1] === name ? s : [...s, name])), []);
@@ -10782,7 +10827,7 @@
         showHelp, setShowHelp, showCreateChannel, setShowCreateChannel,
         channelContextMenu, setChannelContextMenu, editingChannel, setEditingChannel,
         showForwardModal, setShowForwardModal, showAdmin, setShowAdmin,
-        showSettings, setShowSettings, savedPosts, setSavedPosts };
+        showSettings, setShowSettings, showAccountMenu, setShowAccountMenu, savedPosts, setSavedPosts };
     }
 
     function useNotifications() {
@@ -10989,7 +11034,7 @@
         showHelp, setShowHelp, showCreateChannel, setShowCreateChannel,
         channelContextMenu, setChannelContextMenu, editingChannel, setEditingChannel,
         showForwardModal, setShowForwardModal, showAdmin, setShowAdmin,
-        showSettings, setShowSettings, savedPosts, setSavedPosts } = modals;
+        showSettings, setShowSettings, showAccountMenu, setShowAccountMenu, savedPosts, setSavedPosts } = modals;
       const topModal = modalStack[modalStack.length - 1] || null;
       const canGoBack = modalStack.length > 1;
 
@@ -11282,6 +11327,35 @@
         }
         return () => window.removeEventListener('message', handleHubAuth);
       }, []);
+      // v4.35.0: Hub-Leiste / Konto-Menü → Ansicht schalten oder Panel öffnen (Hooks oben!)
+      useEffect(() => {
+        const allowed = [];
+        try {
+          if (window.KRS_HUB_URL) allowed.push(new URL(window.KRS_HUB_URL, window.location.href).origin);
+        } catch (e) {}
+        allowed.push(window.location.origin);
+        const onMsg = (event) => {
+          if (!allowed.includes(event.origin)) return;
+          if (event.source !== window.parent && event.source !== window) return;
+          const d = event.data || {};
+          if (d.type === 'KRS_CONNECT_SET_VIEW') {
+            if (d.view === 'teams' || d.view === 'chat') {
+              setView(d.view);
+              setMobileSidebarOpen(false);
+            }
+          }
+          if (d.type === 'KRS_CONNECT_OPEN_PANEL') {
+            setMobileSidebarOpen(false);
+            if (d.panel === 'settings') openModal('settings');
+            else if (d.panel === 'profile') setShowProfile(true);
+            else if (d.panel === 'admin') setShowAdmin(true);
+          }
+        };
+        window.addEventListener('message', onMsg);
+        return () => window.removeEventListener('message', onMsg);
+      }, []);
+
+
 
       const handleSetupComplete = async ({ isDemo: demoMode, client, authUser }) => {
         setIsDemo(demoMode);
@@ -12202,8 +12276,8 @@
       };
 
       // S19 (22.09.2026): Teams|Chats|Hub stehen in der oberen Leiste.
-      // Im ☰ bleiben nur noch die seltenen Einträge (Merkliste, Einstellungen,
-      // Profil, Administration). data-testid drawer-nav-teams/chat/apps wandern
+      // Im ☰ bleibt die Merkliste; Einstellungen/Profil/Admin sitzen oben rechts
+      // im Konto-Menü (v4.35.0). data-testid drawer-nav-teams/chat/apps wandern
       // auf die Leiste — bestehende und künftige Tests zeigen weiter dorthin.
       const totalUnreadBadge = unreadChatCount + Array.from(unreadPostChannels.values()).reduce((a, b) => a + b, 0);
       const hubErreichbar = !!(window.__krsIsEmbedded || (window.KRS_HUB_URL && String(window.KRS_HUB_URL).trim()));
@@ -12250,6 +12324,7 @@
           'aria-label': 'Zurück zum Hub',
           onClick: () => {
             setMobileSidebarOpen(false);
+            setShowAccountMenu(false);
             if (window.__krsIsEmbedded) {
               zurueckZumHub();
             } else if (window.KRS_HUB_URL) {
@@ -12259,6 +12334,42 @@
         },
           React.createElement('span', { 'aria-hidden': 'true' }, '\u25A6'),
           React.createElement('span', { className: 'topnav-label' }, 'Hub')
+        ),
+        // v4.35.0: Einstellungen / Profil / Administration oben rechts
+        user && React.createElement('div', { className: 'mobile-topnav-account', 'data-testid': 'mobile-topnav-account' },
+          React.createElement('button', {
+            type: 'button',
+            className: 'account-trigger',
+            'aria-label': 'Konto-Menü',
+            'aria-expanded': !!showAccountMenu,
+            'data-testid': 'mobile-account-trigger',
+            onClick: () => setShowAccountMenu(v => !v)
+          }, React.createElement(Avatar, { user: user, size: 32 })),
+          showAccountMenu && React.createElement(React.Fragment, null,
+            React.createElement('div', {
+              className: 'mobile-overlay visible',
+              style: { zIndex: 70 },
+              onClick: () => setShowAccountMenu(false),
+              'data-testid': 'mobile-account-overlay'
+            }),
+            React.createElement('div', { className: 'mobile-account-menu', role: 'menu', 'data-testid': 'mobile-account-menu' },
+              React.createElement('button', {
+                role: 'menuitem',
+                'data-testid': 'drawer-nav-settings',
+                onClick: () => { setShowAccountMenu(false); openModal('settings'); }
+              }, '\u2699\uFE0F', ' Einstellungen'),
+              React.createElement('button', {
+                role: 'menuitem',
+                'data-testid': 'drawer-nav-profile',
+                onClick: () => { setShowAccountMenu(false); setShowProfile(true); }
+              }, '\uD83D\uDC64', ' Profil'),
+              isAdminRole(user) && React.createElement('button', {
+                role: 'menuitem',
+                'data-testid': 'drawer-nav-admin',
+                onClick: () => { setShowAccountMenu(false); setShowAdmin(true); }
+              }, '\uD83D\uDEE0\uFE0F', ' Administration')
+            )
+          )
         )
       );
 
@@ -12267,22 +12378,7 @@
           className: 'wide' + (view === 'saved' ? ' active' : ''),
           'data-testid': 'drawer-nav-merkliste',
           onClick: () => { setView('saved'); setMobileSidebarOpen(false); }
-        }, '\uD83D\uDD16', ' Merkliste'),
-        React.createElement('button', {
-          className: 'wide',
-          'data-testid': 'drawer-nav-settings',
-          onClick: () => { setMobileSidebarOpen(false); openModal('settings'); }
-        }, '\u2699\uFE0F', ' Einstellungen'),
-        React.createElement('button', {
-          className: 'wide',
-          'data-testid': 'drawer-nav-profile',
-          onClick: () => { setMobileSidebarOpen(false); setShowProfile(true); }
-        }, '\uD83D\uDC64', ' Profil'),
-        isAdminRole(user) && React.createElement('button', {
-          className: 'wide',
-          'data-testid': 'drawer-nav-admin',
-          onClick: () => { setMobileSidebarOpen(false); setShowAdmin(true); }
-        }, '\uD83D\uDEE0\uFE0F', ' Administration')
+        }, '\uD83D\uDD16', ' Merkliste')
       ) : null;
 
       // === TEAMS VIEW ===
@@ -12319,7 +12415,7 @@
           ),
           React.createElement('div', { className: 'sidebar-list' },
             (() => {
-              const visibleTeams = teams.filter(t => !hiddenTeams.has(t.id));
+              const visibleTeams = sortTeamsKollegiumFirst(teams.filter(t => !hiddenTeams.has(t.id)));
               const hiddenTeamsList = teams.filter(t => hiddenTeams.has(t.id));
               return React.createElement(React.Fragment, null,
                 visibleTeams.map(team => {
