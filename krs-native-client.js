@@ -105,6 +105,32 @@
     setTimeout(function () { finish(false); }, 1200);
   });
 
+  // Connect liest `Notification.permission` schon beim ersten React-Render.
+  // Der native Handschlag ist zu diesem Zeitpunkt nicht zwingend fertig. Würden
+  // wir den Ersatz erst in `api.ready.then(...)` anlegen, merkt sich Connect
+  // dauerhaft `denied` und seine automatische Erlaubnisabfrage läuft nie. Darum
+  // ist der schlanke Shim im iframe sofort sichtbar; der tatsächliche RPC wartet
+  // weiterhin auf den bestätigten nativen Handschlag.
+  var notificationShimState = null;
+  if (typeof window.Notification === 'undefined') {
+    notificationShimState = { permission: 'default' };
+    function NotificationShim() {}
+    Object.defineProperty(NotificationShim, 'permission', {
+      get: function () { return notificationShimState.permission; }
+    });
+    NotificationShim.requestPermission = function (cb) {
+      return api.ready.then(function (native) {
+        if (!native) return { ok: false, reason: 'web' };
+        return api.enablePush();
+      }).then(function (r) {
+        notificationShimState.permission = (r && r.ok) ? 'granted' : 'denied';
+        if (typeof cb === 'function') cb(notificationShimState.permission);
+        return notificationShimState.permission;
+      });
+    };
+    window.Notification = NotificationShim;
+  }
+
   // ── Anpassungen, die nur in der App gelten ────────────────
   function applyNativeCss() {
     var css = [
@@ -148,24 +174,10 @@
   // die Benachrichtigungs-Einstellung wirkt für Nutzer:innen kaputt.
   // Wir legen deshalb einen schlanken Ersatz an, der auf APNs zeigt.
   api.ready.then(function (native) {
-    if (!native) return;
-    if (typeof window.Notification !== 'undefined') return;   // nichts kaputtmachen
-
-    var state = { permission: 'default' };
-    function Shim() {}                                        // new Notification() → nativer Push
-    Object.defineProperty(Shim, 'permission', { get: function () { return state.permission; } });
-    Shim.requestPermission = function (cb) {
-      return api.enablePush().then(function (r) {
-        state.permission = (r && r.ok) ? 'granted' : 'denied';
-        if (typeof cb === 'function') cb(state.permission);
-        return state.permission;
-      });
-    };
-    window.Notification = Shim;
-
+    if (!native || !notificationShimState) return;
     // War die Erlaubnis schon erteilt, gleich den Zustand übernehmen.
     api.pushStatus().then(function (s) {
-      if (s && s.token) state.permission = 'granted';
+      if (s && s.token) notificationShimState.permission = 'granted';
     }, function () {});
   });
 })();

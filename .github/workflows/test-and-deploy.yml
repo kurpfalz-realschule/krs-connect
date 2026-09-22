@@ -86,6 +86,13 @@ jobs:
           else
             echo "::error::tenant.js fehlt im Repo — Deploy würde die Live-Seite unbenutzbar machen." && exit 1
           fi
+          # Die iOS-App lädt Connect im iframe. Ohne dieses Gegenstück zur
+          # nativen Hub-Brücke bleiben Push, Teilen und externe Links dort tot.
+          if [ -f krs-native-client.js ]; then
+            cp krs-native-client.js _site/
+          else
+            echo "::error::krs-native-client.js fehlt im Repo — native iOS-Funktionen würden ausfallen." && exit 1
+          fi
           # Optionale Assets
           for f in logo*.png manifest.json sw.js favicon.ico; do
             [ -f "$f" ] && cp "$f" _site/ || true
