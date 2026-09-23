@@ -14,12 +14,12 @@
  * es sei ein normaler Browser, und weiter die Web-Notification-API benutzen,
  * die im WKWebView nicht existiert.
  *
- * Version: 1.0.0
+ * Version: 1.1.0
  */
 (function () {
   'use strict';
 
-  var VERSION = '1.0.0';
+  var VERSION = '1.1.0';
   var HUB_ORIGIN = 'https://kurpfalz-realschule.github.io';
   var TIMEOUT_MS = 5000;
 
@@ -34,6 +34,8 @@
     haptic: function () { return Promise.resolve(null); },
     openExternal: function (url) { window.open(url, '_blank', 'noopener'); return Promise.resolve(true); },
     share: function () { return Promise.resolve(null); },
+    capabilities: function () { return Promise.resolve({ downloadFile: false, shareFile: false }); },
+    downloadFile: function () { return Promise.reject(new Error('Nativer Datei-Export nicht verfuegbar')); },
     enablePush: function () { return Promise.resolve({ ok: false, reason: 'web' }); },
     pushStatus: function () { return Promise.resolve({ token: null }); }
   };
@@ -55,7 +57,7 @@
     if (m.ok) p.resolve(m.value); else p.reject(new Error(m.error || 'RPC fehlgeschlagen'));
   });
 
-  function rpc(method, args) {
+  function rpc(method, args, timeoutMs) {
     return new Promise(function (resolve, reject) {
       var id = 'r' + (++seq) + '_' + Date.now();
       pending[id] = {
@@ -64,7 +66,7 @@
         timer: setTimeout(function () {
           delete pending[id];
           reject(new Error('Zeitüberschreitung bei ' + method));
-        }, TIMEOUT_MS)
+        }, timeoutMs || TIMEOUT_MS)
       };
       try {
         window.parent.postMessage({ type: 'KRS_NATIVE_RPC', id: id, method: method, args: args || {} },
@@ -86,6 +88,8 @@
         api.haptic = function (style) { return rpc('haptic', { style: style || 'MEDIUM' }); };
         api.openExternal = function (url) { return rpc('openExternal', { url: url }); };
         api.share = function (o) { return rpc('share', o || {}); };
+        api.capabilities = function () { return rpc('capabilities'); };
+        api.downloadFile = function (o) { return rpc('downloadFile', o || {}, 130000); };
         api.enablePush = function () { return rpc('enablePush'); };
         api.pushStatus = function () { return rpc('pushStatus'); };
         document.documentElement.setAttribute('data-krs-native', 'ios');

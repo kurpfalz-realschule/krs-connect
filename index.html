@@ -2363,95 +2363,61 @@
       }
       window.__krsOpenBlankForNav = _dlOpenBlankForNav;
       window.__krsIsIOSDownload = _dlIsIOS;
-      function forceDownload(file){
+      function _dlResult(requestId, state, extra){
+        var value = Object.assign({ requestId: requestId, state: state }, extra || {});
+        try { window.dispatchEvent(new CustomEvent('krs-download-state', { detail: value })); } catch (e) {}
+        return value;
+      }
+      function _dlWithTimeout(promise, ms, controller, label){
+        var timer;
+        return Promise.race([
+          promise,
+          new Promise(function(_, reject){ timer = setTimeout(function(){
+            if (controller) try { controller.abort(); } catch (e) {}
+            reject(new Error(label || 'Zeitueberschreitung'));
+          }, ms); })
+        ]).finally(function(){ clearTimeout(timer); });
+      }
+      async function forceDownload(file){
         var name = (file && file.name) || 'datei';
+        var requestId = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : 'dl-' + Date.now() + '-' + Math.random().toString(16).slice(2);
         var isIOS = _dlIsIOS();
-        // Fenster SOFORT in der Nutzergeste reservieren (ohne noopener).
-        var emergencyWin = _dlOpenBlankForNav();
-        // S1: privater Bucket → Signed URL (wirft bei Fehler; S8.4: 15s Sign-Timeout).
-        var rp = window.__krsResolveStorageUrl ? window.__krsResolveStorageUrl(file.url) : Promise.resolve(file.url);
-        var slow = setTimeout(function(){ _dlToast('„' + name + '" wird vorbereitet …', 'info'); }, 400);
-
-        function navigateDownload(url){
-          var target = _dlAppendParam(url, name);
-          if (emergencyWin) {
-            try { emergencyWin.location = target; } catch (e) {
-              try { emergencyWin.location.href = target; } catch (e2) {}
+        var slow = setTimeout(function(){ _dlToast('„' + name + '“ wird vorbereitet …', 'info'); }, 400);
+        _dlResult(requestId, 'preparing', { name: name });
+        try {
+          var url = await (window.__krsResolveStorageUrl ? window.__krsResolveStorageUrl(file.url) : Promise.resolve(file.url));
+          var nativeApi = window.KRSNative;
+          if (nativeApi && nativeApi.available && typeof nativeApi.capabilities === 'function') {
+            var caps = await nativeApi.capabilities().catch(function(){ return {}; });
+            if (caps && caps.downloadFile && typeof nativeApi.downloadFile === 'function') {
+              _dlResult(requestId, 'transferring', { name: name, transport: 'native' });
+              var handed = await nativeApi.downloadFile({ requestId: requestId, url: url, name: name, type: file && file.type, size: file && file.size });
+              clearTimeout(slow);
+              _dlToast('„' + name + '“ wurde an iOS übergeben.', 'success');
+              return _dlResult(requestId, (handed && handed.state) || 'handed_off', { name: name, transport: 'native' });
             }
-            _dlToast('„' + name + '" wird geöffnet — bitte den Download im neuen Tab bestätigen.', 'info');
-            return true;
-          }
-          // Same-Tab-Fallback (Web Clip / Popup blockiert)
-          try {
-            _dlToast('„' + name + '" — Popup blockiert, öffne Download in diesem Tab …', 'info');
-            window.location.assign(target);
-            return true;
-          } catch (e) { return false; }
-        }
-
-        function tryShare(blob){
-          if (!isIOS || !navigator.share || typeof navigator.canShare !== 'function') return Promise.resolve(false);
-          try {
-            var f = new File([blob], name, { type: blob.type || 'application/octet-stream' });
-            if (!navigator.canShare({ files: [f] })) return Promise.resolve(false);
-            return navigator.share({ files: [f], title: name }).then(function(){ return true; }).catch(function(){ return false; });
-          } catch (e) { return Promise.resolve(false); }
-        }
-
-        rp.then(function(url){
-          // iOS/iPadOS: Signed URL + ?download= (Content-Disposition) im reservierten
-          // Fenster — blob + <a download> ist unter Safari/Web Clip oft wirkungslos.
-          if (isIOS && window.__krsIsStorageUrl && window.__krsIsStorageUrl(url)) {
-            clearTimeout(slow);
-            if (navigateDownload(url)) return;
           }
 
-          return fetch(url).then(function(r){
-            if (!r.ok) throw new Error('HTTP ' + r.status);
-            return r.blob();
-          }).then(function(blob){
-            clearTimeout(slow);
-            return tryShare(blob).then(function(shared){
-              if (shared) {
-                if (emergencyWin) try { emergencyWin.close(); } catch (e) {}
-                return;
-              }
-              if (isIOS) {
-                if (window.__krsIsStorageUrl && window.__krsIsStorageUrl(url) && navigateDownload(url)) return;
-                var u = URL.createObjectURL(blob);
-                if (emergencyWin) {
-                  try { emergencyWin.location = u; } catch (e) {}
-                  _dlToast('„' + name + '" wird geöffnet — bitte teilen/sichern im neuen Tab.', 'info');
-                } else {
-                  var a = document.createElement('a'); a.href = u; a.download = name;
-                  document.body.appendChild(a); a.click(); a.remove();
-                  _dlToast('„' + name + '" — falls nichts passiert, „↗ Neuer Tab" nutzen.', 'error');
-                }
-                setTimeout(function(){ URL.revokeObjectURL(u); }, 60000);
-                return;
-              }
-              // Desktop: blob + <a download>
-              if (emergencyWin) try { emergencyWin.close(); } catch (e) {}
-              var u2 = URL.createObjectURL(blob);
-              var a2 = document.createElement('a'); a2.href = u2; a2.download = name;
-              document.body.appendChild(a2); a2.click(); a2.remove();
-              setTimeout(function(){ URL.revokeObjectURL(u2); }, 5000);
-            });
-          }).catch(function(err){
-            clearTimeout(slow);
-            console.error('forceDownload fehlgeschlagen:', err);
-            if (window.__krsIsStorageUrl && window.__krsIsStorageUrl(url)) {
-              if (navigateDownload(url)) return;
-            }
-            if (emergencyWin) try { emergencyWin.close(); } catch (e) {}
-            _dlToast('„' + name + '" konnte nicht geladen werden. Bitte über „↗ Neuer Tab" versuchen.', 'error');
-          });
-        }).catch(function(err){
+          _dlResult(requestId, 'transferring', { name: name, transport: 'web' });
+          var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+          var response = await _dlWithTimeout(fetch(url, controller ? { signal: controller.signal } : undefined), 120000, controller, 'Zeitlimit beim Laden (120s)');
+          if (!response.ok) throw new Error('HTTP ' + response.status);
+          var blob = await _dlWithTimeout(response.blob(), 120000, controller, 'Zeitlimit beim Lesen der Datei (120s)');
           clearTimeout(slow);
-          console.error('forceDownload: Signieren fehlgeschlagen:', err);
-          if (emergencyWin) try { emergencyWin.close(); } catch (e) {}
-          _dlToast('„' + name + '" konnte nicht geladen werden (Signierung fehlgeschlagen).', 'error');
-        });
+          _dlResult(requestId, 'ready', { name: name, transport: 'web', bytes: blob.size });
+          var objectUrl = URL.createObjectURL(blob);
+          var a = document.createElement('a'); a.href = objectUrl; a.download = name;
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(function(){ URL.revokeObjectURL(objectUrl); }, isIOS ? 60000 : 5000);
+          _dlToast('Download von „' + name + '“ gestartet.', 'success');
+          return _dlResult(requestId, 'handed_off', { name: name, transport: 'web', bytes: blob.size });
+        } catch (err) {
+          clearTimeout(slow);
+          console.error('forceDownload fehlgeschlagen:', err);
+          var cancelled = err && (err.name === 'AbortError' || /cancel|abgebrochen/i.test(err.message || ''));
+          _dlToast(cancelled ? 'Download von „' + name + '“ abgebrochen.' : '„' + name + '“ konnte nicht geladen werden. Bitte erneut versuchen.', cancelled ? 'info' : 'error');
+          return _dlResult(requestId, cancelled ? 'cancelled' : 'failed', { name: name, errorCode: cancelled ? 'cancelled' : 'download_failed' });
+        }
       }
       window.__krsDownloadFile = forceDownload;
       window.fvHelpers = { extOf: extOf, isImage: isImage, iconFor: iconFor, fmtSize: fmtSize, forceDownload: forceDownload };
@@ -6512,7 +6478,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.37.0';
+    window.KRS_VERSION = '4.38.0';
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
     // Playwright den Klick-Handler prüfen kann, ohne wirklich zu navigieren.
     // Aus tenant.js (TENANT-SPEC.md 2.4) — leer, wenn hub.enabled:false.
@@ -10487,6 +10453,11 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.38.0', date: '23.09.2026', items: [
+        'Downloads liefern jetzt einen pruefbaren Zustand statt eines voreiligen Erfolgs.',
+        'Web-Transfers brechen nach 120 Sekunden kontrolliert ab und speichern keine HTTP-Fehler als Datei.',
+        'Die native iOS-App kann kompatible Builds per sicherer Datei-Bruecke nutzen; alte Builds fallen auf den Webweg zurueck.'
+      ]},
       { v: '4.37.0', date: '22.09.2026', items: [
         'Download auf dem iPhone (Safari / Web Clip): Datei öffnet sich wieder — der Notfall-Tab wurde vorher mit „noopener“ geöffnet und war danach leer/nutzlos',
         '„↗ Neuer Tab“ und Lightbox-Download nutzen denselben sicheren Fenster-Pfad (ohne stillen Fehlschlag)'

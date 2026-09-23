@@ -1,135 +1,62 @@
-import { test, expect, openConnect } from '../fixtures/connect.ts';
+import { test, expect } from '../fixtures/connect.ts';
 
-// Versionen nie hart vergleichen — sonst wird dieser Test bei jedem Release rot
-// (gleiche Falle wie frueher in smoke-auto-update.spec.ts).
-function semverGte(a: string, b: string): boolean {
-  const pa = String(a).split('.').map(Number);
-  const pb = String(b).split('.').map(Number);
-  for (let i = 0; i < 3; i++) {
-    const x = pa[i] || 0, y = pb[i] || 0;
-    if (x !== y) return x > y;
-  }
-  return true;
-}
-
-
-/**
- * 0AU / v4.37.0 — iPhone Download: kein noopener-null-Trap mehr.
- * Statische + Hook-Prüfungen (echte iOS-Safari-Downloads bleiben Geräte-Retest).
- */
-test.describe('0AU Download iOS / noopener-Trap', () => {
-
-  test('Hooks exponiert: __krsDownloadFile, __krsOpenBlankForNav, __krsIsIOSDownload', async ({ connectPage: page }) => {
-    const hooks = await page.evaluate(() => ({
-      dl: typeof (window as any).__krsDownloadFile,
-      openBlank: typeof (window as any).__krsOpenBlankForNav,
-      isIOS: typeof (window as any).__krsIsIOSDownload,
-      version: (window as any).KRS_VERSION,
-    }));
-    expect(hooks.dl).toBe('function');
-    expect(hooks.openBlank).toBe('function');
-    expect(hooks.isIOS).toBe('function');
-    expect(hooks.version).toMatch(/^\d+\.\d+\.\d+$/);
-    expect(semverGte(String(hooks.version), '4.37.0'), `KRS_VERSION ${hooks.version} ist aelter als 4.37.0`).toBe(true);
-  });
-
-  test('__krsOpenBlankForNav öffnet ohne noopener-Feature (Rückgabe nutzbar)', async ({ connectPage: page }) => {
-    const log = await page.evaluate(() => {
-      const calls: Array<{ url: string; target: string; features: string | undefined }> = [];
-      const orig = window.open.bind(window);
-      (window as any).open = function(url?: string | URL, target?: string, features?: string) {
-        calls.push({
-          url: String(url ?? ''),
-          target: String(target ?? ''),
-          features: features,
-        });
-        // Fake-Fenster mit location-Setter (kein echtes Popup im Headless)
-        const fake: any = {
-          closed: false,
-          opener: {},
-          location: '',
-          close() { this.closed = true; },
-        };
-        return fake;
-      };
-      try {
-        const w = (window as any).__krsOpenBlankForNav();
-        return {
-          calls,
-          hasWindow: !!w,
-          openerNulled: w && w.opener === null,
-        };
-      } finally {
-        (window as any).open = orig;
-      }
-    });
-    expect(log.calls.length).toBeGreaterThanOrEqual(1);
-    const first = log.calls[0];
-    expect(first.target).toBe('_blank');
-    // Kritisch: features darf kein noopener enthalten (sonst null in echten Browsern)
-    expect(String(first.features || '')).not.toMatch(/noopener/i);
-    expect(log.hasWindow).toBe(true);
-    expect(log.openerNulled).toBe(true);
-  });
-
-  test('forceDownload-Reserve läuft synchron im Klick und ohne noopener', async ({ connectPage: page }) => {
+test.describe('DL-02/DL-04 — gemeinsamer Downloadvertrag', () => {
+  test('liefert awaitbar preparing → transferring → ready → handed_off', async ({ connectPage: page }) => {
     const result = await page.evaluate(async () => {
-      const calls: Array<{ features: string | undefined; sync: boolean }> = [];
-      let inGesture = false;
-      const orig = window.open.bind(window);
-      (window as any).open = function(url?: string | URL, target?: string, features?: string) {
-        calls.push({ features, sync: inGesture });
-        const fake: any = {
-          closed: false,
-          opener: {},
-          location: '',
-          close() { this.closed = true; },
-        };
-        Object.defineProperty(fake, 'location', {
-          configurable: true,
-          set(_v) { /* swallow */ },
-          get() { return ''; },
-        });
-        return fake;
-      };
-      // resolveStorageUrl → sofort scheitern lassen, damit Emergency-Pfad greift
-      const prevResolve = (window as any).__krsResolveStorageUrl;
-      (window as any).__krsResolveStorageUrl = () => Promise.reject(new Error('test-sign-fail'));
-      const toasts: string[] = [];
-      const prevToast = (window as any).showToast;
-      (window as any).showToast = (msg: string) => { toasts.push(String(msg)); };
-
+      const states: string[] = [];
+      const onState = (event: Event) => states.push((event as CustomEvent).detail.state);
+      window.addEventListener('krs-download-state', onState);
+      const blob = new Blob(['KRS download probe'], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
       try {
-        inGesture = true;
-        (window as any).__krsDownloadFile({ url: 'uploads/test.pdf', name: 'test.pdf' });
-        inGesture = false;
-        // kurz warten auf catch/toast
-        await new Promise(r => setTimeout(r, 50));
-        return {
-          calls,
-          toasts,
-          usedNoopener: calls.some(c => /noopener/i.test(String(c.features || ''))),
-          syncOpen: calls.some(c => c.sync),
-        };
+        const value = await (window as any).__krsDownloadFile({ url, name: 'probe.txt', type: 'text/plain', size: blob.size });
+        return { states, value };
       } finally {
-        (window as any).open = orig;
-        (window as any).__krsResolveStorageUrl = prevResolve;
-        (window as any).showToast = prevToast;
+        window.removeEventListener('krs-download-state', onState);
+        URL.revokeObjectURL(url);
       }
     });
-    expect(result.syncOpen, 'window.open muss synchron in der Geste laufen').toBe(true);
-    expect(result.usedNoopener, 'Reserve-Fenster darf kein noopener nutzen').toBe(false);
-    expect(result.toasts.length, 'bei Fehler muss Toast erscheinen').toBeGreaterThan(0);
-    expect(result.toasts.join(' ')).toMatch(/nicht geladen|Signierung|fehlgeschlagen/i);
+    expect(result.states).toEqual(['preparing', 'transferring', 'ready', 'handed_off']);
+    expect(result.value).toMatchObject({ state: 'handed_off', name: 'probe.txt', transport: 'web', bytes: 18 });
+    expect(result.value.requestId).toMatch(/^dl-|^[0-9a-f-]{20,}$/i);
   });
 
-  test('Quelltext enthält keinen Reserve-open mit noopener mehr (außer Kommentar)', async ({ connectPage: page }) => {
-    // Seitenquelle: laufende App hat Scripts inline — prüfe Hook-Funktionen-String
-    const src = await page.evaluate(() => String((window as any).__krsDownloadFile));
-    expect(src).not.toMatch(/open\(['"]['"]\s*,\s*['"]_blank['"]\s*,\s*['"]noopener['"]\)/);
-    const openSrc = await page.evaluate(() => String((window as any).__krsOpenBlankForNav));
-    expect(openSrc).toMatch(/opener\s*=\s*null/);
-    // Kommentar darf „noopener“ erwähnen — verboten ist nur das Feature-Argument:
-    expect(openSrc).not.toMatch(/open\([^)]*noopener/i);
+  test('HTTP-Fehler werden nicht als Datei gespeichert und enden failed', async ({ connectPage: page }) => {
+    await page.route('**/download-missing.pdf', route => route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"missing"}' }));
+    const downloads: string[] = [];
+    page.on('download', download => downloads.push(download.suggestedFilename()));
+    const result = await page.evaluate(() => (window as any).__krsDownloadFile({ url: '/download-missing.pdf', name: 'bericht.pdf' }));
+    expect(result).toMatchObject({ state: 'failed', name: 'bericht.pdf', errorCode: 'download_failed' });
+    expect(downloads).toEqual([]);
+  });
+
+  test('native Faehigkeit wird verwendet, wenn der neue App-Build sie meldet', async ({ connectPage: page }) => {
+    const result = await page.evaluate(async () => {
+      const previous = (window as any).KRSNative;
+      const calls: any[] = [];
+      (window as any).KRSNative = {
+        available: true,
+        capabilities: async () => ({ downloadFile: true, shareFile: true }),
+        downloadFile: async (args: any) => { calls.push(args); return { state: 'handed_off' }; },
+      };
+      try {
+        const value = await (window as any).__krsDownloadFile({ url: 'blob:test', name: 'datei.pdf', type: 'application/pdf', size: 42 });
+        return { calls, value };
+      } finally { (window as any).KRSNative = previous; }
+    });
+    expect(result.calls).toHaveLength(1);
+    expect(result.calls[0]).toMatchObject({ url: 'blob:test', name: 'datei.pdf', type: 'application/pdf', size: 42 });
+    expect(result.value).toMatchObject({ state: 'handed_off', transport: 'native' });
+  });
+
+  test('alter App-Build ohne downloadFile faellt kontrolliert auf Web zurueck', async ({ connectPage: page }) => {
+    const result = await page.evaluate(async () => {
+      const previous = (window as any).KRSNative;
+      (window as any).KRSNative = { available: true, capabilities: async () => ({ downloadFile: false }) };
+      const url = URL.createObjectURL(new Blob(['fallback']));
+      try { return await (window as any).__krsDownloadFile({ url, name: 'fallback.txt' }); }
+      finally { URL.revokeObjectURL(url); (window as any).KRSNative = previous; }
+    });
+    expect(result).toMatchObject({ state: 'handed_off', transport: 'web', name: 'fallback.txt' });
   });
 });
