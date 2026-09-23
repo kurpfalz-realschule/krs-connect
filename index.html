@@ -2815,7 +2815,11 @@
       TOAST_DURATION: 4000,
       WIKI_LOAD_TIMEOUT: 8000,
       NOTIFICATION_AUTO_CLOSE: 8000,
-      CHAT_POLL_INTERVAL: 20000,                   // Polling-Fallback wenn Realtime hakt (Feedback #4)
+      // PERF-04 (v4.39.0): Realtime primär. Poll nur Fallback.
+      // Legacy-Rollback: localStorage.setItem('KRS_CHAT_POLL_LEGACY','true') → fest 20s.
+      CHAT_POLL_INTERVAL: 20000,                   // Basis/Backoff-Start wenn Realtime ungesund
+      CHAT_POLL_HEALTHY_INTERVAL: 120000,          // Realtime healthy → Poll ≥120s (0 = aus)
+      CHAT_POLL_BACKOFF: [20000, 60000, 120000],   // unhealthy: 20→60→120s
       IMAGE_COMPRESS_THRESHOLD: 200 * 1024,        // 200 KB — darunter kein Compress
 
       // Umfragen
@@ -2846,6 +2850,92 @@
       // Heartbeat
       HEARTBEAT_INTERVAL: 4 * 60 * 60 * 1000, // 4h
     };
+
+
+    // ── PERF-04: Poll-Helfer (Realtime-aware) ─────────────────────
+    function krsChatPollLegacy() {
+      try { return localStorage.getItem('KRS_CHAT_POLL_LEGACY') === 'true'; } catch (e) { return false; }
+    }
+    /** Startet adaptives Polling. onTick() wird aufgerufen. Gibt { stop, setHealthy, force } zurück. */
+    function krsCreateAdaptivePoll(onTick, opts) {
+      const healthyIv = (opts && opts.healthyInterval != null) ? opts.healthyInterval : (CONFIG.CHAT_POLL_HEALTHY_INTERVAL ?? 120000);
+      const backoff = (opts && opts.backoff) || CONFIG.CHAT_POLL_BACKOFF || [20000, 60000, 120000];
+      let healthy = false;
+      let backoffIdx = 0;
+      let timer = null;
+      let stopped = false;
+      let inFlight = null;
+      let lastVisibilityTs = 0;
+
+      const clear = () => { if (timer) { clearTimeout(timer); timer = null; } };
+
+      const runTick = () => {
+        if (stopped) return;
+        if (document.visibilityState !== 'visible') return;
+        if (inFlight) return inFlight;
+        inFlight = Promise.resolve()
+          .then(() => onTick())
+          .catch(() => {})
+          .finally(() => { inFlight = null; });
+        return inFlight;
+      };
+
+      const schedule = () => {
+        clear();
+        if (stopped) return;
+        if (krsChatPollLegacy()) {
+          timer = setTimeout(function loop() {
+            runTick();
+            timer = setTimeout(loop, CONFIG.CHAT_POLL_INTERVAL || 20000);
+          }, CONFIG.CHAT_POLL_INTERVAL || 20000);
+          return;
+        }
+        let delay;
+        if (healthy) {
+          if (!healthyIv || healthyIv <= 0) return; // Poll aus
+          delay = healthyIv;
+        } else {
+          delay = backoff[Math.min(backoffIdx, backoff.length - 1)];
+        }
+        timer = setTimeout(function loop() {
+          runTick();
+          if (!healthy && backoffIdx < backoff.length - 1) backoffIdx += 1;
+          schedule();
+        }, delay);
+      };
+
+      const setHealthy = (ok) => {
+        const next = !!ok;
+        if (next === healthy) return;
+        healthy = next;
+        if (healthy) backoffIdx = 0;
+        schedule();
+      };
+
+      const onVisibility = () => {
+        if (document.visibilityState !== 'visible') return;
+        const now = Date.now();
+        // max 1× pro Rückkehr (Dedupe mit kurzem Fenster + in-flight)
+        if (now - lastVisibilityTs < 1500) return;
+        lastVisibilityTs = now;
+        runTick();
+      };
+
+      schedule();
+      document.addEventListener('visibilitychange', onVisibility);
+      window.addEventListener('online', onVisibility);
+
+      return {
+        stop() {
+          stopped = true;
+          clear();
+          document.removeEventListener('visibilitychange', onVisibility);
+          window.removeEventListener('online', onVisibility);
+        },
+        setHealthy,
+        force: runTick
+      };
+    }
 
     // ── Phase 7.7: Offline-Erkennung ──────────────────────────
     (function initOfflineDetection() {
@@ -3517,6 +3607,32 @@
           return data || [];
         } catch (err) {
           console.error('getChannels error:', err);
+          return [];
+        }
+      }
+
+      // PERF-03 (v4.39.0): alle Channels für mehrere Teams in EINER Query
+      async getChannelsForTeams(teamIds) {
+        const ids = (teamIds || []).filter(Boolean);
+        if (!ids.length) return [];
+        if (this.isDemo) {
+          const out = [];
+          for (const teamId of ids) {
+            const channels = await this.getChannels(teamId);
+            out.push(...channels);
+          }
+          return out;
+        }
+        try {
+          const { data, error } = await this.sb.from('channels')
+            .select('*')
+            .in('team_id', ids)
+            .order('position', { ascending: true, nullsFirst: false })
+            .order('name');
+          if (error) throw error;
+          return data || [];
+        } catch (err) {
+          console.error('getChannelsForTeams error:', err);
           return [];
         }
       }
@@ -4751,7 +4867,7 @@
       // (vorher nur INSERT — bearbeitete/gelöschte Beiträge & Nachrichten
       // blieben bei anderen Nutzern bis zum Reload stehen). Callback-Objekt
       // { onInsert, onUpdate, onDelete } statt einzelner Funktion.
-      subscribeToChannel(channelId, { onInsert, onUpdate, onDelete } = {}) {
+      subscribeToChannel(channelId, { onInsert, onUpdate, onDelete, onStatus } = {}) {
         if (this.isDemo) return () => {};
         const subKey = 'channel'; // Nur eine Channel-Sub gleichzeitig
         this.subManager.remove(subKey);
@@ -4774,7 +4890,7 @@
               (payload) => { if (onUpdate) onUpdate(payload.new); })
             .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'posts', filter: `channel_id=eq.${channelId}` },
               (payload) => { if (onDelete) onDelete(payload.old); })
-            .subscribe();
+            .subscribe((status) => { if (onStatus) onStatus(status); });
           this.subManager.add(subKey, sub);
           return () => { this.subManager.remove(subKey); };
         } catch (err) {
@@ -4783,7 +4899,7 @@
         }
       }
 
-      subscribeToConversation(conversationId, { onInsert, onUpdate, onDelete } = {}) {
+      subscribeToConversation(conversationId, { onInsert, onUpdate, onDelete, onStatus } = {}) {
         if (this.isDemo) return () => {};
         const subKey = 'conversation';
         this.subManager.remove(subKey);
@@ -4816,7 +4932,7 @@
               (payload) => { if (onUpdate) onUpdate(payload.new); })
             .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
               (payload) => { if (onDelete) onDelete(payload.old); })
-            .subscribe();
+            .subscribe((status) => { if (onStatus) onStatus(status); });
           this.subManager.add(subKey, sub);
           return () => { this.subManager.remove(subKey); };
         } catch (err) {
@@ -6540,7 +6656,9 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.38.1';
+    window.KRS_VERSION = '4.39.0';
+    // PERF-01: Cold-Boot-Zähler für Hub keep-alive Abnahme (Connect→Hub-Start→Connect → bleibt 1)
+    window.__krsConnectBootCount = (window.__krsConnectBootCount || 0) + 1;
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
     // Playwright den Klick-Handler prüfen kann, ohne wirklich zu navigieren.
     // Aus tenant.js (TENANT-SPEC.md 2.4) — leer, wenn hub.enabled:false.
@@ -10515,6 +10633,12 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.39.0', date: '23.09.2026', items: [
+        'Polling: bei gesundem Realtime nur noch alle 120s (oder aus); bei Ausfall Backoff 20→60→120s',
+        'Visibility-Refetch höchstens 1× pro Rückkehr, mit In-flight-Dedupe',
+        'Login-Boot: Teams+Chats parallel, Channels in einer Query, getUsers lazy; Unread weiter parallel (RPC folgt)',
+        'Rollback Polling: localStorage KRS_CHAT_POLL_LEGACY=true stellt 20s-Intervall wieder her'
+      ]},
       { v: '4.38.1', date: '23.09.2026', items: [
         'Auf iPhone und iPad erscheint nach der Vorbereitung ein eigener Schritt „In Dateien sichern / Teilen“.',
         'Falls File Share nicht verfügbar ist, kann die geprüfte Download-Adresse bewusst im Browser geöffnet werden.',
@@ -11542,76 +11666,97 @@
         }
       }, [pendingAuthUser, dataService, setupComplete, user]);
 
+      // PERF-03 (v4.39.0): Boot parallel — Teams+Conversations zusammen, Channels in
+      // einer Query, getUsers lazy, Unread parallel (RPC = PERF-02, noch nicht).
+      // First-channel Selection startet Posts-Fetch ohne auf Users/Prefs zu warten.
       const handleUserSelected = async (selectedUser) => {
         setUser(selectedUser);
-        // Load teams
-        const teamsData = await dataService.getTeams(selectedUser.id);
+
+        // Users lazy: blockiert den ersten Feed nicht
+        const usersPromise = dataService.getUsers()
+          .then(usersData => { setAllUsers(usersData || MOCK_USERS); return usersData; })
+          .catch(() => { setAllUsers(MOCK_USERS); return MOCK_USERS; });
+
+        // Kritischer Pfad parallel: Teams + Conversations
+        const [teamsData, convData] = await Promise.all([
+          dataService.getTeams(selectedUser.id),
+          dataService.getConversations(selectedUser.id)
+        ]);
         setTeams(teamsData);
-        // Archivierte Teams (#8) separat laden — für den Archiv-Bereich der Sidebar
+        setConversations(convData || []);
+
+        // Nicht-kritisch parallel (Sidebar-Extras)
         dataService.getArchivedTeams(selectedUser.id).then(setArchivedTeams).catch(() => {});
+        dataService.getHiddenIds('team', selectedUser.id)
+          .then(hiddenT => { if (hiddenT && hiddenT.size) setHiddenTeams(hiddenT); })
+          .catch(() => {});
+        dataService.getMutedIds('team', selectedUser.id)
+          .then(mutedT => { if (mutedT && mutedT.size) setMutedTeams(mutedT); })
+          .catch(() => {});
+
+        const hiddenConvPromise = dataService.getHiddenIds('conv', selectedUser.id)
+          .then(h => {
+            const hiddenC = h || new Set();
+            if (hiddenC.size) setHiddenConversations(hiddenC);
+            return hiddenC;
+          })
+          .catch(() => new Set());
+
         if (teamsData.length > 0) {
           const firstTeam = teamsData[0];
           setSelectedTeam(firstTeam);
-          const channelsData = await dataService.getChannels(firstTeam.id);
-          setChannels(channelsData);
-          // Initialize unread badges from ALL teams' channels + build channelTeamMap
-          const initialUnreads = new Map();
+
+          // EINE Query für alle team_ids statt Schleife
+          const allChannels = await dataService.getChannelsForTeams(teamsData.map(t => t.id));
           const ctMap = new Map();
-          for (const t of teamsData) {
-            const chans = t.id === firstTeam.id ? channelsData : await dataService.getChannels(t.id);
-            chans.forEach(ch => {
-              ctMap.set(ch.id, t.id);
-              if (ch.unread > 0) initialUnreads.set(ch.id, ch.unread);
-            });
+          const channelsByTeam = new Map();
+          const initialUnreads = new Map();
+          for (const ch of allChannels) {
+            ctMap.set(ch.id, ch.team_id);
+            if (!channelsByTeam.has(ch.team_id)) channelsByTeam.set(ch.team_id, []);
+            channelsByTeam.get(ch.team_id).push(ch);
+            if (ch.unread > 0) initialUnreads.set(ch.id, ch.unread);
           }
+          // Demo-Sortierung je Team beibehalten (getChannelsForTeams liefert flach)
+          for (const [tid, list] of channelsByTeam) {
+            list.sort((a, b) => ((a.position ?? 0) - (b.position ?? 0)) || String(a.name || '').localeCompare(String(b.name || '')));
+          }
+          const channelsData = channelsByTeam.get(firstTeam.id) || [];
+          setChannels(channelsData);
           setChannelTeamMap(ctMap);
-          // For Supabase mode: calculate unreads from localStorage lastRead timestamps
-          if (!dataService.isDemo) {
-            const allChannelIds = Array.from(ctMap.keys());
-            const supaUnreads = await dataService.getChannelUnreadCounts(allChannelIds, selectedUser.id);
-            // S15/U2: den automatisch ausgewählten ersten Kanal aus der Badge-Map
-            // entfernen, BEVOR sie gesetzt wird — sonst blitzt der Punkt beim Start
-            // kurz auf, bevor der zentrale Effekt ihn wieder wegnimmt.
-            if (channelsData.length > 0) supaUnreads.delete(channelsData[0].id);
-            if (supaUnreads.size > 0) setUnreadPostChannels(supaUnreads);
-          } else if (initialUnreads.size > 0) {
-            if (channelsData.length > 0) initialUnreads.delete(channelsData[0].id);
-            setUnreadPostChannels(initialUnreads);
-          }
+
+          // First channel sofort — triggert Posts-Effect (First Paint)
           if (channelsData.length > 0) {
             setSelectedChannel(channelsData[0]);
-            // Mark the first channel as read right away (Phase 6: Instanz-Methode für Supabase-Upsert)
             dataService.markChannelRead(channelsData[0].id, selectedUser.id);
           }
-          // Check user's role in this team
+
+          // Unread parallel (N Counts bleiben bis PERF-02/RPC; Promise.all intern schon)
+          const unreadPromise = (!dataService.isDemo)
+            ? dataService.getChannelUnreadCounts(Array.from(ctMap.keys()), selectedUser.id)
+            : Promise.resolve(initialUnreads);
+
+          // Rolle parallel, nicht blockierend für Feed
           if (!dataService.isDemo) {
-            const members = await dataService.getTeamMembers(firstTeam.id);
-            const me = members.find(m => m.id === selectedUser.id);
-            setUserTeamRole(me?.role || null);
+            dataService.getTeamMembers(firstTeam.id)
+              .then(members => {
+                const me = members.find(m => m.id === selectedUser.id);
+                setUserTeamRole(me?.role || null);
+              })
+              .catch(() => setUserTeamRole(null));
           } else {
             setUserTeamRole('admin'); // Demo: always admin
           }
+
+          try {
+            const supaUnreads = await unreadPromise;
+            if (channelsData.length > 0) supaUnreads.delete(channelsData[0].id);
+            if (supaUnreads.size > 0) setUnreadPostChannels(supaUnreads);
+          } catch (e) {}
         }
-        // Ausgeblendete Teams laden (persistiert) — Sprint 4
-        try {
-          const hiddenT = await dataService.getHiddenIds('team', selectedUser.id);
-          if (hiddenT && hiddenT.size) setHiddenTeams(hiddenT);
-        } catch (e) {}
-        // Stummgeschaltete Teams laden (persistiert, rein lokal) — v4.19.0
-        try {
-          const mutedT = await dataService.getMutedIds('team', selectedUser.id);
-          if (mutedT && mutedT.size) setMutedTeams(mutedT);
-        } catch (e) {}
-        // Load conversations + all users for chat
-        const convData = await dataService.getConversations(selectedUser.id);
-        setConversations(convData || []);
-        // Ausgeblendete Chats laden (persistiert)
-        let hiddenC = new Set();
-        try {
-          hiddenC = await dataService.getHiddenIds('conv', selectedUser.id) || new Set();
-          if (hiddenC && hiddenC.size) setHiddenConversations(hiddenC);
-        } catch (e) {}
-        // S21: optional schon beim Login ersten/zuletzt gewählten sichtbaren Chat setzen
+
+        // Chats: hidden + last-pick + unread (Unread parallel, nicht kritisch für Team-Feed)
+        const hiddenC = await hiddenConvPromise;
         try {
           const lastId = readLastConversationId(selectedUser.id);
           let pick = null;
@@ -11624,48 +11769,47 @@
             writeLastConversationId(selectedUser.id, pick.id);
           }
         } catch (e) {}
-        // Initialize unread chat count
+
         if (!dataService.isDemo && convData?.length > 0) {
-          const convUnreads = await dataService.getConversationUnreadCounts(convData, selectedUser.id);
-          let totalUnread = 0;
-          const enrichedConvs = (convData || []).map(c => {
-            const unread = convUnreads.get(c.id) || 0;
-            totalUnread += unread;
-            return unread > 0 ? { ...c, unread } : c;
-          });
-          if (totalUnread > 0) {
-            setConversations(enrichedConvs);
-            setUnreadChatCount(totalUnread);
-          }
+          dataService.getConversationUnreadCounts(convData, selectedUser.id)
+            .then(convUnreads => {
+              let totalUnread = 0;
+              const enrichedConvs = (convData || []).map(c => {
+                const unread = convUnreads.get(c.id) || 0;
+                totalUnread += unread;
+                return unread > 0 ? { ...c, unread } : c;
+              });
+              if (totalUnread > 0) {
+                setConversations(enrichedConvs);
+                setUnreadChatCount(totalUnread);
+              }
+            })
+            .catch(() => {});
         } else {
           const totalChatUnread = (convData || []).reduce((sum, c) => sum + (c.unread || 0), 0);
           if (totalChatUnread > 0) setUnreadChatCount(totalChatUnread);
         }
-        const usersData = await dataService.getUsers();
-        setAllUsers(usersData || MOCK_USERS);
-        // Phase 6: Preferences aus Supabase laden (mit localStorage Fallback)
+
+        // Prefs parallel / nachgelagert
         if (!dataService.isDemo) {
-          try {
-            const prefs = await dataService.getUserPreferences(selectedUser.id);
-            if (prefs) {
+          dataService.getUserPreferences(selectedUser.id)
+            .then(prefs => {
+              if (!prefs) return;
               if (prefs.read_receipts_enabled !== undefined) setReadReceiptsEnabled(prefs.read_receipts_enabled);
               if (prefs.saved_posts && Array.isArray(prefs.saved_posts) && prefs.saved_posts.length > 0) {
                 setSavedPosts(prefs.saved_posts);
               }
-              if (prefs.onboarding_done) {
-                // Onboarding schon gemacht → nicht mehr zeigen
-              } else {
-                setShowOnboarding(true);
-              }
-            }
-          } catch(e) {
-            // Fallback: localStorage
-            try { if (!localStorage.getItem('krs_onboarding_done')) setShowOnboarding(true); } catch(e2) {}
-          }
+              if (!prefs.onboarding_done) setShowOnboarding(true);
+            })
+            .catch(() => {
+              try { if (!localStorage.getItem('krs_onboarding_done')) setShowOnboarding(true); } catch (e2) {}
+            });
         } else {
-          // Demo-Modus: localStorage check
-          try { if (!localStorage.getItem('krs_onboarding_done')) setShowOnboarding(true); } catch(e) {}
+          try { if (!localStorage.getItem('krs_onboarding_done')) setShowOnboarding(true); } catch (e) {}
         }
+
+        // Users-Promise läuft im Hintergrund; kein await nötig für First Paint
+        void usersPromise;
       };
 
       // Session-Refresh + Auto-Logout bei Token-Ablauf (Phase 6)
@@ -11735,6 +11879,8 @@
             }
           };
           loadPosts();
+          // PERF-04: Realtime-Status → adaptives Polling (Bridge vor subscribe)
+          let postsPoll = null;
           const unsub = dataService.subscribeToChannel(selectedChannel.id, {
             onInsert: newPost => {
               if (cancelled) return;
@@ -11770,10 +11916,16 @@
             onDelete: deletedPost => {
               if (cancelled) return;
               setPosts(prev => prev.filter(p => p.id !== deletedPost.id));
+            },
+            onStatus: status => {
+              if (cancelled || !postsPoll) return;
+              postsPoll.setHealthy(status === 'SUBSCRIBED');
             }
           });
           // Feedback #4 (Stresstest 09.07.): Polling-Fallback auch für Kanal-Posts —
           // fängt verpasste Realtime-Events nach WLAN-Abbruch ab (Merge, kein Replace).
+          // PERF-04 (v4.39.0): Realtime healthy → Poll ≥120s/aus; unhealthy Backoff 20→60→120.
+          // Rollback: localStorage KRS_CHAT_POLL_LEGACY=true
           const mergeFreshPosts = (fresh) => {
             if (cancelled || !fresh || postsLoadingRef.current) return;
             setPosts(prev => {
@@ -11801,17 +11953,12 @@
           };
           const refetchPosts = () => {
             if (document.visibilityState !== 'visible') return;
-            dataService.getPosts(selectedChannel.id, PAGE_SIZE, 0).then(mergeFreshPosts).catch(() => {});
+            return dataService.getPosts(selectedChannel.id, PAGE_SIZE, 0).then(mergeFreshPosts);
           };
-          const postsPollIv = setInterval(refetchPosts, CONFIG.CHAT_POLL_INTERVAL || 20000);
-          const onVisiblePosts = () => { if (document.visibilityState === 'visible') refetchPosts(); };
-          document.addEventListener('visibilitychange', onVisiblePosts);
-          window.addEventListener('online', onVisiblePosts);
+          postsPoll = krsCreateAdaptivePoll(refetchPosts);
           return () => {
             cancelled = true; postsLoadingRef.current = false; unsub();
-            clearInterval(postsPollIv);
-            document.removeEventListener('visibilitychange', onVisiblePosts);
-            window.removeEventListener('online', onVisiblePosts);
+            if (postsPoll) postsPoll.stop();
           };
         }
       }, [selectedChannel, dataService]);
@@ -11871,6 +12018,7 @@
             }
           };
           loadMessages();
+          let chatPoll = null;
           const unsub = dataService.subscribeToConversation(selectedConversation.id, {
             onInsert: newMsg => {
               if (!cancelled) setChatMessages(prev => {
@@ -11885,13 +12033,15 @@
             },
             onDelete: deletedMsg => {
               if (!cancelled) setChatMessages(prev => prev.filter(m => m.id !== deletedMsg.id));
+            },
+            onStatus: status => {
+              if (cancelled || !chatPoll) return;
+              chatPoll.setHealthy(status === 'SUBSCRIBED');
             }
           });
           // Feedback #4 (Stresstest 09.07.): „Chat aktualisiert sich nicht live".
-          // Realtime-Websockets brechen im Schul-WLAN gern ab; verpasste Events
-          // holt dieses Sicherheitsnetz nach: sanftes Polling (nur sichtbarer Tab)
-          // + Refetch bei Tab-Rückkehr und Netz-Reconnect. Merge statt Replace,
-          // damit nachgeladene ältere Nachrichten (Pagination) erhalten bleiben.
+          // PERF-04 (v4.39.0): Realtime healthy → Poll ≥120s/aus; unhealthy Backoff.
+          // Rollback: localStorage KRS_CHAT_POLL_LEGACY=true
           const mergeFresh = (msgs) => {
             if (cancelled || !msgs) return;
             setChatMessages(prev => {
@@ -11907,17 +12057,12 @@
           };
           const refetch = () => {
             if (document.visibilityState !== 'visible') return;
-            dataService.getMessages(selectedConversation.id, PAGE_SIZE, 0).then(mergeFresh).catch(() => {});
+            return dataService.getMessages(selectedConversation.id, PAGE_SIZE, 0).then(mergeFresh);
           };
-          const pollIv = setInterval(refetch, CONFIG.CHAT_POLL_INTERVAL || 20000);
-          const onVisible = () => { if (document.visibilityState === 'visible') refetch(); };
-          document.addEventListener('visibilitychange', onVisible);
-          window.addEventListener('online', onVisible);
+          chatPoll = krsCreateAdaptivePoll(refetch);
           return () => {
             cancelled = true; unsub();
-            clearInterval(pollIv);
-            document.removeEventListener('visibilitychange', onVisible);
-            window.removeEventListener('online', onVisible);
+            if (chatPoll) chatPoll.stop();
           };
         }
       }, [selectedConversation, dataService]);
