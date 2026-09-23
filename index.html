@@ -2378,6 +2378,65 @@
           }, ms); })
         ]).finally(function(){ clearTimeout(timer); });
       }
+      function _dlIosHandoff(blob, url, name, requestId){
+        return new Promise(function(resolve){
+          var file;
+          var canShare = false;
+          try {
+            file = new File([blob], name, { type: blob.type || 'application/octet-stream' });
+            canShare = !!(navigator.share && navigator.canShare && navigator.canShare({ files: [file] }));
+          } catch (e) {}
+
+          var backdrop = document.createElement('div');
+          backdrop.className = 'modal-overlay krs-download-handoff';
+          backdrop.setAttribute('role', 'presentation');
+          backdrop.style.cssText = 'position:fixed;inset:0;z-index:10050;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:20px';
+          var box = document.createElement('div');
+          box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true'); box.setAttribute('aria-labelledby', 'krs-download-title');
+          box.style.cssText = 'width:min(430px,100%);background:#fff;border-radius:16px;padding:20px;box-shadow:0 20px 50px rgba(0,0,0,.3);color:#0f172a';
+          var title = document.createElement('h2'); title.id = 'krs-download-title'; title.textContent = 'Datei ist bereit'; title.style.margin = '0 0 8px';
+          var text = document.createElement('p'); text.textContent = '„' + name + '“ ist vorbereitet. Im nächsten Schritt kannst du „In Dateien sichern“ wählen.';
+          var error = document.createElement('p'); error.setAttribute('role', 'alert'); error.style.cssText = 'display:none;color:#b91c1c;font-weight:600';
+          var actions = document.createElement('div'); actions.style.cssText = 'display:flex;flex-wrap:wrap;gap:10px;margin-top:16px';
+          var primary = document.createElement('button'); primary.type = 'button'; primary.className = 'btn btn-primary';
+          primary.textContent = canShare ? 'In Dateien sichern / Teilen' : 'Im Browser laden';
+          var cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'btn btn-secondary'; cancel.textContent = 'Abbrechen';
+          var settled = false;
+          function finish(state, extra){
+            if (settled) return; settled = true; backdrop.remove();
+            resolve(_dlResult(requestId, state, Object.assign({ name: name, transport: 'web-ios' }, extra || {})));
+          }
+          function navigateFallback(){
+            var target = _dlAppendParam(url, name);
+            var reserved = _dlOpenBlankForNav();
+            if (reserved) {
+              try { reserved.location = target; }
+              catch (e) { try { reserved.location.href = target; } catch (e2) { try { reserved.close(); } catch (e3) {} return false; } }
+              finish('handed_off', { method: 'download-url' }); return true;
+            }
+            try { window.location.assign(target); finish('handed_off', { method: 'download-url-same-tab' }); return true; }
+            catch (e) { error.textContent = 'Der Browser konnte die Datei nicht öffnen. Bitte erneut versuchen.'; error.style.display = 'block'; return false; }
+          }
+          primary.onclick = function(){
+            if (!canShare) { navigateFallback(); return; }
+            primary.disabled = true;
+            navigator.share({ files: [file], title: name }).then(function(){
+              finish('handed_off', { method: 'web-share', bytes: blob.size });
+            }).catch(function(err){
+              if (err && (err.name === 'AbortError' || /cancel|abgebrochen/i.test(err.message || ''))) {
+                finish('cancelled', { method: 'web-share' }); return;
+              }
+              canShare = false; primary.disabled = false; primary.textContent = 'Im Browser laden';
+              error.textContent = 'Teilen ist fehlgeschlagen. Du kannst die geprüfte Download-Adresse im Browser öffnen.';
+              error.style.display = 'block';
+            });
+          };
+          cancel.onclick = function(){ finish('cancelled', { method: canShare ? 'web-share' : 'download-url' }); };
+          actions.appendChild(primary); actions.appendChild(cancel);
+          box.appendChild(title); box.appendChild(text); box.appendChild(error); box.appendChild(actions); backdrop.appendChild(box);
+          document.body.appendChild(backdrop); primary.focus();
+        });
+      }
       async function forceDownload(file){
         var name = (file && file.name) || 'datei';
         var requestId = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : 'dl-' + Date.now() + '-' + Math.random().toString(16).slice(2);
@@ -2405,6 +2464,9 @@
           var blob = await _dlWithTimeout(response.blob(), 120000, controller, 'Zeitlimit beim Lesen der Datei (120s)');
           clearTimeout(slow);
           _dlResult(requestId, 'ready', { name: name, transport: 'web', bytes: blob.size });
+          if (isIOS) {
+            return await _dlIosHandoff(blob, url, name, requestId);
+          }
           var objectUrl = URL.createObjectURL(blob);
           var a = document.createElement('a'); a.href = objectUrl; a.download = name;
           document.body.appendChild(a); a.click(); a.remove();
@@ -6478,7 +6540,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.38.0';
+    window.KRS_VERSION = '4.38.1';
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
     // Playwright den Klick-Handler prüfen kann, ohne wirklich zu navigieren.
     // Aus tenant.js (TENANT-SPEC.md 2.4) — leer, wenn hub.enabled:false.
@@ -10453,6 +10515,11 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.38.1', date: '23.09.2026', items: [
+        'Auf iPhone und iPad erscheint nach der Vorbereitung ein eigener Schritt „In Dateien sichern / Teilen“.',
+        'Falls File Share nicht verfügbar ist, kann die geprüfte Download-Adresse bewusst im Browser geöffnet werden.',
+        'Ein abgebrochenes Share-Sheet bleibt „Abgebrochen“ und startet keinen überraschenden zweiten Download.'
+      ]},
       { v: '4.38.0', date: '23.09.2026', items: [
         'Downloads liefern jetzt einen pruefbaren Zustand statt eines voreiligen Erfolgs.',
         'Web-Transfers brechen nach 120 Sekunden kontrolliert ab und speichern keine HTTP-Fehler als Datei.',
