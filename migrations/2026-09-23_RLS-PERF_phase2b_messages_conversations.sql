@@ -3,6 +3,8 @@
 -- Projekt: ooejsfixxiuobrpqgfqm · Voraussetzung: Phase 2a (Hilfsfunktionen)
 -- ============================================================================
 
+SET LOCAL lock_timeout = '5s';
+
 -- messages
 DROP POLICY IF EXISTS messages_select          ON public.messages;
 DROP POLICY IF EXISTS messages_select_member   ON public.messages;

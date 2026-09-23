@@ -3,6 +3,8 @@
 -- Projekt: ooejsfixxiuobrpqgfqm · Voraussetzung: Phase 2a (Hilfsfunktionen)
 -- ============================================================================
 
+SET LOCAL lock_timeout = '5s';
+
 -- channels
 DROP POLICY IF EXISTS channels_select             ON public.channels;
 DROP POLICY IF EXISTS channels_select_member      ON public.channels;
