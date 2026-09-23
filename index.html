@@ -3619,7 +3619,9 @@
           const out = [];
           for (const teamId of ids) {
             const channels = await this.getChannels(teamId);
-            out.push(...channels);
+            // v4.40.0: MOCK_CHANNELS tragen kein team_id — ohne Stempel landeten
+            // im Demo-Boot alle Kanäle unter "undefined" (leere Kanalliste, 5 rote Smokes seit 4.39.0).
+            out.push(...channels.map(ch => (ch.team_id != null ? ch : { ...ch, team_id: teamId })));
           }
           return out;
         }
@@ -3637,8 +3639,77 @@
         }
       }
 
-      // Get unread counts for channels (Phase 6: Supabase channel_reads + localStorage Fallback)
+      // PERF-02 (v4.40.0): Unread in EINEM Roundtrip über rpc_unread_*_counts.
+      // Server kennt nur channel_reads/conversation_reads. IDs ohne DB-Lesestand,
+      // aber mit localStorage-Wert (Altbestand) werden einzeln nachgezählt — sonst
+      // würden dort alte Beiträge als ungelesen aufblitzen.
+      // Rollback: localStorage KRS_UNREAD_N_LEGACY=true → alter N-Pfad.
+      _unreadLegacy() {
+        try { return localStorage.getItem('KRS_UNREAD_N_LEGACY') === 'true'; } catch (e) { return false; }
+      }
+
+      async _unreadViaRpc({ rpcName, rpcArg, ids, readsTable, idCol, lsPrefix, countTable, countIdCol, extraFilter, authorCol, userId }) {
+        const [rpcRes, readsRes] = await Promise.all([
+          this.sb.rpc(rpcName, { [rpcArg]: ids }),
+          this.sb.from(readsTable).select(idCol).eq('user_id', userId).in(idCol, ids)
+        ]);
+        if (rpcRes.error) throw rpcRes.error;
+        const counts = new Map();
+        for (const row of (rpcRes.data || [])) {
+          const id = Number(row[idCol]);
+          const n = Number(row.unread_count) || 0;
+          if (n > 0) counts.set(id, n);
+        }
+        // Nur wenn der Reads-Abgleich geklappt hat, LS-Altbestand nachzählen
+        if (!readsRes.error) {
+          const hasDbRead = new Set((readsRes.data || []).map(r => Number(r[idCol])));
+          const lsOnly = [];
+          for (const id of ids) {
+            if (hasDbRead.has(Number(id))) continue;
+            let ls = null;
+            try { ls = localStorage.getItem(`${lsPrefix}${id}`); } catch (e) {}
+            if (ls) lsOnly.push([id, ls]);
+          }
+          if (lsOnly.length > 0) {
+            const results = await Promise.all(lsOnly.map(([id, lastRead]) => {
+              let q = this.sb.from(countTable).select('id', { count: 'exact', head: true }).eq(countIdCol, id);
+              if (extraFilter) q = extraFilter(q);
+              return q.neq(authorCol, userId).gt('created_at', lastRead)
+                .then(res => ({ id, count: res.count, error: res.error }));
+            }));
+            for (const { id, count, error } of results) {
+              if (error) continue;
+              if (count > 0) counts.set(Number(id), count); else counts.delete(Number(id));
+            }
+          }
+        }
+        if (typeof window !== 'undefined') {
+          window.__krsUnreadRpcCalls = (window.__krsUnreadRpcCalls || 0) + 1;
+        }
+        return counts;
+      }
+
+      // Get unread counts for channels (v4.40.0: RPC, Fallback N-Pfad)
       async getChannelUnreadCounts(channelIds, userId) {
+        if (this.isDemo) return new Map();
+        if (!Array.isArray(channelIds) || channelIds.length === 0) return new Map();
+        if (!this._unreadLegacy()) {
+          try {
+            return await this._unreadViaRpc({
+              rpcName: 'rpc_unread_channel_counts', rpcArg: 'p_channel_ids', ids: channelIds,
+              readsTable: 'channel_reads', idCol: 'channel_id', lsPrefix: 'krs-lastread-ch-',
+              countTable: 'posts', countIdCol: 'channel_id', extraFilter: q => q.is('parent_id', null),
+              authorCol: 'author_id', userId
+            });
+          } catch (err) {
+            console.warn('rpc_unread_channel_counts nicht verfügbar — N-Fallback:', err?.message || err);
+          }
+        }
+        return this._getChannelUnreadCountsLegacy(channelIds, userId);
+      }
+
+      // Legacy N-Pfad (bis v4.39) — Fallback / Rollback-Flag
+      async _getChannelUnreadCountsLegacy(channelIds, userId) {
         if (this.isDemo) return new Map();
         try {
           // 1. Lesezeiten aus Supabase laden (1 Query statt N)
@@ -3676,8 +3747,28 @@
         }
       }
 
-      // Get unread counts for conversations (Phase 6: Supabase + localStorage Fallback)
+      // Get unread counts for conversations (v4.40.0: RPC, Fallback N-Pfad)
       async getConversationUnreadCounts(conversations, userId) {
+        if (this.isDemo) return new Map();
+        const convIds = (conversations || []).map(c => c.id);
+        if (convIds.length === 0) return new Map();
+        if (!this._unreadLegacy()) {
+          try {
+            return await this._unreadViaRpc({
+              rpcName: 'rpc_unread_conversation_counts', rpcArg: 'p_conversation_ids', ids: convIds,
+              readsTable: 'conversation_reads', idCol: 'conversation_id', lsPrefix: 'krs-lastread-conv-',
+              countTable: 'messages', countIdCol: 'conversation_id', extraFilter: null,
+              authorCol: 'sender_id', userId
+            });
+          } catch (err) {
+            console.warn('rpc_unread_conversation_counts nicht verfügbar — N-Fallback:', err?.message || err);
+          }
+        }
+        return this._getConversationUnreadCountsLegacy(conversations, userId);
+      }
+
+      // Legacy N-Pfad (bis v4.39) — Fallback / Rollback-Flag
+      async _getConversationUnreadCountsLegacy(conversations, userId) {
         if (this.isDemo) return new Map();
         try {
           const convIds = conversations.map(c => c.id);
@@ -3719,12 +3810,18 @@
         const now = new Date().toISOString();
         // localStorage immer setzen (Fallback + Demo-Modus)
         try { localStorage.setItem(`krs-lastread-ch-${channelId}`, now); } catch(e) {}
-        // Supabase upsert (async, non-blocking)
+        // O7-Client (v4.40.0): Serverzeit + GREATEST via rpc_mark_channel_read;
+        // Fallback auf direkten Upsert (Geräteuhr), falls RPC fehlt/verweigert.
         if (!this.isDemo && this.sb && userId) {
-          Promise.resolve(this.sb.from('channel_reads').upsert(
-            { user_id: userId, channel_id: channelId, last_read_at: now },
-            { onConflict: 'user_id,channel_id' }
-          )).catch(e => console.warn('markChannelRead error:', e));
+          Promise.resolve(this.sb.rpc('rpc_mark_channel_read', { p_channel_id: channelId }))
+            .then(res => {
+              if (!res?.error) return;
+              return Promise.resolve(this.sb.from('channel_reads').upsert(
+                { user_id: userId, channel_id: channelId, last_read_at: now },
+                { onConflict: 'user_id,channel_id' }
+              ));
+            })
+            .catch(e => console.warn('markChannelRead error:', e));
         }
       }
 
@@ -3733,10 +3830,15 @@
         const now = new Date().toISOString();
         try { localStorage.setItem(`krs-lastread-conv-${conversationId}`, now); } catch(e) {}
         if (!this.isDemo && this.sb && userId) {
-          Promise.resolve(this.sb.from('conversation_reads').upsert(
-            { user_id: userId, conversation_id: conversationId, last_read_at: now },
-            { onConflict: 'user_id,conversation_id' }
-          )).catch(e => console.warn('markConversationRead error:', e));
+          Promise.resolve(this.sb.rpc('rpc_mark_conversation_read', { p_conversation_id: conversationId }))
+            .then(res => {
+              if (!res?.error) return;
+              return Promise.resolve(this.sb.from('conversation_reads').upsert(
+                { user_id: userId, conversation_id: conversationId, last_read_at: now },
+                { onConflict: 'user_id,conversation_id' }
+              ));
+            })
+            .catch(e => console.warn('markConversationRead error:', e));
         }
       }
 
@@ -6656,7 +6758,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.39.0';
+    window.KRS_VERSION = '4.40.0';
     // PERF-01: Cold-Boot-Zähler für Hub keep-alive Abnahme (Connect→Hub-Start→Connect → bleibt 1)
     window.__krsConnectBootCount = (window.__krsConnectBootCount || 0) + 1;
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
@@ -10633,6 +10735,12 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.40.0', date: '23.09.2026', items: [
+        'Schnellerer Start: Ungelesen-Zähler für alle Kanäle und Chats kommen in einem Abruf statt einzeln pro Kanal',
+        'Gelesen-Markierung nutzt die Serverzeit — falsch gehende Geräteuhren erzeugen keine Geister-Ungelesen mehr',
+        'Rollback Unread: localStorage KRS_UNREAD_N_LEGACY=true stellt die alte Zählung wieder her',
+        'Fix Demo-Modus: Kanalliste nach dem parallelen Boot aus 4.39.0 wieder befüllt'
+      ]},
       { v: '4.39.0', date: '23.09.2026', items: [
         'Polling: bei gesundem Realtime nur noch alle 120s (oder aus); bei Ausfall Backoff 20→60→120s',
         'Visibility-Refetch höchstens 1× pro Rückkehr, mit In-flight-Dedupe',
@@ -11731,7 +11839,7 @@
             dataService.markChannelRead(channelsData[0].id, selectedUser.id);
           }
 
-          // Unread parallel (N Counts bleiben bis PERF-02/RPC; Promise.all intern schon)
+          // Unread parallel — v4.40.0: 1 RPC (+1 Reads-Abgleich) statt N Counts
           const unreadPromise = (!dataService.isDemo)
             ? dataService.getChannelUnreadCounts(Array.from(ctMap.keys()), selectedUser.id)
             : Promise.resolve(initialUnreads);
