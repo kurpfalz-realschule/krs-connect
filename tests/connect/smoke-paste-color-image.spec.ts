@@ -47,12 +47,12 @@ test.describe('Paste/Render: Farben & Bilder bleiben erhalten', () => {
     expect(out).not.toMatch(/url\(/i);
   });
 
-  test('Paste-Simplifier behält Inline-Bild (https)', async ({ page }) => {
+  test('Paste-Simplifier macht Fremd-Bild (https) zum Link (A7)', async ({ page }) => {
     const out = await page.evaluate(() =>
       (window as any).__krsSimplifyPastedHtml('<p>Foto: <img src="https://example.com/bild.png" alt="Bild"></p>')
     );
-    expect(out).toMatch(/<img[^>]+src="https:\/\/example\.com\/bild\.png"/i);
-    expect(out).toMatch(/referrerpolicy="no-referrer"/i);
+    expect(out).not.toMatch(/<img/i);
+    expect(out).toMatch(/<a[^>]+href="https:\/\/example\.com\/bild\.png"/i);
   });
 
   test('Render-Sanitizer behält Inline-Bild (data:image)', async ({ page }) => {

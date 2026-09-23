@@ -51,7 +51,7 @@ test.describe('KRS Connect — S4: SVG blockiert', () => {
     expect(res.svgBase64).toBe(false); // XSS-Vektor abgelehnt
     expect(res.svgUtf).toBe(false);    // XSS-Vektor abgelehnt
     expect(res.png).toBe(true);        // Regression: PNG-Data-URL erlaubt
-    expect(res.http).toBe(true);       // Regression: http(s) erlaubt
+    expect(res.http).toBe(false);      // A7 (4.41.0): Fremd-Bilder (Tracking-Pixel) nicht mehr erlaubt
   });
 
   test('DataService.uploadFile lehnt eine SVG-Datei ab', async ({ connectPage: page }) => {

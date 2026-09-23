@@ -1817,7 +1817,7 @@
   <link rel="preload" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" as="script">
   <link rel="preload" href="https://unpkg.com/react@18/umd/react.production.min.js" as="script" crossorigin>
   <link rel="preload" href="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" as="script" crossorigin>
-  <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js" as="script">
+  <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.4/purify.min.js" as="script">
 
   <!-- supabase-js resilient laden: Fallback-CDN-Kette + Timeout, damit ein
        CDN-Haenger nicht die ganze App mit "Supabase nicht verfuegbar" killt.
@@ -1867,13 +1867,13 @@
       if (_el) _el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:12px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#5A5F72;text-align:center;padding:24px"><div style="font-size:32px">📡</div><div style="font-weight:600">' + (window.T ? window.T('app.name', 'Die App') : 'Die App') + ' konnte nicht laden</div><div style="font-size:14px;max-width:320px">Bitte Internetverbindung prüfen und die Seite neu laden (auf dem iPad: Seite nach unten ziehen zum Aktualisieren).</div></div>';
     }
   </script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.4/purify.min.js"></script>
   <script>
     // DOMPurify CDN-Check mit Fallback
     if (!window.DOMPurify) {
       console.warn('DOMPurify CDN 1 fehlgeschlagen, lade Fallback...');
       var s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/dompurify@3.0.9/dist/purify.min.js';
+      s.src = 'https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js';
       s.onload = function() { console.log('DOMPurify Fallback geladen'); };
       s.onerror = function() {
         console.error('KRITISCH: DOMPurify konnte von keinem CDN geladen werden');
@@ -3928,6 +3928,20 @@
           return null;
         }
 
+        // A8 (4.41.0): Der Speicher prüft den Dateityp jetzt serverseitig (Bucket-Liste).
+        // Manche Geräte liefern keinen Typ (file.type leer) → aus der Endung ableiten,
+        // sonst käme application/octet-stream an und der Upload würde abgelehnt.
+        if (!file.type) {
+          const EXT_MIME = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', heic: 'image/heic',
+            pdf: 'application/pdf', doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ppt: 'application/vnd.ms-powerpoint', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            txt: 'text/plain', csv: 'text/csv', md: 'text/markdown' };
+          if (EXT_MIME[ext]) {
+            try { file = new File([file], file.name, { type: EXT_MIME[ext] }); } catch (e) { /* alter Browser: Upload versucht es trotzdem */ }
+          }
+        }
+
         window.__krsActiveUploads = (window.__krsActiveUploads || 0) + 1;
         try {
           // Komprimierung gehört bereits zum laufenden Upload: währenddessen darf
@@ -4555,19 +4569,12 @@
           return null;
         }
         try {
-          // Fetch current poll data
-          const { data: post, error: fetchErr } = await this.sb.from('posts').select('poll_data').eq('id', postId).single();
-          if (fetchErr) throw fetchErr;
-          const pd = post.poll_data;
-          // Remove previous vote by this user
-          pd.options.forEach(o => { o.votes = o.votes.filter(v => v !== userId); });
-          // Add new vote
-          const opt = pd.options.find(o => o.id === optionId);
-          if (opt) opt.votes.push(userId);
-          pd.totalVotes = pd.options.reduce((sum, o) => sum + o.votes.length, 0);
-          const { data, error } = await this.sb.from('posts').update({ poll_data: pd }).eq('id', postId).select('*, author:users(*)').single();
+          // A4 (4.41.0): atomar per RPC (Mitgliedschaft serverseitig geprüft). Vorher
+          // Lesen-dann-Schreiben per UPDATE → RLS blockte Nicht-Autor:innen, gleich-
+          // zeitige Stimmen gingen verloren.
+          const { data, error } = await this.sb.rpc('vote_poll', { p_post_id: postId, p_option_id: optionId });
           if (error) throw error;
-          return data;
+          return { id: postId, poll_data: data };
         } catch (err) {
           console.error('votePoll error:', err);
           showToast('Abstimmung konnte nicht gespeichert werden.', 'error');
@@ -5979,7 +5986,29 @@
     // (Sprint 9c, Punkt 4). Jeder Zugriff in try/catch: im privaten Modus wirft
     // localStorage, das darf die App nie zum Absturz bringen.
     var KRS_DRAFT_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
-    function krsDraftKey(typ, zielId) { return 'krs-draft-' + typ + '-' + zielId; }
+    // A5 (4.41.0): Entwürfe pro Person (geteiltes iPad) — Nutzer-ID im Schlüssel.
+    function krsDraftKey(typ, zielId) { return 'krs-draft-u' + (window.__krsDraftUid || 'x') + '-' + typ + '-' + zielId; }
+    // A5: beim Abmelden alle personenbezogenen Browser-Daten dieses Geräts entfernen
+    // (Entwürfe, Lesestände, gemerkte Beiträge, Stummschaltungen, Supabase-Sitzung).
+    // Bewusst behalten: Geräte-Flags (krs-embedded, KRS_* Rollback-Schalter).
+    function krsClearPersonalStorage() {
+      var n = 0;
+      [window.localStorage, window.sessionStorage].forEach(function (st) {
+        try {
+          var keys = [];
+          for (var i = 0; i < st.length; i++) keys.push(st.key(i));
+          keys.forEach(function (k) {
+            if (!k) return;
+            if (k === 'krs-embedded') return;
+            if (k.indexOf('krs-') === 0 || k.indexOf('sb-') === 0) {
+              try { st.removeItem(k); n++; } catch (e) {}
+            }
+          });
+        } catch (e) {}
+      });
+      return n;
+    }
+    window.__krsClearPersonalStorage = krsClearPersonalStorage;
     function krsDraftIsEmpty(data) {
       if (!data) return true;
       return Object.keys(data).every(function (k) {
@@ -6064,9 +6093,29 @@
 
     // Nur http(s)- und data:image-Quellen sind als Bild erlaubt (kein javascript:, kein data:text/html).
     // SVG bewusst NICHT erlaubt (S4): data:image/svg+xml kann <script>/on*-Handler enthalten → Stored-XSS.
+    // A7 (4.41.0): Keine Fremd-Bilder mehr (Tracking-Pixel: IP, Lesezeit). Erlaubt sind nur
+    // eingebettete Raster-Bilder (data:image) und der eigene Supabase-Storage.
     function isSafeImageSrc(src) {
       src = String(src || '').trim();
-      return /^https?:\/\//i.test(src) || /^data:image\/(png|jpe?g|gif|webp|bmp);/i.test(src);
+      if (/^data:image\/(png|jpe?g|gif|webp|bmp);/i.test(src)) return true;
+      try {
+        var own = new URL(window.T ? window.T('supabase.url', '') : '').host;
+        return !!own && /^https:\/\//i.test(src) && new URL(src).host === own;
+      } catch (e) { return false; }
+    }
+    // A7: externes Bild → klickbarer Link statt automatisch geladenem Bild.
+    function replaceUnsafeImg(img) {
+      var src = img.getAttribute('src') || '';
+      if (/^https?:\/\//i.test(src)) {
+        var a = document.createElement('a');
+        a.setAttribute('href', src);
+        a.setAttribute('target', '_blank');
+        a.setAttribute('rel', 'noopener noreferrer');
+        a.textContent = '🖼️ Externes Bild öffnen';
+        img.replaceWith(a);
+      } else {
+        img.remove();
+      }
     }
 
     function simplifyPastedHtml(rawHtml) {
@@ -6109,7 +6158,7 @@
       // 2.0) Bilder: unsichere Quellen entfernen, sichere Bilder DSGVO-schonend laden
       root.querySelectorAll('img').forEach(img => {
         const src = img.getAttribute('src') || '';
-        if (!isSafeImageSrc(src)) { img.remove(); return; }
+        if (!isSafeImageSrc(src)) { replaceUnsafeImg(img); return; }
         img.removeAttribute('style');            // keine Layout-Styles aus Fremdquellen
         img.setAttribute('loading', 'lazy');
         img.setAttribute('referrerpolicy', 'no-referrer');
@@ -6300,7 +6349,7 @@
       useEffect(() => {
         const el = editorRef.current;
         if (el && el.innerHTML !== (value || '')) {
-          el.innerHTML = value || '';
+          el.innerHTML = sanitizeForEditor(value || '');   // A2
         }
       }, [value]);
 
@@ -6515,7 +6564,7 @@
             catch (err) {
               // Fallback: ans Ende anhängen
               const el = editorRef.current;
-              if (el) el.innerHTML = (el.innerHTML || '') + toInsert;
+              if (el) el.innerHTML = sanitizeForEditor((el.innerHTML || '') + toInsert);   // A2
             }
             emitChange();
           },
@@ -6758,7 +6807,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.40.0';
+    window.KRS_VERSION = '4.41.0';
     // PERF-01: Cold-Boot-Zähler für Hub keep-alive Abnahme (Connect→Hub-Start→Connect → bleibt 1)
     window.__krsConnectBootCount = (window.__krsConnectBootCount || 0) + 1;
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
@@ -6897,7 +6946,7 @@
         // Bilder: unsichere Quellen entfernen, sichere Bilder DSGVO-schonend laden
         tmp.querySelectorAll('img').forEach(img => {
           const src = img.getAttribute('src') || '';
-          if (!isSafeImageSrc(src)) { img.remove(); return; }
+          if (!isSafeImageSrc(src)) { replaceUnsafeImg(img); return; }
           img.removeAttribute('style');
           img.setAttribute('loading', 'lazy');
           img.setAttribute('referrerpolicy', 'no-referrer');
@@ -6918,6 +6967,27 @@
       highlightMentions(tmp);
       return tmp.innerHTML;
     }
+
+    // A2 (4.41.0): Alles, was in den WYSIWYG-Editor geschrieben wird (Wert, Entwurf,
+    // „Bearbeiten", Einfüge-Fallback), läuft hier durch — sonst führt ein präparierter
+    // Beitrag Code aus, sobald jemand „Bearbeiten" klickt. Wie sanitizeHtml, aber ohne
+    // Mention-Spans/target, damit der gespeicherte Text unverändert bleibt.
+    function sanitizeForEditor(html) {
+      if (!html) return '';
+      if (!(window.DOMPurify && window.DOMPurify.sanitize)) {
+        return escapeHtmlText(htmlToText(String(html))).replace(/\r?\n/g, '<br>');
+      }
+      const tmp = document.createElement('div');
+      tmp.innerHTML = DOMPurify.sanitize(String(html), SANITIZE_CONFIG);
+      tmp.querySelectorAll('[style]').forEach(filterSafeStyle);
+      tmp.querySelectorAll('img').forEach(img => {
+        const src = img.getAttribute('src') || '';
+        if (!isSafeImageSrc(src)) { replaceUnsafeImg(img); return; }
+        img.removeAttribute('style');
+      });
+      return tmp.innerHTML;
+    }
+    window.__krsSanitizeForEditor = sanitizeForEditor;
 
     // Neues Passwort setzen — erscheint, wenn ein Kollege den "Passwort
     // vergessen"-Link geöffnet hat (Recovery-Session). Kein altes Passwort nötig.
@@ -10735,6 +10805,13 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.41.0', date: '23.09.2026', items: [
+        'Datenschutz: Push und E-Mail bei „Dringend" oder @alle gehen nur noch an die Mitglieder des Teams — und enthalten keinen Text mehr, nur Team und Kanal',
+        'Umfragen funktionieren jetzt: alle Team-Mitglieder können abstimmen, gleichzeitige Stimmen gehen nicht mehr verloren',
+        'Sicherheit: Beim „Bearbeiten" wird der Text vorher geprüft; Bilder von fremden Seiten erscheinen nur noch als Link',
+        'Geteilte iPads: Entwürfe gehören der angemeldeten Person; beim Abmelden werden Entwürfe, Lesestände und Stummschaltungen auf dem Gerät gelöscht',
+        'Sicherheitsfilter aktualisiert (DOMPurify 3.2.4)'
+      ]},
       { v: '4.40.0', date: '23.09.2026', items: [
         'Schnellerer Start: Ungelesen-Zähler für alle Kanäle und Chats kommen in einem Abruf statt einzeln pro Kanal',
         'Gelesen-Markierung nutzt die Serverzeit — falsch gehende Geräteuhren erzeugen keine Geister-Ungelesen mehr',
@@ -11369,6 +11446,7 @@
       const [supabaseClient, setSupabaseClient] = useState(null);
       const [isDemo, setIsDemo] = useState(true);
       const [user, setUser] = useState(null);
+      window.__krsDraftUid = user && user.id != null ? user.id : null;   // A5: Entwurfsschlüssel pro Person
       const [view, setView] = useState('teams');
       // v4.25.0 — Merkliste (Aufgaben aus der Tabelle `tasks`)
       const [tasks, setTasks] = useState([]);
@@ -12629,6 +12707,7 @@
         if (!isDemo) {
           await dataService.signOut();
         }
+        krsClearPersonalStorage();   // A5: geteiltes iPad — nichts Persönliches bleibt liegen
         // Phase 6: Singleton-Client zurücksetzen
         _supabaseClientSingleton = null;
         setSupabaseClient(null);

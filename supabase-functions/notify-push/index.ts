@@ -7,6 +7,9 @@
 //   2) public.messages → Direktnachrichten
 //   Beide schicken den Header  x-krs-hook-secret: <HOOK_SECRET>
 //
+// Paket A (23.09.2026): Empfänger bei Beiträgen = Mitglieder des Teams (A1),
+// Text nur Hinweis + Team/Kanal ohne Inhalt (E-2), Secret aus Vault (A9).
+//
 // Bewusst KEIN zweites Regelwerk: Für Beiträge gilt dieselbe Regel wie beim
 // E-Mail-Versand (nur Haupt-Posts, nicht gelöscht, Dringend ODER @alle).
 // Neu ist nur der Kanal — und Direktnachrichten, die per E-Mail nie gingen.
@@ -24,6 +27,7 @@
 // =====================================================================
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { hookErlaubt } from "./hook-secret.ts";
 
 // Direktnachrichten können Schülernamen enthalten. Standardmäßig steht deshalb
 // nur „Neue Nachricht von X" auf dem Sperrbildschirm, nicht der Text selbst.
@@ -156,8 +160,12 @@ async function sende(
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
 
-  const secret = Deno.env.get("HOOK_SECRET") || "";
-  if (!secret || req.headers.get("x-krs-hook-secret") !== secret) {
+  const sb = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+
+  if (!(await hookErlaubt(req, sb))) {
     return new Response(JSON.stringify({ error: "forbidden" }), { status: 403 });
   }
 
@@ -165,16 +173,11 @@ Deno.serve(async (req) => {
   try {
     payload = await req.json();
   } catch {
-    return new Response(JSON.stringify({ error: "bad json" }), { status: 400 });
+    return new Response(JSON.stringify({ error: "bad request" }), { status: 400 });
   }
 
   const tabelle = String(payload?.table ?? "");
   const record = (payload?.record ?? {}) as Record<string, unknown>;
-
-  const sb = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
 
   let absenderId = 0;
   let empfaengerIds: number[] = [];
@@ -194,15 +197,31 @@ Deno.serve(async (req) => {
     }
 
     absenderId = Number(record.author_id ?? 0);
-    const { data: alle } = await sb
-      .from("users").select("id, status").neq("id", absenderId);
-    empfaengerIds = (alle || [])
-      .filter((u) => (u.status ?? "active") === "active")
-      .map((u) => Number(u.id));
 
-    const betreff = String(record.title ?? "").trim();
-    titel = dringend ? "🔴 Dringend in Connect" : "📣 Beitrag an @alle";
-    text = [betreff, stripHtml(content).slice(0, 180)].filter(Boolean).join(" — ");
+    // A1: nur Mitglieder des Teams, in dessen Kanal gepostet wurde.
+    const { data: kanal } = await sb
+      .from("channels").select("id, name, team_id").eq("id", Number(record.channel_id ?? 0)).maybeSingle();
+    if (!kanal?.team_id) {
+      return new Response(JSON.stringify({ skipped: "kein Kanal" }), { status: 200 });
+    }
+    const { data: team } = await sb.from("teams").select("name").eq("id", kanal.team_id).maybeSingle();
+    const { data: mitglieder } = await sb
+      .from("team_members").select("user_id").eq("team_id", kanal.team_id);
+    const mitgliedIds = [...new Set((mitglieder || []).map((m) => Number(m.user_id)))]
+      .filter((id) => id !== absenderId);
+    if (mitgliedIds.length > 0) {
+      const { data: aktiv } = await sb
+        .from("users").select("id, status").in("id", mitgliedIds);
+      empfaengerIds = (aktiv || [])
+        .filter((u) => (u.status ?? "active") === "active")
+        .map((u) => Number(u.id));
+    }
+
+    // E-2: kein Inhalt, kein Titel — nur Hinweis + Team/Kanal.
+    const teamName = String(team?.name ?? "Connect").trim();
+    const kanalName = String(kanal.name ?? "").trim();
+    titel = dringend ? `🔴 Dringend: ${teamName}` : `📣 @alle: ${teamName}`;
+    text = kanalName ? `Neuer Beitrag in #${kanalName}` : "Neuer Beitrag in Connect";
     ref = String(record.id ?? "");
 
   // ── Fall 2: Direktnachricht ────────────────────────────────────────
@@ -263,7 +282,7 @@ Deno.serve(async (req) => {
   } catch (e) {
     console.error("APNs-JWT:", (e as Error).message);
     // 200, damit der Webhook nicht endlos wiederholt.
-    return new Response(JSON.stringify({ error: (e as Error).message }), { status: 200 });
+    return new Response(JSON.stringify({ error: "apns config" }), { status: 200 });
   }
 
   let zugestellt = 0;
