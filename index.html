@@ -1963,7 +1963,7 @@
     // ============================================================
     (function() {
       var _lbImgs = [], _lbIdx = 0, _lbKeyHandler = null, _lbTouchStartX = 0;
-      var _lbScale = 1, _lbHintShown = false;
+      var _lbScale = 1, _lbHintShown = false, _lbWinHandlers = [];
 
       window.openLightbox = function(images, startIdx) {
         _lbImgs = images;
@@ -2117,6 +2117,8 @@
       function closeLB() {
         var ov = document.querySelector('.lightbox-overlay');
         if (ov) ov.remove();
+        _lbWinHandlers.forEach(function (h) { window.removeEventListener(h[0], h[1]); });
+        _lbWinHandlers = [];
         if (_lbKeyHandler) {
           document.removeEventListener('keydown', _lbKeyHandler);
           _lbKeyHandler = null;
@@ -2229,12 +2231,17 @@
           if (sc <= 1.01) return;
           e.preventDefault(); panning = true; panX = e.clientX; panY = e.clientY;
         });
-        window.addEventListener('mousemove', function(e) {
+        // B10 (4.42.0): Fenster-Listener merken und in closeLB abmelden (sonst
+        // sammeln sie sich im ganztägigen Keep-alive bei jedem Bild an).
+        var _mm = function(e) {
           if (!panning || !imgEl.isConnected) return;
           tx += e.clientX - panX; ty += e.clientY - panY;
           panX = e.clientX; panY = e.clientY; apply();
-        });
-        window.addEventListener('mouseup', function() { panning = false; });
+        };
+        var _mu = function() { panning = false; };
+        window.addEventListener('mousemove', _mm);
+        window.addEventListener('mouseup', _mu);
+        _lbWinHandlers.push(['mousemove', _mm], ['mouseup', _mu]);
 
         apply();
       }
@@ -3238,10 +3245,10 @@
     // ============================================================
     // DATA SERVICE ABSTRACTION LAYER
     // ============================================================
-    async function compressImage(file, maxWidth = 1200, quality = 0.8) {
+    async function compressImage(file, maxWidth = 1200, quality = 0.8, always = false) {
       return new Promise((resolve) => {
-        // Skip non-image files or small files (< 200KB)
-        if (!file.type.startsWith('image/') || file.size < CONFIG.IMAGE_COMPRESS_THRESHOLD) {
+        // Skip non-image files or small files (< 200KB) — außer always (Avatar, B12)
+        if (!file.type.startsWith('image/') || (!always && file.size < CONFIG.IMAGE_COMPRESS_THRESHOLD)) {
           resolve(file);
           return;
         }
@@ -3364,11 +3371,22 @@
         }
       }
 
+      // B8 (4.42.0): Autor/Absender für Realtime-Events aus dem Speicher statt
+      // pro Event users.select('*') — nur bei Cache-Fehlschlag nachladen.
+      async _lookupUser(id) {
+        if (!this._userCache) this._userCache = new Map();
+        if (this._userCache.has(id)) return this._userCache.get(id);
+        const { data } = await this.sb.from('users').select('*').eq('id', id).single();
+        if (data) this._userCache.set(id, data);
+        return data;
+      }
+
       async getUsers() {
         if (this.isDemo) return [...MOCK_USERS];
         try {
           const { data, error } = await this.sb.from('users').select('*').order('display_name');
           if (error) throw error;
+          this._userCache = new Map((data || []).map(u => [u.id, u]));
           return data || [];
         } catch (err) {
           console.error('getUsers error:', err);
@@ -3949,20 +3967,8 @@
           if (file.type.startsWith('image/')) {
             file = await compressImage(file);
           }
-          // Storage-Quota-Check (Free Tier: 1 GB)
-          try {
-            const { data: storageFiles } = await this.sb.storage.from('images').list('uploads', { limit: 1000 });
-            if (storageFiles) {
-              const totalSize = storageFiles.reduce((sum, f) => sum + (f.metadata?.size || 0), 0);
-              const maxStorage = 900 * 1024 * 1024; // 900 MB Warnschwelle
-              if (totalSize + file.size > maxStorage) {
-                console.warn(`Storage fast voll: ${Math.round(totalSize / 1024 / 1024)} MB von ~1000 MB`);
-                // Nicht blockieren, nur warnen
-              }
-            }
-          } catch (quotaErr) {
-            // Quota-Check fehlgeschlagen — kein Problem, Upload trotzdem versuchen
-          }
+          // B11 (4.42.0): Speicher-Quota-Abfrage (storage.list, 1000 Einträge) vor jedem
+          // Upload entfernt — sie diente nur einer Konsolen-Warnung.
           const path = `${folder}/${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${ext}`;
           const { data, error } = await this.sb.storage.from('images').upload(path, file, {
             contentType: file.type || undefined,
@@ -4004,7 +4010,7 @@
       async createPost(channelId, authorId, content, title = null, imageUrl = null, isUrgent = false) {
         if (this.isDemo) {
           const author = MOCK_USERS.find(u => u.id === authorId);
-          const post = { id: 'p' + Date.now(), channel_id: channelId, author, content, title, image_url: imageUrl, is_urgent: isUrgent, reactions: [], replies: 0, reply_users: [], created_at: new Date().toLocaleString('de-DE') };
+          const post = { id: 'p' + Date.now(), channel_id: channelId, author_id: authorId, author, content, title, image_url: imageUrl, is_urgent: isUrgent, reactions: [], replies: 0, reply_users: [], created_at: new Date().toLocaleString('de-DE') };
           if (!MOCK_POSTS[channelId]) MOCK_POSTS[channelId] = [];
           MOCK_POSTS[channelId].unshift(post);
           // entkoppelte Kopie (eigene reactions-Referenz) für den optimistic insert
@@ -4984,8 +4990,7 @@
           const hydrateAuthor = async (post) => {
             if (post.author_id && !post.author) {
               try {
-                const { data: author } = await this.sb.from('users').select('*').eq('id', post.author_id).single();
-                post.author = author;
+                post.author = await this._lookupUser(post.author_id);
               } catch (e) {
                 post.author = { display_name: 'Unbekannt', avatar_color: '#757575' };
               }
@@ -5016,8 +5021,7 @@
           const hydrateSender = async (msg) => {
             if (msg.sender_id && !msg.sender) {
               try {
-                const { data: sender } = await this.sb.from('users').select('*').eq('id', msg.sender_id).single();
-                msg.sender = sender;
+                msg.sender = await this._lookupUser(msg.sender_id);
               } catch (e) {
                 msg.sender = { display_name: 'Unbekannt', avatar_color: '#757575' };
               }
@@ -5058,8 +5062,7 @@
           const hydrateAuthor = async (reply) => {
             if (reply.author_id && !reply.author) {
               try {
-                const { data: author } = await this.sb.from('users').select('*').eq('id', reply.author_id).single();
-                reply.author = author;
+                reply.author = await this._lookupUser(reply.author_id);
               } catch (e) {
                 reply.author = { display_name: 'Unbekannt', avatar_color: '#757575' };
               }
@@ -5642,13 +5645,27 @@
           const hasUpload = (window.__krsActiveUploads || 0) > 0 || !!document.querySelector('[data-uploading="true"], .upload-progress');
           return hasText || hasOpenDialog || hasUpload;
         };
-        const check = async ({ allowAutoReload = false } = {}) => {
+        // B6 (4.42.0): nicht mehr die ganze index.html (~800 KB) laden, sondern die
+        // winzige version.json (erzeugt der Deploy-Workflow). Fallback auf index.html,
+        // solange version.json fehlt. Nur prüfen, wenn Connect wirklich sichtbar ist —
+        // nicht im versteckten Keep-alive-iframe des Hubs und nicht im Hintergrund.
+        const inHiddenFrame = () => {
+          try { const f = window.frameElement; return !!f && (f.offsetParent === null || getComputedStyle(f).visibility === 'hidden'); } catch (e) { return false; }
+        };
+        const fetchRemoteVersion = async () => {
           try {
-            const res = await fetch('index.html?_=' + Date.now(), { cache: 'no-store' });
-            if (!res.ok) return;
-            const txt = await res.text();
-            const m = txt.match(/KRS_VERSION\s*=\s*'([^']+)'/);
-            const remote = m && m[1];
+            const r = await fetch('version.json?_=' + Date.now(), { cache: 'no-store' });
+            if (r.ok) { const j = await r.json(); if (j && j.version) return String(j.version); }
+          } catch (e) {}
+          const res = await fetch('index.html?_=' + Date.now(), { cache: 'no-store' });
+          if (!res.ok) return null;
+          const m = (await res.text()).match(/KRS_VERSION\s*=\s*'([^']+)'/);
+          return m && m[1];
+        };
+        const check = async ({ allowAutoReload = false } = {}) => {
+          if (document.visibilityState !== 'visible' || inHiddenFrame()) return;
+          try {
+            const remote = await fetchRemoteVersion();
             if (stopped || !remote) return;
             if (remote === current) {
               try { sessionStorage.removeItem('krs_autoreload_for'); } catch (e) {}
@@ -5906,6 +5923,7 @@
       if (user.avatar_url && avatarSrc) {
         return React.createElement('img', {
           src: avatarSrc,
+          loading: 'lazy',   // B12
           className: 'avatar',
           style: { width: size, height: size, borderRadius: '50%', objectFit: 'cover' },
           alt: user.display_name
@@ -6807,7 +6825,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.41.0';
+    window.KRS_VERSION = '4.42.0';
     // PERF-01: Cold-Boot-Zähler für Hub keep-alive Abnahme (Connect→Hub-Start→Connect → bleibt 1)
     window.__krsConnectBootCount = (window.__krsConnectBootCount || 0) + 1;
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
@@ -6934,8 +6952,28 @@
     };
     window.__krsUploadConfig = UPLOAD_CONFIG;            // Test-Hook: Upload-Whitelist (S4: kein svg)
 
+    // B5 (4.42.0): Ergebnis-Cache. Ohne Cache lief DOMPurify bei jedem Tastendruck
+    // im Composer für alle ~50 Beiträge erneut (PostList rendert komplett neu).
+    const _krsSanitizeCache = new Map();
+    window.__krsSanitizeStats = { calls: 0, misses: 0 };
     function sanitizeHtml(html) {
       if (!html) return '';
+      window.__krsSanitizeStats.calls++;
+      const ready = !!(window.DOMPurify && window.DOMPurify.sanitize);
+      if (ready && _krsSanitizeCache.has(html)) {
+        const v = _krsSanitizeCache.get(html);
+        _krsSanitizeCache.delete(html); _krsSanitizeCache.set(html, v);   // LRU: nach hinten
+        return v;
+      }
+      window.__krsSanitizeStats.misses++;
+      const out = _sanitizeHtmlUncached(html);
+      if (ready) {
+        _krsSanitizeCache.set(html, out);
+        if (_krsSanitizeCache.size > 600) _krsSanitizeCache.delete(_krsSanitizeCache.keys().next().value);
+      }
+      return out;
+    }
+    function _sanitizeHtmlUncached(html) {
       const tmp = document.createElement('div');
 
       if (window.DOMPurify && window.DOMPurify.sanitize) {
@@ -7943,16 +7981,20 @@
       }, [openPostMenu]);
 
       // Load reactions for loaded posts (Supabase mode)
+      // B9 (4.42.0): nur für NEU dazugekommene Beiträge laden (vorher bei jeder
+      // Längenänderung alles); Lesebestätigungen nur mit Opt-in.
+      const reactionsLoadedRef = useRef(new Set());
+      useEffect(() => { reactionsLoadedRef.current = new Set(); }, [channelId]);
       useEffect(() => {
         if (posts.length === 0 || dataService.isDemo) return;
-        const postIds = posts.filter(p => p.id && typeof p.id === 'number').map(p => p.id);
+        const postIds = posts.filter(p => p.id && typeof p.id === 'number' && !reactionsLoadedRef.current.has(p.id)).map(p => p.id);
         if (postIds.length === 0) return;
-        // Load reactions + read receipts in parallel
+        postIds.forEach(id => reactionsLoadedRef.current.add(id));
         Promise.all([
           dataService.getReactions('post', postIds),
-          dataService.getPostReads(postIds)
+          readReceiptsEnabled ? dataService.getPostReads(postIds) : Promise.resolve(new Map())
         ]).then(([reactionsMap, readsMap]) => {
-          if (readsMap.size > 0) setReadReceipts(readsMap);
+          if (readsMap.size > 0) setReadReceipts(prev => { const next = new Map(prev); readsMap.forEach((v, k) => next.set(k, v)); return next; });
           if (reactionsMap.size > 0) {
             setPosts(prev => prev.map(p => {
               const r = reactionsMap.get(p.id);
@@ -8007,13 +8049,15 @@
       }, [dataService]);
 
       // Mark posts as read when they are displayed (nur mit Opt-in)
+      // B9: jede ID nur einmal melden (vorher bei jeder posts-Änderung 50 Upserts)
+      const reportedReadsRef = useRef(new Set());
       useEffect(() => {
         if (!user || posts.length === 0 || !readReceiptsEnabled) return;
-        const parentPosts = posts.filter(p => !p.parent_id && p.id);
-        for (const post of parentPosts) {
-          if (post.author_id !== user.id) { // Eigene Posts nicht markieren
-            dataService.markPostRead(post.id, user.id);
-          }
+        for (const post of posts) {
+          if (!post.id || post.parent_id || post.author_id === user.id) continue; // Eigene Posts nicht markieren
+          if (reportedReadsRef.current.has(post.id)) continue;
+          reportedReadsRef.current.add(post.id);
+          dataService.markPostRead(post.id, user.id);
         }
       }, [posts, user, dataService, readReceiptsEnabled]);
 
@@ -8078,13 +8122,19 @@
           if (updated) {
             setPosts(prev => prev.map(p => p.id === postId ? { ...p, content: editContent, title: editTitle || null, image_url: newImageUrl, edited_at: new Date().toISOString() } : p));
             showToast('Beitrag gespeichert', 'success');
+            setEditingPost(null);   // B2 (4.42.0): nur bei Erfolg schließen, sonst bleibt der Text im Editor
           }
         } catch (err) { console.error('Edit error:', err); showToast('Beitrag konnte nicht gespeichert werden.', 'error'); }
-        setEditingPost(null);
       };
 
       const handleDeletePost = async (postId) => {
-        if (!confirm('Post wirklich l\u00f6schen?')) return;
+        // B14 (4.42.0): Rückfrage nennt mitgelöschte Antworten
+        const _p = posts.find(p => p.id === postId);
+        const _n = (_p && (_p.replies ?? _p.reply_count)) || 0;
+        const _msg = _n > 0
+          ? 'Beitrag wirklich l\u00f6schen? Die ' + _n + ' Antwort' + (_n === 1 ? '' : 'en') + ' darauf werden ebenfalls gel\u00f6scht.'
+          : 'Beitrag wirklich l\u00f6schen?';
+        if (!confirm(_msg)) return;
         try {
           const deleted = await dataService.deletePost(postId);
           if (!deleted) return;
@@ -8194,16 +8244,21 @@
             showToast(selectedFiles.length > 1 ? 'Dateien werden hochgeladen…' : 'Datei wird hochgeladen…', 'info');
             // Parallel statt nacheinander → spürbar schneller bei mehreren Dateien.
             const results = await Promise.all(selectedFiles.map(async sf => {
-              const url = await dataService.uploadFile(sf.file);
+              // B4 (4.42.0): Zeitlimit je Datei, damit „Posten" nicht ewig hängt
+              const url = await withTimeout(dataService.uploadFile(sf.file), 60000, 'Datei-Upload').catch(() => null);
               return url ? { url, name: sf.file.name, type: sf.file.type, size: sf.file.size } : null;
             }));
             fileUrls = results.filter(Boolean);
-            if (fileUrls.length === 0) { setPostError('Dateien konnten nicht hochgeladen werden.'); setSaving(false); return; }
+            // B4: Teilfehler melden statt Anhänge still wegfallen zu lassen
+            if (fileUrls.length < selectedFiles.length) {
+              setPostError((selectedFiles.length - fileUrls.length) + ' von ' + selectedFiles.length + ' Dateien konnten nicht hochgeladen werden. Beitrag wurde nicht gesendet — bitte erneut versuchen.');
+              setSaving(false); return;
+            }
           }
           // Store as JSON array string in image_url field, or single URL for backward compat
           const imageUrlValue = fileUrls.length > 0 ? JSON.stringify(fileUrls) : null;
           const contentText = newPostContent || (fileUrls.length > 0 ? ('📎 ' + fileUrls.length + ' Datei' + (fileUrls.length > 1 ? 'en' : '')) : '');
-          const newPost = await dataService.createPost(channelId, user.id, contentText, newPostTitle || undefined, imageUrlValue, isUrgent);
+          const newPost = await withTimeout(dataService.createPost(channelId, user.id, contentText, newPostTitle || undefined, imageUrlValue, isUrgent), 20000, 'Posten');
           if (newPost) {
             setPosts(prev => [newPost, ...prev]);
             setNewPostTitle('');
@@ -8294,7 +8349,7 @@
                 position: { top: '50%', left: '50%' }
               }),
               React.createElement('div', { style: { flex: 1 } }),
-              React.createElement('button', { type: 'button', onClick: () => { setShowPostForm(false); setNewPostTitle(''); setNewPostContent(''); clearAllFiles(); setShowPollCreator(false); setShowPostEmoji(false); }, style: { padding: '6px 14px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '13px' } }, 'Abbrechen'),
+              React.createElement('button', { type: 'button', onClick: () => { if ((htmlToText(newPostContent).trim() || newPostTitle.trim() || selectedFiles.length) && !confirm('Entwurf verwerfen? Der Text geht verloren.')) return; setShowPostForm(false); setNewPostTitle(''); setNewPostContent(''); clearAllFiles(); setShowPollCreator(false); setShowPostEmoji(false); }, style: { padding: '6px 14px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '13px' } }, 'Abbrechen'),
               React.createElement('button', { type: 'submit', disabled: saving, style: { padding: '6px 16px', background: saving ? 'var(--text-muted)' : 'var(--accent)', color: 'white', border: 'none', borderRadius: 'var(--radius)', cursor: saving ? 'not-allowed' : 'pointer', fontSize: '13px', fontWeight: '500', display: 'inline-flex', alignItems: 'center', gap: '6px' } },
                 React.createElement('span', null, saving ? 'Wird gesendet...' : 'Posten'),
                 React.createElement('span', { style: { width: '15px', height: '15px', display: 'inline-flex' }, dangerouslySetInnerHTML: { __html: Icons.send } })
@@ -8398,7 +8453,7 @@
                   ),
                   React.createElement('div', { style: { display: 'flex', gap: '8px', marginTop: '8px' } },
                     React.createElement('button', { onClick: () => handleSaveEdit(post.id), style: { padding: '6px 14px', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: 'var(--radius)', cursor: 'pointer', fontSize: '13px' } }, 'Speichern'),
-                    React.createElement('button', { onClick: () => setEditingPost(null), style: { padding: '6px 14px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', fontSize: '13px', color: 'var(--text-secondary)' } }, 'Abbrechen')
+                    React.createElement('button', { onClick: () => { if ((editContent !== (post.content || '') || (editTitle || '') !== (post.title || '')) && !confirm('Änderungen verwerfen?')) return; setEditingPost(null); }, style: { padding: '6px 14px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', fontSize: '13px', color: 'var(--text-secondary)' } }, 'Abbrechen')
                   )
                 )
               : React.createElement(React.Fragment, null,
@@ -8519,12 +8574,15 @@
             const url = await withTimeout(dataService.uploadFile(sf.file), 60000, 'Datei-Upload');
             if (url) fileUrls.push({ url, name: sf.file.name, type: sf.file.type, size: sf.file.size });
           }
-          if (replyFiles.length > 0 && fileUrls.length === 0) { showToast('Dateien konnten nicht hochgeladen werden.', 'error'); return; }
+          // B4: Teilfehler nicht still verschlucken — Antwort bleibt stehen, erneut versuchen.
+          if (fileUrls.length < replyFiles.length) { showToast((replyFiles.length - fileUrls.length) + ' von ' + replyFiles.length + ' Dateien konnten nicht hochgeladen werden. Bitte erneut senden.', 'error'); return; }
           const imageUrlValue = fileUrls.length > 0 ? JSON.stringify(fileUrls) : null;
           const contentText = (htmlToText(rawReply).trim() ? rawReply : '') || (fileUrls.length > 0 ? ('📎 ' + fileUrls.length + ' Datei' + (fileUrls.length > 1 ? 'en' : '')) : '');
           const created = await withTimeout(dataService.createReply(post.id, post.channel_id || 1, user.id, contentText, imageUrlValue), 20000, 'Senden');
           // Demo-Modus hat keine Realtime-Subscription → Antwort optimistisch anhängen.
-          if (created && onReplyCreated) onReplyCreated(created);
+          // B1 (4.42.0): nur bei Erfolg leeren — sonst bleiben Text und Entwurf stehen.
+          if (!created) return;
+          if (onReplyCreated) onReplyCreated(created);
           setReplyContent('');
           clearDraft('reply', post.id);
           replyFiles.forEach(f => { if (f.preview) URL.revokeObjectURL(f.preview); });
@@ -9533,7 +9591,8 @@
         const raw = typeof overrideContent === 'string' ? overrideContent : editMsgContent;
         if (!htmlToText(raw).trim()) { setEditingMsgId(null); return; }
         const updated = await dataService.updateMessage(msgId, raw);
-        if (updated && setMessages) {
+        if (!updated) return;   // B2: Fehler → Bearbeiten bleibt offen, Text bleibt
+        if (setMessages) {
           setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: raw, edited_at: (updated.edited_at || new Date().toISOString()) } : m));
           showToast('Nachricht gespeichert', 'success');
         }
@@ -9632,7 +9691,7 @@
                         style: { minHeight: '52px' }
                       }),
                       React.createElement('div', { style: { display: 'flex', gap: '6px', justifyContent: 'flex-end' } },
-                        React.createElement('button', { type: 'button', onClick: () => setEditingMsgId(null), style: { padding: '4px 10px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '12px', minHeight: '32px' } }, 'Abbrechen'),
+                        React.createElement('button', { type: 'button', onClick: () => { if (editMsgContent !== (msg.content || '') && !confirm('Änderungen verwerfen?')) return; setEditingMsgId(null); }, style: { padding: '4px 10px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '12px', minHeight: '32px' } }, 'Abbrechen'),
                         React.createElement('button', { type: 'button', onClick: () => handleSaveMsgEdit(msg.id), style: { padding: '4px 12px', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', minHeight: '32px' } }, 'Speichern')
                       )
                     )
@@ -10805,6 +10864,15 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.42.0', date: '24.09.2026', items: [
+        'Kein Text geht mehr verloren: Klappt das Senden einer Antwort oder das Speichern einer Bearbeitung nicht, bleibt dein Text stehen',
+        '„Abbrechen" fragt nach, bevor ein angefangener Text verworfen wird',
+        'Schlägt beim Posten ein Anhang fehl, sagt Connect Bescheid, statt ihn still wegzulassen',
+        'Beim Löschen eines Beitrags steht dabei, wie viele Antworten mitgelöscht werden',
+        'Schneller: Tippen bremst die Beitragsliste nicht mehr, weniger Datenverkehr im Hintergrund (Update-Prüfung, Reaktionen, Profilbilder)',
+        'Benachrichtigungs-Einstellungen wirken sofort, nicht erst nach Neuladen',
+        'Im Hub zeigt die Connect-Kachel jetzt die Zahl ungelesener Beiträge und Nachrichten'
+      ]},
       { v: '4.41.0', date: '23.09.2026', items: [
         'Datenschutz: Push und E-Mail bei „Dringend" oder @alle gehen nur noch an die Mitglieder des Teams — und enthalten keinen Text mehr, nur Team und Kanal',
         'Umfragen funktionieren jetzt: alle Team-Mitglieder können abstimmen, gleichzeitige Stimmen gehen nicht mehr verloren',
@@ -11529,7 +11597,9 @@
         if (!file.type.startsWith('image/')) { showToast('Bitte wähle ein Bild aus.', 'error'); return; }
         if (file.size > CONFIG.MAX_FILE_SIZE_AVATAR) { showToast('Bild zu groß (max. ' + Math.round(CONFIG.MAX_FILE_SIZE_AVATAR / 1024 / 1024) + ' MB).', 'error'); return; }
         try {
-          const url = await dataService.uploadFile(file);
+          // B12 (4.42.0): Avatar auf 256 px verkleinern (angezeigt werden 36–80 px)
+          const small = await compressImage(file, 256, 0.85, true);
+          const url = await dataService.uploadFile(small);
           if (url) {
             const updated = await dataService.updateProfile(user.id, { avatar_url: url });
             if (updated) {
@@ -12258,6 +12328,14 @@
       selectedConversationRef.current = selectedConversation;
       const selectedChannelRef = useRef(selectedChannel);
       selectedChannelRef.current = selectedChannel;
+      // B13 (4.42.0): Benachrichtigungs-Einstellungen im Listener über Refs lesen —
+      // vorher galten Änderungen erst nach Neuladen (Listener abonniert nur bei [user, dataService]).
+      const notifEnabledRef = useRef(notificationsEnabled);
+      notifEnabledRef.current = notificationsEnabled;
+      const notifPermRef = useRef(notificationPermission);
+      notifPermRef.current = notificationPermission;
+      const sendNotifRef = useRef(sendBrowserNotification);
+      sendNotifRef.current = sendBrowserNotification;
       // v4.19.0: Refs für Stummschaltung — verhindert Stale Closure im
       // unten stehenden postgres_changes-Listener (der nur bei [user,
       // dataService] neu abonniert, mutedTeams/channelTeamMap aber
@@ -12286,7 +12364,7 @@
             // Update conversation unread badge
             setConversations(prev => updateConversationActivity(prev, newMsg, { unreadDelta: 1, timeLabel: 'Jetzt' }));
             // Browser-Notification
-            sendBrowserNotification(
+            sendNotifRef.current(
               '💬 Neue Nachricht',
               htmlToText(newMsg.content) || '📎 Datei',
               () => { /* focus kommt automatisch */ }
@@ -12323,7 +12401,7 @@
             } else if (isUrgentPost || hasMentionAll || hasMentionMe) {
               // Dringend + @alle: Notification auch wenn App im Fokus
               try {
-                if (notificationsEnabled && notificationPermission === 'granted') {
+                if (notifEnabledRef.current && notifPermRef.current === 'granted') {
                   const n = new Notification(notifTitle, {
                     body: (newPost.title || htmlToText(newPost.content) || 'Neuer Beitrag').substring(0, 150),
                     icon: APP_LOGO, badge: APP_LOGO, tag: 'krs-urgent-' + newPost.id, renotify: true, requireInteraction: isUrgentPost
@@ -12335,7 +12413,7 @@
               // In-App Toast für dringende Posts
               if (isUrgentPost) showToast('🚨 DRINGEND: ' + (newPost.title || htmlToText(newPost.content) || '').substring(0, 80), 'error');
             } else {
-              sendBrowserNotification(notifTitle, newPost.title || htmlToText(newPost.content) || 'Neuer Beitrag in einem Kanal', () => {});
+              sendNotifRef.current(notifTitle, newPost.title || htmlToText(newPost.content) || 'Neuer Beitrag in einem Kanal', () => {});
             }
           })
           .subscribe();
@@ -12351,6 +12429,14 @@
         const totalUnread = unreadChatCount + Array.from(unreadPostChannels.values()).reduce((a, b) => a + b, 0);
         { const __an = window.T ? window.T('app.name', 'Die App') : 'Die App';
           document.title = totalUnread > 0 ? `(${totalUnread}) ${__an}` : __an; }
+        // C3 (4.43.0): Summe an den Hub melden (dort wartet der Ungelesen-Zähler
+        // darauf). Nur eingebettet, Ziel-Origin fest = eigene Origin (Hub + Connect
+        // liegen auf derselben).
+        try {
+          if (window.parent && window.parent !== window) {
+            window.parent.postMessage({ type: 'KRS_HUB_UNREAD_UPDATE', moduleId: 'connect', count: totalUnread }, window.location.origin);
+          }
+        } catch (e) {}
       }, [unreadChatCount, unreadPostChannels]);
 
       // Auto-request notification permission on first load
@@ -12419,7 +12505,9 @@
       useEffect(() => {
         if (!user || !dataService) return;
         const cleanup = dataService.trackPresence(user.id, user.display_name, (onlineIds) => {
-          setOnlineUsers(onlineIds);
+          // B7 (4.42.0): nur setzen, wenn sich die Menge wirklich geändert hat —
+          // jedes Presence-Sync erzeugte ein neues Set und renderte die ganze App neu.
+          setOnlineUsers(prev => (prev && prev.size === onlineIds.size && [...onlineIds].every(id => prev.has(id))) ? prev : onlineIds);
         });
         return cleanup;
       }, [user, dataService]);

@@ -93,6 +93,10 @@ jobs:
           else
             echo "::error::krs-native-client.js fehlt im Repo — native iOS-Funktionen würden ausfallen." && exit 1
           fi
+          # B6 (4.42.0): kleine version.json für den Update-Check (statt 800 KB index.html)
+          v=$(grep -oE "KRS_VERSION = '[^']+'" index.html | head -1 | sed -E "s/.*'([^']+)'/\1/")
+          [ -n "$v" ] || { echo "::error::KRS_VERSION nicht gefunden"; exit 1; }
+          printf '{"version":"%s"}\n' "$v" > _site/version.json
           # Optionale Assets
           for f in logo*.png manifest.json sw.js favicon.ico; do
             [ -f "$f" ] && cp "$f" _site/ || true
