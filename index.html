@@ -3371,6 +3371,11 @@
       get size() { return this.subs.size; }
     }
 
+    // S-2 2.5 (25.09.2026): users.email ist fuer Lehrkraefte nicht mehr lesbar (Spalten-GRANT).
+    // Darum NIE users(' + USER_COLS + ') / select('*') auf users — immer USER_COLS. Eigene Zeile inkl. E-Mail:
+    // RPC krs_my_profile; Admin-Liste inkl. E-Mail: RPC krs_admin_users.
+    const USER_COLS = 'id,username,display_name,avatar_color,role,last_seen,created_at,avatar_url,auth_id,status,kuerzel,hub_editor,nachname,anzeigename';
+
     class DataService {
       constructor(supabaseClient = null) {
         this.sb = supabaseClient;
@@ -3417,7 +3422,7 @@
       async _lookupUser(id) {
         if (!this._userCache) this._userCache = new Map();
         if (this._userCache.has(id)) return this._userCache.get(id);
-        const { data } = await this.sb.from('users').select('*').eq('id', id).single();
+        const { data } = await this.sb.from('users').select(USER_COLS).eq('id', id).single();
         if (data) this._userCache.set(id, data);
         return data;
       }
@@ -3425,7 +3430,7 @@
       async getUsers() {
         if (this.isDemo) return [...MOCK_USERS];
         try {
-          const { data, error } = await this.sb.from('users').select('*').order('display_name');
+          const { data, error } = await this.sb.from('users').select(USER_COLS).order('display_name');
           if (error) throw error;
           this._userCache = new Map((data || []).map(u => [u.id, u]));
           return data || [];
@@ -3918,7 +3923,7 @@
           reactions: (p.reactions || []).map(r => ({ ...r, users: [...(r.users || [])] }))
         }));
         try {
-          const { data, error } = await this.sb.from('posts').select('*, author:users(*)').eq('channel_id', channelId).is('parent_id', null).order('created_at', { ascending: false }).range(offset, offset + limit - 1);
+          const { data, error } = await this.sb.from('posts').select('*, author:users(' + USER_COLS + ')').eq('channel_id', channelId).is('parent_id', null).order('created_at', { ascending: false }).range(offset, offset + limit - 1);
           if (error) throw error;
           const parents = data || [];
           // v4.22.0 — Antwort-Zaehler. Eine Beitragszeile weiss nicht, wie viele
@@ -4061,7 +4066,7 @@
           const insertObj = { channel_id: channelId, author_id: authorId, content, title };
           if (imageUrl) insertObj.image_url = imageUrl;
           if (isUrgent) insertObj.is_urgent = true;
-          const { data, error } = await this.sb.from('posts').insert(insertObj).select('*, author:users(*)').single();
+          const { data, error } = await this.sb.from('posts').insert(insertObj).select('*, author:users(' + USER_COLS + ')').single();
           if (error) throw error;
           return data;
         } catch (err) {
@@ -4091,11 +4096,11 @@
           if (imageUrl !== undefined) payload.image_url = imageUrl;
           // Robust: falls die Spalte edited_at (noch) fehlt, ohne sie speichern,
           // damit Bearbeiten nie hart blockiert (siehe Befund 2026-06-20).
-          let resp = await this.sb.from('posts').update(payload).eq('id', postId).select('*, author:users(*)').single();
+          let resp = await this.sb.from('posts').update(payload).eq('id', postId).select('*, author:users(' + USER_COLS + ')').single();
           if (resp.error && /edited_at/i.test(resp.error.message || '')) {
             const payloadOhneEdited = { content, title };
             if (imageUrl !== undefined) payloadOhneEdited.image_url = imageUrl;
-            resp = await this.sb.from('posts').update(payloadOhneEdited).eq('id', postId).select('*, author:users(*)').single();
+            resp = await this.sb.from('posts').update(payloadOhneEdited).eq('id', postId).select('*, author:users(' + USER_COLS + ')').single();
           }
           if (resp.error) throw resp.error;
           return resp.data;
@@ -4558,7 +4563,7 @@
           return user;
         }
         try {
-          const { data, error } = await this.sb.from('users').update(safeUpdates).eq('id', userId).select().single();
+          const { data, error } = await this.sb.from('users').update(safeUpdates).eq('id', userId).select(USER_COLS).single();
           if (error) throw error;
           return data;
         } catch (err) {
@@ -4589,7 +4594,7 @@
             channel_id: channelId, author_id: authorId,
             content: '<p>📊 ' + question + '</p>',
             poll_data: pollData
-          }).select('*, author:users(*)').single();
+          }).select('*, author:users(' + USER_COLS + ')').single();
           if (error) throw error;
           return data;
         } catch (err) {
@@ -4642,7 +4647,7 @@
           const { data, error } = await this.sb.from('posts')
             .update({ is_pinned: !isPinned })
             .eq('id', postId)
-            .select('*, author:users(*)')
+            .select('*, author:users(' + USER_COLS + ')')
             .single();
           if (error) throw error;
           return data;
@@ -4710,7 +4715,7 @@
       async getReplies(postId) {
         if (this.isDemo) return [...(MOCK_REPLIES[postId] || [])];
         try {
-          const { data, error } = await this.sb.from('posts').select('*, author:users(*)').eq('parent_id', postId).order('created_at');
+          const { data, error } = await this.sb.from('posts').select('*, author:users(' + USER_COLS + ')').eq('parent_id', postId).order('created_at');
           if (error) throw error;
           return data || [];
         } catch (err) {
@@ -4730,7 +4735,7 @@
         try {
           const insertObj = { parent_id: postId, channel_id: channelId, author_id: authorId, content };
           if (imageUrl) insertObj.image_url = imageUrl;
-          const { data, error } = await this.sb.from('posts').insert(insertObj).select('*, author:users(*)').single();
+          const { data, error } = await this.sb.from('posts').insert(insertObj).select('*, author:users(' + USER_COLS + ')').single();
           if (error) throw error;
           return data;
         } catch (err) {
@@ -4757,7 +4762,7 @@
 
           // 2+3. Lade Teilnehmer UND letzte Nachrichten parallel
           const [membersRes, msgsRes] = await Promise.all([
-            this.sb.from('conversation_members').select('conversation_id, user_id, users(*)').in('conversation_id', convIds),
+            this.sb.from('conversation_members').select('conversation_id, user_id, users(' + USER_COLS + ')').in('conversation_id', convIds),
             this.sb.from('messages').select('conversation_id, content, created_at').in('conversation_id', convIds).order('created_at', { ascending: false })
           ]);
           const allMembers = membersRes.data || [];
@@ -4859,7 +4864,7 @@
           // Originalnachricht bleibt trotzdem ueber den Embed auffindbar,
           // damit der Zitatbalken "Nachricht gelöscht" zeigen kann.
           const { data, error } = await this.sb.from('messages')
-            .select('*, sender:users(*), reply_to:reply_to_id(id, content, image_url, is_deleted, sender:sender_id(display_name))')
+            .select('*, sender:users(' + USER_COLS + '), reply_to:reply_to_id(id, content, image_url, is_deleted, sender:sender_id(display_name))')
             .eq('conversation_id', conversationId).eq('is_deleted', false)
             .order('created_at', { ascending: false }).range(offset, offset + limit - 1);
           if (error) throw error;
@@ -4885,7 +4890,7 @@
           const insertObj = { conversation_id: conversationId, sender_id: senderId, content: content || '' };
           if (imageUrl) insertObj.image_url = imageUrl;
           if (replyToId) insertObj.reply_to_id = replyToId;
-          const { data, error } = await this.sb.from('messages').insert(insertObj).select('*, sender:users(*), reply_to:reply_to_id(id, content, image_url, is_deleted, sender:sender_id(display_name))').single();
+          const { data, error } = await this.sb.from('messages').insert(insertObj).select('*, sender:users(' + USER_COLS + '), reply_to:reply_to_id(id, content, image_url, is_deleted, sender:sender_id(display_name))').single();
           if (error) throw error;
           return data;
         } catch (err) {
@@ -4905,9 +4910,9 @@
         try {
           const nowIso = new Date().toISOString();
           // Robust: falls Spalte edited_at fehlt, ohne sie speichern (kein Hart-Fail).
-          let resp = await this.sb.from('messages').update({ content, edited_at: nowIso }).eq('id', messageId).select('*, sender:users(*)').single();
+          let resp = await this.sb.from('messages').update({ content, edited_at: nowIso }).eq('id', messageId).select('*, sender:users(' + USER_COLS + ')').single();
           if (resp.error && /edited_at/i.test(resp.error.message || '')) {
-            resp = await this.sb.from('messages').update({ content }).eq('id', messageId).select('*, sender:users(*)').single();
+            resp = await this.sb.from('messages').update({ content }).eq('id', messageId).select('*, sender:users(' + USER_COLS + ')').single();
           }
           if (resp.error) throw resp.error;
           return resp.data;
@@ -4949,7 +4954,7 @@
           let posts, messages;
           try {
             const { data: ftsPost } = await this.sb.from('posts')
-              .select('*, author:users(*), channel:channels(name, team_id)')
+              .select('*, author:users(' + USER_COLS + '), channel:channels(name, team_id)')
               .textSearch('content', query, { type: 'websearch', config: 'german' })
               .order('created_at', { ascending: false })
               .limit(20);
@@ -4957,7 +4962,7 @@
           } catch (ftsErr) {
             // Fallback zu ilike wenn FTS-Index nicht existiert
             const { data: ilikePosts } = await this.sb.from('posts')
-              .select('*, author:users(*), channel:channels(name, team_id)')
+              .select('*, author:users(' + USER_COLS + '), channel:channels(name, team_id)')
               .or(`content.ilike.%${query}%,title.ilike.%${query}%`)
               .order('created_at', { ascending: false })
               .limit(20);
@@ -4965,14 +4970,14 @@
           }
           try {
             const { data: ftsMsgs } = await this.sb.from('messages')
-              .select('*, sender:users(*)')
+              .select('*, sender:users(' + USER_COLS + ')')
               .textSearch('content', query, { type: 'websearch', config: 'german' })
               .order('created_at', { ascending: false })
               .limit(20);
             messages = ftsMsgs;
           } catch (ftsErr) {
             const { data: ilikeMsgs } = await this.sb.from('messages')
-              .select('*, sender:users(*)')
+              .select('*, sender:users(' + USER_COLS + ')')
               .ilike('content', `%${query}%`)
               .order('created_at', { ascending: false })
               .limit(20);
@@ -5241,7 +5246,7 @@
           return MOCK_USERS.slice(0, 3).map(u => ({ ...u, role: 'member' }));
         }
         try {
-          const { data, error } = await this.sb.from('team_members').select('user_id, role, users(*)').eq('team_id', teamId);
+          const { data, error } = await this.sb.from('team_members').select('user_id, role, users(' + USER_COLS + ')').eq('team_id', teamId);
           if (error) throw error;
           return data?.map(tm => ({ ...tm.users, role: tm.role })) || [];
         } catch (err) {
@@ -5411,7 +5416,7 @@
         if (!authUser || this.isDemo) return null;
         try {
           // Suche User in der users-Tabelle per E-Mail
-          const { data, error } = await this.sb.from('users').select('*').eq('email', authUser.email).single();
+          const { data, error } = await this.sb.rpc('krs_my_profile').maybeSingle();
           if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows
           if (!data) {
             console.warn('resolveAuthUser: Kein User mit Email', authUser.email);
@@ -5558,7 +5563,7 @@
       async getAllUsersAdmin() {
         if (this.isDemo) return MOCK_USERS;
         try {
-          const { data, error } = await this.sb.from('users').select('*').order('display_name');
+          const { data, error } = await this.sb.rpc('krs_admin_users');
           if (error) throw error;
           return data || [];
         } catch (e) { console.error('getAllUsersAdmin error:', e); return []; }
@@ -5578,7 +5583,7 @@
             role,
             status: 'invited',
             avatar_color: colors[Math.floor(Math.random() * colors.length)]
-          }).select().single();
+          }).select(USER_COLS).single();
           if (error) throw error;
           return data;
         } catch (e) {
@@ -6866,7 +6871,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.43.0';
+    window.KRS_VERSION = '4.44.0';
     // PERF-01: Cold-Boot-Zähler für Hub keep-alive Abnahme (Connect→Hub-Start→Connect → bleibt 1)
     window.__krsConnectBootCount = (window.__krsConnectBootCount || 0) + 1;
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
@@ -10905,6 +10910,10 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.44.0', date: '25.09.2026', items: [
+        'Datenschutz: E-Mail-Adressen der Kolleginnen und Kollegen sind nur noch für die Administration sichtbar',
+        'Rückmeldungen (Feedback) sieht jede Person nur noch selbst — die Administration sieht alle'
+      ]},
       { v: '4.43.0', date: '24.09.2026', items: [
         'iPad quer: Teamnamen sind wieder lesbar — 🔔 und 👁 erscheinen nur noch beim gewählten Team',
         'iPhone: der „Posten"-Knopf ist vollständig sichtbar und groß genug zum Tippen',
@@ -12138,7 +12147,7 @@
         if (isDemo || !supabaseClient) return;
         const interval = setInterval(async () => {
           try {
-            await supabaseClient.from('users').select('count', { count: 'exact', head: true });
+            await supabaseClient.from('users').select('id', { count: 'exact', head: true });
           } catch (e) {
             console.warn('Heartbeat failed:', e);
             showToast('Verbindung zum Server unterbrochen. Seite bitte neu laden.', 'error');
