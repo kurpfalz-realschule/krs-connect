@@ -2,6 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
+  <meta name="referrer" content="same-origin">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <!-- Tenant-Konfiguration (TENANT-SPEC.md): MUSS das erste Script sein, synchron,
        vor jedem anderen Code — setzt window.TENANT/window.T, Branding-CSS-Variablen,
@@ -86,6 +87,9 @@
       border-radius: var(--radius);
     }
     button:focus:not(:focus-visible) { outline: none; }
+    /* C8 (4.42.0): In Leiste und Listen wurde der Fokusrahmen vom Eltern-Overflow
+       abgeschnitten → nach innen legen, damit Tastatur-Nutzer ihn sehen. */
+    .sidebar .nav-item:focus-visible, .list-item:focus-visible, .team-mute-btn:focus-visible, .team-hide-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
     /* Skip-Link „Zum Inhalt springen" (WCAG 2.4.1) — sichtbar nur bei Fokus */
     .skip-link {
       position: absolute; left: 8px; top: -48px; z-index: 9999;
@@ -1327,6 +1331,41 @@
     .hidden-teams-toggle { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 12px; width: 100%; transition: color 0.15s; }
     .hidden-teams-toggle:hover { color: var(--text-primary); }
 
+    /* C7 (4.42.0): Touch-Ziele ≥ 44 px (Antworten-Link war 15 px, Teams/Chats 36 px) */
+    @media (hover: none) {
+      .post-footer button { min-height: 44px; }
+      /* Teams/Chats-Umschalter bleibt bei 36 px in der 44-px-Leiste (S19-Vorgabe „max. 44 px“), WCAG 2.5.8 AA (24 px) erfüllt. */
+    }
+    /* C6 (4.42.0): Composer-Leiste am Handy — nichts ragt mehr aus dem Bild, 44-px-Ziele */
+    @media (max-width: 600px) {
+      .composer-actionbar > button { min-height: 44px; }
+      .composer-actionbar > .composer-submit { flex: 1 1 100%; justify-content: center; }
+    }
+    /* C5 (4.42.0): Touch-Geräte — Team-Zeile als Flex mit eigener Aktionsspalte.
+       Vorher lagen 🔔/👁 absolut ÜBER Teamnamen und Zähler (iPad quer, 190-px-Spalte). */
+    @media (hover: none) {
+      .team-item { display: flex; align-items: center; }
+      .team-item > .list-item { flex: 1 1 auto; min-width: 0; padding-right: 6px !important; }
+      .team-item > .list-item .list-item-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+      .team-item > .team-mute-btn, .team-item > .team-hide-btn { position: static; transform: none; flex: 0 0 auto; right: auto; }
+      /* Aktionen nur am gewählten Team zeigen — sonst bleibt in schmalen Spalten kein Platz für den Namen.
+         Ein stummes Team zeigt 🔕 ohnehin in der Zeile. */
+      .team-item:not(:has(> .list-item.active)) > .team-mute-btn,
+      .team-item:not(:has(> .list-item.active)) > .team-hide-btn { display: none; }
+    }
+    /* C5: Spaltenköpfe „Teams"/„# Kanäle" im iPad-Querformat — Knöpfe wurden abgeschnitten */
+    @media (min-width: 769px) and (max-width: 1180px) {
+      .sidebar-header { padding: 10px 8px 10px 12px; gap: 4px 6px; flex-wrap: wrap; }
+      .sidebar-header h2 { font-size: 15px; white-space: nowrap; }
+      .sidebar-header > div, .sidebar-header > span { flex-shrink: 0; gap: 2px !important; margin-left: auto; }
+    }
+    /* C5: gewähltes Team im iPad-Querformat — Aktionen in eine zweite Zeile, Name bleibt lesbar */
+    @media (hover: none) and (min-width: 769px) and (max-width: 1180px) {
+      .team-item:has(> .list-item.active) { flex-wrap: wrap; }
+      .team-item:has(> .list-item.active) > .list-item { flex-basis: 100%; }
+      .team-item:has(> .list-item.active) > .team-mute-btn { margin-left: auto; }
+    }
+
     /* Teams-Ansicht: Wrapper um Teams- + Kanäle-Spalte. Desktop: transparent
        (display:contents) → 3-Spalten-Layout bleibt unverändert. Mobile: wird
        zum gemeinsamen Drawer (siehe Media Query unten). */
@@ -1814,10 +1853,11 @@
   <div id="app"><div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#5A5F72"><div style="width:40px;height:40px;border:3px solid #E2E4E8;border-top-color:#5B7B94;border-radius:50%;animation:spin 0.8s linear infinite"></div><div>Wird geladen...</div><style>@keyframes spin{to{transform:rotate(360deg)}}</style></div></div>
 
   <!-- Phase 7.8: CDN Preload für schnelleren Initial Load -->
-  <link rel="preload" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" as="script">
-  <link rel="preload" href="https://unpkg.com/react@18/umd/react.production.min.js" as="script" crossorigin>
-  <link rel="preload" href="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" as="script" crossorigin>
-  <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.4/purify.min.js" as="script">
+  <!-- C12 (4.42.0): feste Versionen, gleiche URLs wie der Hub (ein Browser-Cache), SRI -->
+  <link rel="preload" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.1/dist/umd/supabase.min.js" as="script">
+  <link rel="preload" href="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js" as="script" crossorigin integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z">
+  <link rel="preload" href="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js" as="script" crossorigin integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1">
+  <link rel="preload" href="https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js" as="script" crossorigin integrity="sha384-eEu5CTj3qGvu9PdJuS+YlkNi7d2XxQROAFYOr59zgObtlcux1ae1Il3u7jvdCSWu">
 
   <!-- supabase-js resilient laden: Fallback-CDN-Kette + Timeout, damit ein
        CDN-Haenger nicht die ganze App mit "Supabase nicht verfuegbar" killt.
@@ -1825,9 +1865,9 @@
   <script>
     (function () {
       var CDNS = [
-        'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
-        'https://unpkg.com/@supabase/supabase-js@2',
-        'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js'
+        'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.1/dist/umd/supabase.min.js',
+        'https://unpkg.com/@supabase/supabase-js@2.117.1/dist/umd/supabase.js',
+        'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.1/dist/umd/supabase.js'
       ];
       var i = 0, settled = false;
       window.__supabaseReady = new Promise(function (resolve, reject) {
@@ -1852,12 +1892,12 @@
   <!-- React/ReactDOM resilient: primär unpkg, bei Ausfall parser-synchroner
        Fallback (jsdelivr → cdnjs). Ohne Fallback führte ein unpkg-Hänger dazu,
        dass React nie lud und die App gar nicht mountete (rote CI / weiße Seite). -->
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script>window.React||document.write('<script crossorigin src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"><\/script>')</script>
-  <script>window.React||document.write('<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"><\/script>')</script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script>window.ReactDOM||document.write('<script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"><\/script>')</script>
-  <script>window.ReactDOM||document.write('<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"><\/script>')</script>
+  <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z"></script>
+  <script>window.React||document.write('<script crossorigin integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"><\/script>')</script>
+  <script>window.React||document.write('<script crossorigin integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"><\/script>')</script>
+  <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1"></script>
+  <script>window.ReactDOM||document.write('<script crossorigin integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"><\/script>')</script>
+  <script>window.ReactDOM||document.write('<script crossorigin integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"><\/script>')</script>
   <script>
     // Letzte Absicherung: wenn React nach allen CDNs fehlt, klare Meldung statt
     // ewiger "wird geladen…"-Spinner (sonst wirkt die App nur kaputt).
@@ -1867,13 +1907,14 @@
       if (_el) _el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:12px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#5A5F72;text-align:center;padding:24px"><div style="font-size:32px">📡</div><div style="font-weight:600">' + (window.T ? window.T('app.name', 'Die App') : 'Die App') + ' konnte nicht laden</div><div style="font-size:14px;max-width:320px">Bitte Internetverbindung prüfen und die Seite neu laden (auf dem iPad: Seite nach unten ziehen zum Aktualisieren).</div></div>';
     }
   </script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.4/purify.min.js"></script>
+  <script crossorigin src="https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js" integrity="sha384-eEu5CTj3qGvu9PdJuS+YlkNi7d2XxQROAFYOr59zgObtlcux1ae1Il3u7jvdCSWu"></script>
   <script>
     // DOMPurify CDN-Check mit Fallback
     if (!window.DOMPurify) {
       console.warn('DOMPurify CDN 1 fehlgeschlagen, lade Fallback...');
       var s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js';
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.4/purify.min.js';
+      s.crossOrigin = 'anonymous'; s.integrity = 'sha384-eEu5CTj3qGvu9PdJuS+YlkNi7d2XxQROAFYOr59zgObtlcux1ae1Il3u7jvdCSWu';
       s.onload = function() { console.log('DOMPurify Fallback geladen'); };
       s.onerror = function() {
         console.error('KRITISCH: DOMPurify konnte von keinem CDN geladen werden');
@@ -6825,7 +6866,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.42.0';
+    window.KRS_VERSION = '4.43.0';
     // PERF-01: Cold-Boot-Zähler für Hub keep-alive Abnahme (Connect→Hub-Start→Connect → bleibt 1)
     window.__krsConnectBootCount = (window.__krsConnectBootCount || 0) + 1;
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
@@ -8311,8 +8352,8 @@
               ),
               selectedFiles.length > 1 && React.createElement('button', { type: 'button', onClick: clearAllFiles, style: { alignSelf: 'flex-end', fontSize: '11px', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' } }, 'Alle entfernen')
             ),
-            // Action bar
-            React.createElement('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--border)' } },
+            // Action bar (C6: umbrechend, „Posten" am Handy volle Breite)
+            React.createElement('div', { className: 'composer-actionbar', style: { display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--border)' } },
               React.createElement('input', { ref: fileInputRef, type: 'file', multiple: true, accept: 'image/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt', onChange: handleFileSelect, style: { display: 'none' } }),
               React.createElement('button', { type: 'button', onClick: () => fileInputRef.current?.click(), title: 'Dateien anhängen (max. 10)', 'aria-label': 'Dateien anhängen', style: { padding: '6px 10px', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: '18px', cursor: 'pointer', color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: '6px', minHeight: '36px', fontSize: '13px' } },
                 React.createElement('span', { style: { width: '16px', height: '16px', display: 'inline-flex' }, dangerouslySetInnerHTML: { __html: Icons.paperclip } }),
@@ -8350,7 +8391,7 @@
               }),
               React.createElement('div', { style: { flex: 1 } }),
               React.createElement('button', { type: 'button', onClick: () => { if ((htmlToText(newPostContent).trim() || newPostTitle.trim() || selectedFiles.length) && !confirm('Entwurf verwerfen? Der Text geht verloren.')) return; setShowPostForm(false); setNewPostTitle(''); setNewPostContent(''); clearAllFiles(); setShowPollCreator(false); setShowPostEmoji(false); }, style: { padding: '6px 14px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '13px' } }, 'Abbrechen'),
-              React.createElement('button', { type: 'submit', disabled: saving, style: { padding: '6px 16px', background: saving ? 'var(--text-muted)' : 'var(--accent)', color: 'white', border: 'none', borderRadius: 'var(--radius)', cursor: saving ? 'not-allowed' : 'pointer', fontSize: '13px', fontWeight: '500', display: 'inline-flex', alignItems: 'center', gap: '6px' } },
+              React.createElement('button', { type: 'submit', className: 'composer-submit', disabled: saving, style: { padding: '6px 16px', background: saving ? 'var(--text-muted)' : 'var(--accent)', color: 'white', border: 'none', borderRadius: 'var(--radius)', cursor: saving ? 'not-allowed' : 'pointer', fontSize: '13px', fontWeight: '500', display: 'inline-flex', alignItems: 'center', gap: '6px' } },
                 React.createElement('span', null, saving ? 'Wird gesendet...' : 'Posten'),
                 React.createElement('span', { style: { width: '15px', height: '15px', display: 'inline-flex' }, dangerouslySetInnerHTML: { __html: Icons.send } })
               )
@@ -10864,6 +10905,14 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.43.0', date: '24.09.2026', items: [
+        'iPad quer: Teamnamen sind wieder lesbar — 🔔 und 👁 erscheinen nur noch beim gewählten Team',
+        'iPhone: der „Posten"-Knopf ist vollständig sichtbar und groß genug zum Tippen',
+        'Größere Tippflächen (z. B. „Antworten"), bessere Bedienung mit Tastatur und Vorleseprogramm',
+        'Das geschlossene Hilfe-Fenster wirft keinen Schatten mehr in den rechten Rand',
+        '„Was ist neu" in Alltagssprache',
+        'Bibliotheken mit festen Versionen und Prüfsumme geladen (sicherer, einheitlich mit dem Hub)'
+      ]},
       { v: '4.42.0', date: '24.09.2026', items: [
         'Kein Text geht mehr verloren: Klappt das Senden einer Antwort oder das Speichern einer Bearbeitung nicht, bleibt dein Text stehen',
         '„Abbrechen" fragt nach, bevor ein angefangener Text verworfen wird',
@@ -10881,16 +10930,12 @@
         'Sicherheitsfilter aktualisiert (DOMPurify 3.2.4)'
       ]},
       { v: '4.40.0', date: '23.09.2026', items: [
-        'Schnellerer Start: Ungelesen-Zähler für alle Kanäle und Chats kommen in einem Abruf statt einzeln pro Kanal',
-        'Gelesen-Markierung nutzt die Serverzeit — falsch gehende Geräteuhren erzeugen keine Geister-Ungelesen mehr',
-        'Rollback Unread: localStorage KRS_UNREAD_N_LEGACY=true stellt die alte Zählung wieder her',
-        'Fix Demo-Modus: Kanalliste nach dem parallelen Boot aus 4.39.0 wieder befüllt'
+        'Schnellerer Start: die Ungelesen-Zahlen aller Kanäle und Chats kommen auf einmal',
+        'Falsch gehende Geräteuhren erzeugen keine „Geister-Ungelesen“ mehr'
       ]},
       { v: '4.39.0', date: '23.09.2026', items: [
-        'Polling: bei gesundem Realtime nur noch alle 120s (oder aus); bei Ausfall Backoff 20→60→120s',
-        'Visibility-Refetch höchstens 1× pro Rückkehr, mit In-flight-Dedupe',
-        'Login-Boot: Teams+Chats parallel, Channels in einer Query, getUsers lazy; Unread weiter parallel (RPC folgt)',
-        'Rollback Polling: localStorage KRS_CHAT_POLL_LEGACY=true stellt 20s-Intervall wieder her'
+        'Connect fragt im Hintergrund seltener nach Neuem — schont iPad-Akku und Schul-WLAN',
+        'Nach dem Anmelden erscheinen Teams und Chats schneller'
       ]},
       { v: '4.38.1', date: '23.09.2026', items: [
         'Auf iPhone und iPad erscheint nach der Vorbereitung ein eigener Schritt „In Dateien sichern / Teilen“.',
@@ -13060,7 +13105,7 @@
                       'aria-label': mutedTeams.has(team.id) ? 'Stummschaltung aufheben' : 'Team stummschalten',
                       'data-testid': 'team-mute-btn'
                     }, mutedTeams.has(team.id) ? '🔕' : '🔔'),
-                    React.createElement('button', { className: 'team-hide-btn', onClick: (e) => { e.stopPropagation(); handleToggleTeamHidden(team.id); }, title: 'Team ausblenden', 'data-testid': 'team-hide' }, '👁')
+                    React.createElement('button', { className: 'team-hide-btn', onClick: (e) => { e.stopPropagation(); handleToggleTeamHidden(team.id); }, title: 'Team ausblenden', 'aria-label': 'Team „' + team.name + '" ausblenden', 'data-testid': 'team-hide' }, '👁')
                   ),
                   // v4.29.0 — Kanäle des aufgeklappten Teams direkt darunter.
                   // Nur im Handy-Layout sichtbar (CSS `.team-children`), am
@@ -13580,7 +13625,8 @@
             React.createElement('button', {
               className: 'online-indicator',
               onClick: () => setShowOnlinePanel(prev => !prev),
-              title: 'Online-Status'
+              title: 'Online-Status',
+              'aria-label': (onlineUsers.size || 0) + ' Kolleg:innen online — Liste anzeigen'
             },
               React.createElement('span', { className: 'online-dot small' }),
               React.createElement('span', { className: 'online-count' }, onlineUsers.size || '–')
@@ -13886,7 +13932,9 @@ window.KRS_COACH_CONFIG = {
     background:#F8F9FC;box-shadow:-8px 0 40px rgba(15,23,42,.28);display:flex;flex-direction:column;
     transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);
     font:15px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;color:#1e293b}
-  .krsc-panel.krsc-open{transform:translateX(0)}
+  /* C9: geschlossen unsichtbar — sonst fällt der Schatten in den rechten Rand */
+  .krsc-panel:not(.krsc-open){visibility:hidden;box-shadow:none;transition:transform .28s cubic-bezier(.4,0,.2,1),visibility 0s linear .28s}
+  .krsc-panel.krsc-open{transform:translateX(0);visibility:visible}
   @media(max-width:520px){.krsc-panel{width:100vw}}
 
   .krsc-head{padding:18px 18px 14px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;flex:0 0 auto}
