@@ -1,0 +1,15 @@
+-- S-2 2.8 M-7/M-8 — VORSCHLAG, NICHT AKTIV. Fristen muessen SL/DSB bestaetigen (Loeschkonzept, S-3).
+-- Stand 25.09.2026: 29 Dateien ohne Verweis, 4 geloeschte Chat-Nachrichten (Soft-Delete), admin_audit_log 27 Zeilen seit 19.06.,
+-- Wochensicherung behaelt 8 Wochen (135 Tabellen in backup/backup_beta). Vorschlag-Fristen in [ ] = Platzhalter.
+--
+-- 1) Wochensicherung kuerzen: 8 -> 4 Wochen
+--    select cron.alter_job((select jobid from cron.job where jobname='krs-wochensicherung'), command := 'select backup.wochensicherung(4)');
+--    backup_beta-Schema pruefen und loeschen, wenn Beta-Altstand.
+-- 2) Dateien ohne Verweis aelter als [30] Tage loeschen (Storage-API via Edge/Script, NICHT per SQL-Delete auf storage.objects).
+-- 3) Soft-geloeschte Nachrichten/Beitraege nach [30] Tagen (kein deleted_at vorhanden -> edited_at/created_at als Naeherung oder Spalte deleted_at ergaenzen) endgueltig entfernen:
+--    select cron.schedule('krs-softdelete-purge','15 3 * * *',
+--      $$delete from public.messages where is_deleted and coalesce(edited_at, created_at) < now() - interval '30 days'$$);
+-- 4) admin_audit_log nach [12] Monaten loeschen.
+-- 5) Offboarding (Lehrkraft verlaesst Schule): users.status='inactive', display_name/nachname/anzeigename -> 'Ehemalige Lehrkraft',
+--    email/auth_id leeren, Auth-Konto loeschen; Beitraege bleiben (Schulkommunikation), Chats [nach 6 Monaten] loeschen.
+-- Freigabe: Petra Carse (SL) + DSB. Danach als echte Migration + Eintrag in HANDOVER.
