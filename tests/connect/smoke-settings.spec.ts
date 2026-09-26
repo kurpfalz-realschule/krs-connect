@@ -98,8 +98,8 @@ test.describe('v4.10.0 Einstellungen-Panel (Demo)', () => {
     const dialog = page.locator('.modal-overlay[aria-label="Einstellungen"]').first();
     await expect(dialog).toBeVisible({ timeout: 5_000 });
     const switches = dialog.locator('[role="switch"]');
-    // Benachrichtigungen + Lesebestätigungen → 2 Schalter
-    await expect(switches).toHaveCount(2);
+    // Benachrichtigungen + Feierabend (D3, 4.45.0) + Lesebestätigungen → 3 Schalter
+    await expect(switches).toHaveCount(3);
   });
 });
 

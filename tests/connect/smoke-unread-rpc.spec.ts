@@ -78,12 +78,33 @@ test.describe('KRS Connect — PERF-02 Unread-RPC (v4.40.0)', () => {
       return { map: [...m.entries()], log: sb.log };
     });
     expect(res.map).toEqual([[11, 3], [13, 1]]);
+    // D1 (4.45.0): genau ein zweiter RPC für Thread-Antworten (parallel), sonst nichts
     const rpcs = res.log.filter((l: any) => l.kind === 'rpc');
-    expect(rpcs).toHaveLength(1);
-    expect(rpcs[0].name).toBe('rpc_unread_channel_counts');
-    expect(rpcs[0].args).toEqual({ p_channel_ids: [11, 12, 13] });
+    expect(rpcs.map((r: any) => r.name).sort()).toEqual(['rpc_unread_channel_counts', 'rpc_unread_thread_counts']);
+    for (const r of rpcs) expect(r.args).toEqual({ p_channel_ids: [11, 12, 13] });
     expect(res.log.filter((l: any) => l.kind === 'count')).toHaveLength(0);
     expect(res.log.filter((l: any) => l.kind === 'select')).toHaveLength(1);
+  });
+
+  test('D1: neue Antworten in meinen Threads (nach Kanal-Lesestand) zählen im Kanal-Punkt mit', async ({ connectPage: page }) => {
+    const res = await page.evaluate(async () => {
+      const w = window as any;
+      const sb = w.__makeFakeSb({
+        rpc: {
+          rpc_unread_channel_counts: [{ channel_id: 11, unread_count: 3 }, { channel_id: 12, unread_count: 0 }],
+          rpc_unread_thread_counts: [
+            { channel_id: 11, parent_id: 900, unread_count: 4, unread_since_channel_read: 2 },
+            { channel_id: 12, parent_id: 901, unread_count: 5, unread_since_channel_read: 0 },
+          ],
+        },
+        reads: { channel_reads: [{ channel_id: 11 }, { channel_id: 12 }] },
+      });
+      const ds = new w.DataService(null); ds.isDemo = false; ds.sb = sb;
+      const m = await ds.getChannelUnreadCounts([11, 12], 7);
+      return [...m.entries()];
+    });
+    // 11: 3 Beiträge + 2 Antworten seit Kanal-Besuch; 12: Antworten schon vor dem Besuch → kein Punkt
+    expect(res).toEqual([[11, 5]]);
   });
 
   test('localStorage-Altbestand ohne DB-Zeile wird einzeln nachgezählt', async ({ connectPage: page }) => {

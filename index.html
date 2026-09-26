@@ -599,6 +599,8 @@
     .skeleton-circle { border-radius: 50%; }
     .skeleton-card { padding: 16px; margin-bottom: 8px; border: 1px solid var(--border); border-radius: var(--radius-lg); }
     .mention-tag-all { color: var(--danger); font-weight: 700; background: rgba(239,68,68,0.1); padding: 1px 6px; border-radius: 4px; }
+    /* D1 (4.45.0): neue Antworten im eigenen Thread */
+    .thread-unread-badge { display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 10px; background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; vertical-align: middle; }
 
     /* Rich-Text-Editor (contentEditable WYSIWYG) */
     .rich-editor { display:block; width:100%; padding:8px 0; border:none; background:transparent; color:var(--text-primary); font-size:14px; min-height:60px; font-family:inherit; white-space:pre-wrap; overflow-wrap:anywhere; }
@@ -2893,12 +2895,26 @@
         FILE_UPLOAD: true,        // 📎 Datei-Upload
         ADMIN_PANEL: true,        // ⚙️ Admin-Verwaltung
         BROWSER_NOTIFICATIONS: true, // 🔔 Push-Notifications
+        // D2 (4.45.0): „Zur Kenntnis genommen" bei Dringend-Beiträgen.
+        // AUS, bis der Personalrat informiert ist (mögliche Verhaltens-/
+        // Leistungskontrolle). Im Demo-Modus per localStorage KRS_FEATURE_ACK=1
+        // testbar — im Live-Betrieb wirkt nur dieses Flag.
+        ACK: false,
       },
 
       // Heartbeat
       HEARTBEAT_INTERVAL: 4 * 60 * 60 * 1000, // 4h
     };
 
+
+    // D3 (4.45.0): Standard-Feierabend (wie DB-Defaults in user_preferences)
+    const QUIET_DEFAULTS = { quiet_enabled: true, quiet_start: '18:00', quiet_end: '07:00', quiet_weekend: true, quiet_holidays: true };
+    // D2 (4.45.0): Kenntnisnahme nur mit Flag; im Demo-Modus für Tests schaltbar.
+    function krsAckEnabled(ds) {
+      if (CONFIG.FEATURES.ACK) return true;
+      if (!ds || !ds.isDemo) return false;
+      try { return localStorage.getItem('KRS_FEATURE_ACK') === '1'; } catch (e) { return false; }
+    }
 
     // ── PERF-04: Poll-Helfer (Realtime-aware) ─────────────────────
     function krsChatPollLegacy() {
@@ -3759,12 +3775,24 @@
         if (!Array.isArray(channelIds) || channelIds.length === 0) return new Map();
         if (!this._unreadLegacy()) {
           try {
-            return await this._unreadViaRpc({
-              rpcName: 'rpc_unread_channel_counts', rpcArg: 'p_channel_ids', ids: channelIds,
-              readsTable: 'channel_reads', idCol: 'channel_id', lsPrefix: 'krs-lastread-ch-',
-              countTable: 'posts', countIdCol: 'channel_id', extraFilter: q => q.is('parent_id', null),
-              authorCol: 'author_id', userId
-            });
+            // D1 (4.45.0): Antworten in meinen Threads, die nach dem Kanal-Lesestand
+            // kamen, zählen im Kanal-Punkt mit (parallel, ein zusätzlicher Aufruf).
+            const [counts, threads] = await Promise.all([
+              this._unreadViaRpc({
+                rpcName: 'rpc_unread_channel_counts', rpcArg: 'p_channel_ids', ids: channelIds,
+                readsTable: 'channel_reads', idCol: 'channel_id', lsPrefix: 'krs-lastread-ch-',
+                countTable: 'posts', countIdCol: 'channel_id', extraFilter: q => q.is('parent_id', null),
+                authorCol: 'author_id', userId
+              }),
+              this.getThreadUnreadCounts(channelIds)
+            ]);
+            for (const t of threads || []) {
+              const n = Number(t.unread_since_channel_read) || 0;
+              if (n <= 0) continue;
+              const id = Number(t.channel_id);
+              counts.set(id, (counts.get(id) || 0) + n);
+            }
+            return counts;
           } catch (err) {
             console.warn('rpc_unread_channel_counts nicht verfügbar — N-Fallback:', err?.message || err);
           }
@@ -3923,7 +3951,7 @@
           reactions: (p.reactions || []).map(r => ({ ...r, users: [...(r.users || [])] }))
         }));
         try {
-          const { data, error } = await this.sb.from('posts').select('*, author:users(' + USER_COLS + ')').eq('channel_id', channelId).is('parent_id', null).order('created_at', { ascending: false }).range(offset, offset + limit - 1);
+          const { data, error } = await this.sb.from('posts').select('*, author:users!posts_author_id_fkey(' + USER_COLS + ')').eq('channel_id', channelId).is('parent_id', null).order('created_at', { ascending: false }).range(offset, offset + limit - 1);
           if (error) throw error;
           const parents = data || [];
           // v4.22.0 — Antwort-Zaehler. Eine Beitragszeile weiss nicht, wie viele
@@ -3932,9 +3960,14 @@
           // schon Antworten gibt, sah man erst nach dem Oeffnen des Threads
           // (Rueckmeldung aus dem Kollegium, 14.09.2026).
           await this.attachReplyCounts(parents);
+          if (this._postsFehler === channelId) this._postsFehler = null;
           return parents;
         } catch (err) {
           console.error('getPosts error:', err);
+          // 0BJ-Folge (4.45.0): Ladefehler nicht still als „leerer Kanal" zeigen —
+          // am 25./26.09. sah ein Serverfehler (HTTP 300) aus wie „alles gelöscht".
+          this._postsFehler = channelId;
+          if (offset === 0) showToast('Beiträge konnten nicht geladen werden. Bitte die Seite neu laden.', 'error');
           return [];
         }
       }
@@ -4066,7 +4099,7 @@
           const insertObj = { channel_id: channelId, author_id: authorId, content, title };
           if (imageUrl) insertObj.image_url = imageUrl;
           if (isUrgent) insertObj.is_urgent = true;
-          const { data, error } = await this.sb.from('posts').insert(insertObj).select('*, author:users(' + USER_COLS + ')').single();
+          const { data, error } = await this.sb.from('posts').insert(insertObj).select('*, author:users!posts_author_id_fkey(' + USER_COLS + ')').single();
           if (error) throw error;
           return data;
         } catch (err) {
@@ -4096,11 +4129,11 @@
           if (imageUrl !== undefined) payload.image_url = imageUrl;
           // Robust: falls die Spalte edited_at (noch) fehlt, ohne sie speichern,
           // damit Bearbeiten nie hart blockiert (siehe Befund 2026-06-20).
-          let resp = await this.sb.from('posts').update(payload).eq('id', postId).select('*, author:users(' + USER_COLS + ')').single();
+          let resp = await this.sb.from('posts').update(payload).eq('id', postId).select('*, author:users!posts_author_id_fkey(' + USER_COLS + ')').single();
           if (resp.error && /edited_at/i.test(resp.error.message || '')) {
             const payloadOhneEdited = { content, title };
             if (imageUrl !== undefined) payloadOhneEdited.image_url = imageUrl;
-            resp = await this.sb.from('posts').update(payloadOhneEdited).eq('id', postId).select('*, author:users(' + USER_COLS + ')').single();
+            resp = await this.sb.from('posts').update(payloadOhneEdited).eq('id', postId).select('*, author:users!posts_author_id_fkey(' + USER_COLS + ')').single();
           }
           if (resp.error) throw resp.error;
           return resp.data;
@@ -4594,7 +4627,7 @@
             channel_id: channelId, author_id: authorId,
             content: '<p>📊 ' + question + '</p>',
             poll_data: pollData
-          }).select('*, author:users(' + USER_COLS + ')').single();
+          }).select('*, author:users!posts_author_id_fkey(' + USER_COLS + ')').single();
           if (error) throw error;
           return data;
         } catch (err) {
@@ -4647,7 +4680,7 @@
           const { data, error } = await this.sb.from('posts')
             .update({ is_pinned: !isPinned })
             .eq('id', postId)
-            .select('*, author:users(' + USER_COLS + ')')
+            .select('*, author:users!posts_author_id_fkey(' + USER_COLS + ')')
             .single();
           if (error) throw error;
           return data;
@@ -4715,7 +4748,7 @@
       async getReplies(postId) {
         if (this.isDemo) return [...(MOCK_REPLIES[postId] || [])];
         try {
-          const { data, error } = await this.sb.from('posts').select('*, author:users(' + USER_COLS + ')').eq('parent_id', postId).order('created_at');
+          const { data, error } = await this.sb.from('posts').select('*, author:users!posts_author_id_fkey(' + USER_COLS + ')').eq('parent_id', postId).order('created_at');
           if (error) throw error;
           return data || [];
         } catch (err) {
@@ -4735,7 +4768,7 @@
         try {
           const insertObj = { parent_id: postId, channel_id: channelId, author_id: authorId, content };
           if (imageUrl) insertObj.image_url = imageUrl;
-          const { data, error } = await this.sb.from('posts').insert(insertObj).select('*, author:users(' + USER_COLS + ')').single();
+          const { data, error } = await this.sb.from('posts').insert(insertObj).select('*, author:users!posts_author_id_fkey(' + USER_COLS + ')').single();
           if (error) throw error;
           return data;
         } catch (err) {
@@ -4864,7 +4897,7 @@
           // Originalnachricht bleibt trotzdem ueber den Embed auffindbar,
           // damit der Zitatbalken "Nachricht gelöscht" zeigen kann.
           const { data, error } = await this.sb.from('messages')
-            .select('*, sender:users(' + USER_COLS + '), reply_to:reply_to_id(id, content, image_url, is_deleted, sender:sender_id(display_name))')
+            .select('*, sender:users!messages_sender_id_fkey(' + USER_COLS + '), reply_to:reply_to_id(id, content, image_url, is_deleted, sender:sender_id(display_name))')
             .eq('conversation_id', conversationId).eq('is_deleted', false)
             .order('created_at', { ascending: false }).range(offset, offset + limit - 1);
           if (error) throw error;
@@ -4890,7 +4923,7 @@
           const insertObj = { conversation_id: conversationId, sender_id: senderId, content: content || '' };
           if (imageUrl) insertObj.image_url = imageUrl;
           if (replyToId) insertObj.reply_to_id = replyToId;
-          const { data, error } = await this.sb.from('messages').insert(insertObj).select('*, sender:users(' + USER_COLS + '), reply_to:reply_to_id(id, content, image_url, is_deleted, sender:sender_id(display_name))').single();
+          const { data, error } = await this.sb.from('messages').insert(insertObj).select('*, sender:users!messages_sender_id_fkey(' + USER_COLS + '), reply_to:reply_to_id(id, content, image_url, is_deleted, sender:sender_id(display_name))').single();
           if (error) throw error;
           return data;
         } catch (err) {
@@ -4910,9 +4943,9 @@
         try {
           const nowIso = new Date().toISOString();
           // Robust: falls Spalte edited_at fehlt, ohne sie speichern (kein Hart-Fail).
-          let resp = await this.sb.from('messages').update({ content, edited_at: nowIso }).eq('id', messageId).select('*, sender:users(' + USER_COLS + ')').single();
+          let resp = await this.sb.from('messages').update({ content, edited_at: nowIso }).eq('id', messageId).select('*, sender:users!messages_sender_id_fkey(' + USER_COLS + ')').single();
           if (resp.error && /edited_at/i.test(resp.error.message || '')) {
-            resp = await this.sb.from('messages').update({ content }).eq('id', messageId).select('*, sender:users(' + USER_COLS + ')').single();
+            resp = await this.sb.from('messages').update({ content }).eq('id', messageId).select('*, sender:users!messages_sender_id_fkey(' + USER_COLS + ')').single();
           }
           if (resp.error) throw resp.error;
           return resp.data;
@@ -4954,7 +4987,7 @@
           let posts, messages;
           try {
             const { data: ftsPost } = await this.sb.from('posts')
-              .select('*, author:users(' + USER_COLS + '), channel:channels(name, team_id)')
+              .select('*, author:users!posts_author_id_fkey(' + USER_COLS + '), channel:channels(name, team_id)')
               .textSearch('content', query, { type: 'websearch', config: 'german' })
               .order('created_at', { ascending: false })
               .limit(20);
@@ -4962,7 +4995,7 @@
           } catch (ftsErr) {
             // Fallback zu ilike wenn FTS-Index nicht existiert
             const { data: ilikePosts } = await this.sb.from('posts')
-              .select('*, author:users(' + USER_COLS + '), channel:channels(name, team_id)')
+              .select('*, author:users!posts_author_id_fkey(' + USER_COLS + '), channel:channels(name, team_id)')
               .or(`content.ilike.%${query}%,title.ilike.%${query}%`)
               .order('created_at', { ascending: false })
               .limit(20);
@@ -4970,14 +5003,14 @@
           }
           try {
             const { data: ftsMsgs } = await this.sb.from('messages')
-              .select('*, sender:users(' + USER_COLS + ')')
+              .select('*, sender:users!messages_sender_id_fkey(' + USER_COLS + ')')
               .textSearch('content', query, { type: 'websearch', config: 'german' })
               .order('created_at', { ascending: false })
               .limit(20);
             messages = ftsMsgs;
           } catch (ftsErr) {
             const { data: ilikeMsgs } = await this.sb.from('messages')
-              .select('*, sender:users(' + USER_COLS + ')')
+              .select('*, sender:users!messages_sender_id_fkey(' + USER_COLS + ')')
               .ilike('content', `%${query}%`)
               .order('created_at', { ascending: false })
               .limit(20);
@@ -5464,7 +5497,7 @@
 
       // ── Phase 6: User-Preferences (Supabase statt localStorage) ──
       async getUserPreferences(userId) {
-        if (this.isDemo) return { read_receipts_enabled: false, notifications_enabled: true, saved_posts: [], onboarding_done: false };
+        if (this.isDemo) return { read_receipts_enabled: false, notifications_enabled: true, saved_posts: [], onboarding_done: false, ...QUIET_DEFAULTS, ...(this._demoPrefs || {}) };
         try {
           const { data } = await this.sb.from('user_preferences').select('*').eq('user_id', userId).single();
           return data || { read_receipts_enabled: false, notifications_enabled: true, saved_posts: [], onboarding_done: false };
@@ -5477,6 +5510,109 @@
           await this.sb.from('user_preferences')
             .upsert({ user_id: userId, [key]: value, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
         } catch (e) { console.warn('updateUserPreference error:', e); }
+      }
+
+      // D3 (4.45.0): mehrere Einstellungen auf einmal (Feierabend-Abschnitt).
+      // Gibt { error } zurück, damit die Oberfläche „nicht gespeichert" zeigen kann.
+      async updateUserPreferences(userId, patch) {
+        if (this.isDemo) { this._demoPrefs = { ...(this._demoPrefs || {}), ...patch }; return { error: null }; }
+        try {
+          const { error } = await this.sb.from('user_preferences')
+            .upsert({ user_id: userId, ...patch, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+          return { error: error || null };
+        } catch (e) { console.warn('updateUserPreferences error:', e); return { error: e }; }
+      }
+
+      // ── D1 (4.45.0): Antworten in meinen Threads ─────────────────
+      // Liefert [{channel_id, parent_id, unread_count, unread_since_channel_read}].
+      // Fehlt die RPC (ältere DB), gibt es einfach keine Thread-Badges.
+      async getThreadUnreadCounts(channelIds) {
+        if (this.isDemo) {
+          if (!this._demoThreadUnread) this._demoThreadUnread = new Map([[4, 2]]); // Demo: Beitrag 4 in „Allgemein"
+          const rows = [];
+          for (const [pid, n] of this._demoThreadUnread) {
+            const chId = Object.keys(MOCK_POSTS).find(k => (MOCK_POSTS[k] || []).some(p => p.id === pid));
+            if (chId == null) continue;
+            if (Array.isArray(channelIds) && channelIds.length && !channelIds.map(Number).includes(Number(chId))) continue;
+            rows.push({ channel_id: Number(chId), parent_id: pid, unread_count: n, unread_since_channel_read: 0 });
+          }
+          return rows;
+        }
+        if (this._threadRpcMissing || !Array.isArray(channelIds) || channelIds.length === 0) return [];
+        try {
+          const { data, error } = await this.sb.rpc('rpc_unread_thread_counts', { p_channel_ids: channelIds });
+          if (error) throw error;
+          return data || [];
+        } catch (err) {
+          if (String(err?.code) === 'PGRST202' || /Could not find the function/i.test(String(err?.message))) this._threadRpcMissing = true;
+          console.warn('rpc_unread_thread_counts:', err?.message || err);
+          return [];
+        }
+      }
+
+      async markThreadRead(parentId) {
+        if (this.isDemo) { if (this._demoThreadUnread) this._demoThreadUnread.delete(parentId); return; }
+        if (this._threadRpcMissing || parentId == null || typeof parentId !== 'number') return;
+        try {
+          const { error } = await this.sb.rpc('rpc_mark_thread_read', { p_parent_id: parentId });
+          if (error) throw error;
+        } catch (err) { console.warn('rpc_mark_thread_read:', err?.message || err); }
+      }
+
+      // ── D4 (4.45.0): ungelesene Dringend-Beiträge für die Hub-Karte ─
+      // Nur IDs + Team/Kanal-Namen, kein Inhalt (E-2).
+      async getUnreadUrgent(limit = 3) {
+        if (this.isDemo) return { count: 0, list: [] };
+        if (this._urgentRpcMissing) return { count: 0, list: [] };
+        try {
+          const { data, error } = await this.sb.rpc('rpc_unread_urgent', { p_limit: limit });
+          if (error) throw error;
+          const rows = data || [];
+          return {
+            count: rows.length ? Number(rows[0].total) || rows.length : 0,
+            list: rows.map(r => ({ id: r.post_id, team: r.team_name || '', kanal: r.channel_name || '' }))
+          };
+        } catch (err) {
+          if (String(err?.code) === 'PGRST202' || /Could not find the function/i.test(String(err?.message))) this._urgentRpcMissing = true;
+          console.warn('rpc_unread_urgent:', err?.message || err);
+          return { count: 0, list: [] };
+        }
+      }
+
+      // ── D2 (4.45.0, hinter FEATURES.ACK): Kenntnisnahme ──────────
+      async ackPost(postId, viewerId) {
+        if (this.isDemo) {
+          this._demoAcks = this._demoAcks || new Map();
+          const set = this._demoAcks.get(postId) || new Set();
+          set.add(viewerId);
+          this._demoAcks.set(postId, set);
+          return { error: null };
+        }
+        try {
+          const { error } = await this.sb.rpc('ack_post', { p_post_id: postId });
+          return { error: error || null };
+        } catch (e) { return { error: e }; }
+      }
+
+      async ackStatus(postId, viewer) {
+        if (this.isDemo) {
+          const post = Object.values(MOCK_POSTS).flat().find(p => p.id === postId);
+          const authorId = post ? (post.author_id || post.author?.id) : null;
+          const acks = (this._demoAcks && this._demoAcks.get(postId)) || new Set();
+          const soll = MOCK_USERS.filter(u => u.id !== authorId);
+          const darfListe = viewer && (viewer.id === authorId || viewer.role === 'admin' || viewer.role === 'owner');
+          return {
+            acked: soll.filter(u => acks.has(u.id)).length,
+            total: soll.length,
+            mine: !!(viewer && acks.has(viewer.id)),
+            missing: darfListe ? soll.filter(u => !acks.has(u.id)).map(u => u.display_name) : null
+          };
+        }
+        try {
+          const { data, error } = await this.sb.rpc('ack_status', { p_post_id: postId });
+          if (error) throw error;
+          return data;
+        } catch (e) { console.warn('ack_status:', e?.message || e); return null; }
       }
 
       // ── v4.25.0: Merkliste (Tabelle `tasks`) ──
@@ -6871,7 +7007,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.44.0';
+    window.KRS_VERSION = '4.45.0';
     // PERF-01: Cold-Boot-Zähler für Hub keep-alive Abnahme (Connect→Hub-Start→Connect → bleibt 1)
     window.__krsConnectBootCount = (window.__krsConnectBootCount || 0) + 1;
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
@@ -7986,6 +8122,33 @@
       const [openPostMenu, setOpenPostMenu] = useState(null); // postId or null
       // readReceiptsEnabled kommt jetzt als Prop von App (Single Source of Truth)
 
+      // D1 (4.45.0): „N neue Antworten" an Beiträgen, in deren Thread ich beteiligt
+      // bin. Neu geladen bei Kanalwechsel und wenn sich Antwort-Zähler ändern.
+      const [threadUnread, setThreadUnread] = useState(new Map()); // Map<String(postId), n>
+      const replySig = (posts || []).map(p => p.id + ':' + (p.replies || 0)).join(',');
+      useEffect(() => {
+        let aktiv = true;
+        if (!dataService || channelId == null || !dataService.getThreadUnreadCounts) return;
+        dataService.getThreadUnreadCounts([channelId]).then(rows => {
+          if (!aktiv) return;
+          const m = new Map();
+          for (const r of rows || []) {
+            if (Number(r.channel_id) !== Number(channelId)) continue;
+            const n = Number(r.unread_count) || 0;
+            if (n > 0) m.set(String(r.parent_id), n);
+          }
+          setThreadUnread(m);
+        }).catch(() => {});
+        return () => { aktiv = false; };
+      }, [dataService, channelId, replySig]);
+      const openThreadMitLesen = (post) => {
+        if (threadUnread.has(String(post.id))) {
+          try { dataService.markThreadRead(post.id); } catch (e) {}
+          setThreadUnread(prev => { const n = new Map(prev); n.delete(String(post.id)); return n; });
+        }
+        onOpenThread(post);
+      };
+
       // S11 (22.09.2026): Entwurf dieses Kanals laden, sobald er gewechselt wird.
       const draftLoadedForChannel = useRef(null);
       useEffect(() => {
@@ -8409,8 +8572,15 @@
             onCancel: () => setShowPollCreator(false)
           })
         ),
+        // 0BJ-Folge (4.45.0): Ladefehler statt „Noch keine Beiträge"
+        posts.length === 0 && dataService && dataService._postsFehler != null && dataService._postsFehler === channelId && React.createElement('div', { 'data-testid': 'posts-ladefehler', role: 'alert', style: { textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' } },
+          React.createElement('div', { style: { fontSize: '48px', marginBottom: '12px' } }, '⚠️'),
+          React.createElement('div', { style: { fontSize: '16px', fontWeight: '600', marginBottom: '8px', color: 'var(--text-secondary)' } }, 'Beiträge konnten nicht geladen werden'),
+          React.createElement('div', { style: { fontSize: '13px' } }, 'Die Beiträge sind nicht weg — die Verbindung zum Server hat nicht geklappt.'),
+          React.createElement('button', { onClick: () => { try { window.location.reload(); } catch (e) {} }, style: { marginTop: '16px', padding: '8px 20px', minHeight: '44px', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: 'var(--radius)', cursor: 'pointer', fontSize: '14px' } }, '↻ Neu laden')
+        ),
         // Phase 7.8: Empty State wenn keine Posts
-        posts.length === 0 && React.createElement('div', { style: { textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' } },
+        posts.length === 0 && !(dataService && dataService._postsFehler != null && dataService._postsFehler === channelId) && React.createElement('div', { style: { textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' } },
           React.createElement('div', { style: { fontSize: '48px', marginBottom: '12px' } }, '💬'),
           React.createElement('div', { style: { fontSize: '16px', fontWeight: '500', marginBottom: '8px', color: 'var(--text-secondary)' } }, 'Noch keine Beiträge in diesem Kanal'),
           React.createElement('div', { style: { fontSize: '13px' } }, 'Schreibe den ersten Beitrag und starte die Diskussion!'),
@@ -8529,15 +8699,22 @@
               })
             ),
             React.createElement('div', { className: 'post-footer', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' } },
-              React.createElement('button', {
-                onClick: () => onOpenThread(post),
-                'aria-label': replyCount > 0 ? (replyCount + ' Antworten öffnen') : 'Auf diesen Beitrag antworten',
-                style: replyCount > 0 ? { color: 'var(--accent)', fontWeight: '600' } : null
-              },
-                replyCount > 0
-                  ? ('💬 ' + replyCount + ' Antwort' + (replyCount === 1 ? '' : 'en') + (post.last_reply_at ? ' · zuletzt ' + formatDate(post.last_reply_at) : ''))
-                  : '💬 Antworten'
-              ),
+              (() => {
+                const neu = threadUnread.get(String(post.id)) || 0;
+                return React.createElement('button', {
+                  onClick: () => openThreadMitLesen(post),
+                  'aria-label': (replyCount > 0 ? (replyCount + ' Antworten öffnen') : 'Auf diesen Beitrag antworten') + (neu > 0 ? ', ' + neu + ' neu' : ''),
+                  style: replyCount > 0 ? { color: 'var(--accent)', fontWeight: '600' } : null
+                },
+                  replyCount > 0
+                    ? ('💬 ' + replyCount + ' Antwort' + (replyCount === 1 ? '' : 'en') + (post.last_reply_at ? ' · zuletzt ' + formatDate(post.last_reply_at) : ''))
+                    : '💬 Antworten',
+                  neu > 0 && React.createElement('span', { className: 'thread-unread-badge', 'data-testid': 'thread-unread-badge' },
+                    neu + ' neue Antwort' + (neu === 1 ? '' : 'en'))
+                );
+              })(),
+              // D2 (4.45.0, nur mit FEATURES.ACK): Kenntnisnahme bei Dringend
+              post.is_urgent && !post.parent_id && krsAckEnabled(dataService) && React.createElement(AckBar, { post, dataService, user }),
               (() => {
                 const readers = readReceipts.get(post.id);
                 if (!readers || readers.length === 0) return null;
@@ -8565,6 +8742,45 @@
       );
     }
 
+    // ── D2 (4.45.0): „Zur Kenntnis genommen" — nur mit FEATURES.ACK ───
+    // Alle sehen „12 von 20 bestätigt"; die Namensliste „fehlt noch" liefert
+    // der Server NUR an Verfasser:in und Schulleitung (ack_status → missing).
+    function AckBar({ post, dataService, user }) {
+      const [st, setSt] = useState(null);
+      const [offen, setOffen] = useState(false);
+      const [busy, setBusy] = useState(false);
+      const authorId = post.author_id != null ? post.author_id : (post.author && post.author.id);
+      const istAutor = !!user && authorId === user.id;
+      useEffect(() => {
+        let aktiv = true;
+        dataService.ackStatus(post.id, user).then(r => { if (aktiv) setSt(r); }).catch(() => {});
+        return () => { aktiv = false; };
+      }, [post.id]);
+      const bestaetigen = async () => {
+        setBusy(true);
+        const { error } = await dataService.ackPost(post.id, user && user.id);
+        if (error) showToast('Bestätigung konnte nicht gespeichert werden.', 'error');
+        const r = await dataService.ackStatus(post.id, user);
+        if (r) setSt(r);
+        setBusy(false);
+      };
+      if (!st) return null;
+      const fehlt = Array.isArray(st.missing) ? st.missing : null;
+      const knopf = { minHeight: '44px', padding: '6px 12px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--bg)', cursor: 'pointer', fontSize: '13px' };
+      return React.createElement('div', { className: 'ack-bar', 'data-testid': 'ack-bar', style: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', width: '100%' } },
+        !istAutor && React.createElement('button', {
+          type: 'button', 'data-testid': 'ack-btn', onClick: bestaetigen, disabled: busy || st.mine,
+          style: { ...knopf, fontWeight: 600, color: st.mine ? 'var(--success, #2e7d32)' : 'var(--text-primary)', cursor: st.mine ? 'default' : 'pointer' }
+        }, st.mine ? '✓ bestätigt' : '✓ Zur Kenntnis genommen'),
+        React.createElement('span', { 'data-testid': 'ack-count', style: { fontSize: '12px', color: 'var(--text-muted)' } }, st.acked + ' von ' + st.total + ' bestätigt'),
+        fehlt && fehlt.length > 0 && React.createElement('button', {
+          type: 'button', 'data-testid': 'ack-missing-toggle', 'aria-expanded': offen ? 'true' : 'false', onClick: () => setOffen(!offen),
+          style: { ...knopf, fontSize: '12px', color: 'var(--text-muted)' }
+        }, offen ? 'Liste ausblenden' : 'fehlt noch: ' + fehlt.length),
+        offen && fehlt && React.createElement('div', { 'data-testid': 'ack-missing', style: { width: '100%', fontSize: '12px', color: 'var(--text-secondary)' } }, 'fehlt noch: ' + fehlt.join(', '))
+      );
+    }
+
     // Phase 7.2: Props sind jetzt optional — Fallback auf AppContext
     function ThreadPanel({ post, replies, dataService: _ds, user: _u, onClose, onReplyCreated }) {
       const ctx = useApp();
@@ -8575,6 +8791,14 @@
       const [saving, setSaving] = useState(false);
       const [replyFiles, setReplyFiles] = useState([]); // Array of { file, preview }
       const replyFileRef = useRef(null);
+
+      // D1 (4.45.0): offener Thread gilt als gelesen — beim Öffnen und wenn
+      // neue Antworten eintreffen, solange er offen ist.
+      const replyAnzahl = Array.isArray(replies) ? replies.length : 0;
+      useEffect(() => {
+        if (!dataService || !dataService.markThreadRead || post == null) return;
+        dataService.markThreadRead(post.id);
+      }, [post && post.id, replyAnzahl]);
 
       // S11 (22.09.2026): Entwurf dieser Antwort laden, sobald der Thread
       // (anderer Ursprungsbeitrag) wechselt; gebremst (500ms) speichern.
@@ -10952,6 +11176,13 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.45.0', date: '26.09.2026', items: [
+        'Feierabend: werktags von 18 bis 7 Uhr, am Wochenende und in den Ferien kommen keine Push- und Mail-Hinweise mehr. Dringende Beiträge kommen immer durch. Zeiten ändern oder abschalten: ⚙️ Einstellungen → „Feierabend"',
+        'Wer dich mit @Name erwähnt, schickt dir jetzt einen Push-Hinweis aufs iPhone (App „KRS Schule")',
+        'Antwortet jemand in einem Thread, in dem du geschrieben hast, bekommst du einen Push-Hinweis — und am Beitrag steht „2 neue Antworten", bis du den Thread öffnest',
+        'Die Hub-Startseite zeigt eine Karte „In Connect: … ungelesen · … dringend" — ein Tipp öffnet Connect',
+        'Können Beiträge wegen eines Serverfehlers nicht geladen werden, steht das jetzt da (mit „Neu laden") — statt eines leeren Kanals'
+      ]},
       { v: '4.44.0', date: '25.09.2026', items: [
         'Datenschutz: E-Mail-Adressen der Kolleginnen und Kollegen sind nur noch für die Administration sichtbar',
         'Profil: Wer mit mehreren Vornamen eingetragen ist, kann selbst festlegen, dass nur der Rufname angezeigt wird'
@@ -11167,10 +11398,76 @@
     // gegen window.KRS_CHANGELOG[0].v.
     window.KRS_CHANGELOG = KRS_CHANGELOG;
 
+    // ── D3 (4.45.0): Feierabend-Modus ─────────────────────────────
+    // Keine Push-/Mail-Hinweise außerhalb der eigenen Zeiten. Der Server
+    // (notify-push/notify-email → krs_quiet_users) entscheidet; hier werden nur
+    // die Einstellungen in user_preferences gespeichert. Dringend kommt immer durch.
+    function QuietHoursSection({ dataService, userId, sectionStyle, rowStyle, labelStyle, hintStyle, toggleBtn }) {
+      const [prefs, setPrefs] = useState(null);
+      const [status, setStatus] = useState(''); // '', 'saving', 'saved', 'error'
+      useEffect(() => {
+        let aktiv = true;
+        if (!dataService || userId == null) { setPrefs({ ...QUIET_DEFAULTS }); return; }
+        dataService.getUserPreferences(userId).then(p => {
+          if (!aktiv) return;
+          const v = { ...QUIET_DEFAULTS };
+          for (const k of Object.keys(QUIET_DEFAULTS)) if (p && p[k] !== undefined && p[k] !== null) v[k] = p[k];
+          v.quiet_start = String(v.quiet_start).slice(0, 5);
+          v.quiet_end = String(v.quiet_end).slice(0, 5);
+          setPrefs(v);
+        }).catch(() => aktiv && setPrefs({ ...QUIET_DEFAULTS }));
+        return () => { aktiv = false; };
+      }, [dataService, userId]);
+
+      const speichern = async (patch) => {
+        const next = { ...prefs, ...patch };
+        setPrefs(next);
+        if (!dataService || userId == null) return;
+        setStatus('saving');
+        const { error } = await dataService.updateUserPreferences(userId, patch);
+        setStatus(error ? 'error' : 'saved');
+      };
+
+      if (!prefs) return React.createElement('div', { style: sectionStyle, 'data-testid': 'quiet-section' },
+        React.createElement('div', { style: labelStyle }, '🌙 Feierabend'),
+        React.createElement('div', { style: hintStyle }, 'Wird geladen …'));
+
+      const on = !!prefs.quiet_enabled;
+      const zeitStyle = { padding: '8px 10px', minHeight: '44px', fontSize: '16px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: 'var(--bg)', color: 'var(--text-primary)' };
+      const checkRow = (key, text, testid) => React.createElement('label', { style: { display: 'flex', alignItems: 'center', gap: '10px', minHeight: '44px', fontSize: '14px', cursor: 'pointer' } },
+        React.createElement('input', { type: 'checkbox', checked: !!prefs[key], 'data-testid': testid, onChange: e => speichern({ [key]: e.target.checked }), style: { width: '20px', height: '20px' } }),
+        text);
+      const zeit = (key, label, testid) => React.createElement('label', { style: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' } },
+        label,
+        React.createElement('input', { type: 'time', value: prefs[key], 'data-testid': testid, 'aria-label': 'Feierabend ' + label,
+          onChange: e => { const v = e.target.value; if (/^\d{2}:\d{2}$/.test(v)) speichern({ [key]: v }); }, style: zeitStyle }));
+
+      return React.createElement('div', { style: sectionStyle, 'data-testid': 'quiet-section' },
+        React.createElement('div', { style: rowStyle },
+          React.createElement('div', null,
+            React.createElement('div', { style: labelStyle }, '🌙 Feierabend'),
+            React.createElement('div', { style: hintStyle }, 'Keine Push- und Mail-Hinweise außerhalb deiner Zeiten. Dringende Beiträge kommen immer durch.')
+          ),
+          toggleBtn(on, () => speichern({ quiet_enabled: !on }), 'Feierabend-Modus umschalten')
+        ),
+        on && React.createElement('div', { style: { marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '4px' } },
+          React.createElement('div', { style: { display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' } },
+            zeit('quiet_start', 'ab', 'quiet-start'),
+            zeit('quiet_end', 'bis', 'quiet-end')
+          ),
+          prefs.quiet_start === prefs.quiet_end && React.createElement('div', { style: { ...hintStyle, color: 'var(--danger)' } }, 'Beginn und Ende sind gleich — dann gilt keine Abendruhe.'),
+          checkRow('quiet_weekend', 'Am Wochenende ruhig', 'quiet-weekend'),
+          checkRow('quiet_holidays', 'In den Ferien ruhig', 'quiet-holidays')
+        ),
+        React.createElement('div', { 'aria-live': 'polite', 'data-testid': 'quiet-status', style: { ...hintStyle, minHeight: '16px', color: status === 'error' ? 'var(--danger)' : 'var(--text-muted)' } },
+          status === 'saving' ? 'Wird gespeichert …' : status === 'saved' ? '✓ Gespeichert' : status === 'error' ? 'Nicht gespeichert — bitte erneut versuchen.' : '')
+      );
+    }
+
     // ── Einstellungen-Panel (⚙️) — v4.10.0 ───────────────────────────
     // Bündelt Benachrichtigungen, Lesebestätigungen, Hilfe/Datenschutz und
     // den Changelog an einem Ort. Ersetzt die verstreuten Icons unten links.
-    function SettingsPanel({ onClose, canGoBack, notificationsEnabled, notificationPermission, onToggleNotifications, readReceiptsEnabled, onToggleReadReceipts, onOpenHelp, onOpenPrivacy, onOpenFeedback, onChangePassword }) {
+    function SettingsPanel({ onClose, canGoBack, notificationsEnabled, notificationPermission, onToggleNotifications, readReceiptsEnabled, onToggleReadReceipts, onOpenHelp, onOpenPrivacy, onOpenFeedback, onChangePassword, dataService, userId }) {
       useEffect(() => {
         const onKey = (e) => { if (e.key === 'Escape') onClose(); };
         document.addEventListener('keydown', onKey);
@@ -11228,6 +11525,8 @@
               toggleBtn(notifOn, onToggleNotifications, 'Benachrichtigungen umschalten')
             )
           ),
+          // D3 (4.45.0): Feierabend
+          React.createElement(QuietHoursSection, { dataService, userId, sectionStyle, rowStyle, labelStyle, hintStyle, toggleBtn }),
           // Lesebestätigungen
           React.createElement('div', { style: sectionStyle },
             React.createElement('div', { style: rowStyle },
@@ -12533,6 +12832,7 @@
       }, [user, dataService]); // selectedConversation NICHT in Dependencies (via Ref)
 
       // Tab-Titel mit Unread-Count aktualisieren
+      const lastUrgentRef = useRef({ count: 0, list: [] }); // D4 (4.45.0)
       useEffect(() => {
         const totalUnread = unreadChatCount + Array.from(unreadPostChannels.values()).reduce((a, b) => a + b, 0);
         { const __an = window.T ? window.T('app.name', 'Die App') : 'Die App';
@@ -12540,11 +12840,29 @@
         // C3 (4.43.0): Summe an den Hub melden (dort wartet der Ungelesen-Zähler
         // darauf). Nur eingebettet, Ziel-Origin fest = eigene Origin (Hub + Connect
         // liegen auf derselben).
-        try {
-          if (window.parent && window.parent !== window) {
-            window.parent.postMessage({ type: 'KRS_HUB_UNREAD_UPDATE', moduleId: 'connect', count: totalUnread }, window.location.origin);
-          }
-        } catch (e) {}
+        // D4 (4.45.0): zusätzlich bis zu 3 ungelesene Dringend-Beiträge (nur
+        // Team/Kanal-Namen, kein Inhalt) für die Karte auf der Hub-Startseite.
+        // Nur eingebettet und nur, wenn es überhaupt Ungelesenes gibt.
+        let abgebrochen = false;
+        const melden = (urgent) => {
+          if (abgebrochen) return;
+          lastUrgentRef.current = urgent;
+          try {
+            if (window.parent && window.parent !== window) {
+              window.parent.postMessage({ type: 'KRS_HUB_UNREAD_UPDATE', moduleId: 'connect', count: totalUnread,
+                urgentCount: urgent.count, urgent: urgent.list.slice(0, 3) }, window.location.origin);
+            }
+          } catch (e) {}
+        };
+        const eingebettet = (() => { try { return window.parent && window.parent !== window; } catch (e) { return false; } })();
+        if (eingebettet && totalUnread > 0 && dataService && dataService.getUnreadUrgent) {
+          melden(lastUrgentRef.current); // Zahl sofort, Dringend-Liste gleich danach
+          const t = setTimeout(() => {
+            dataService.getUnreadUrgent(3).then(melden).catch(() => melden({ count: 0, list: [] }));
+          }, 800);
+          return () => { abgebrochen = true; clearTimeout(t); };
+        }
+        melden({ count: 0, list: [] });
       }, [unreadChatCount, unreadPostChannels]);
 
       // Auto-request notification permission on first load
@@ -13805,7 +14123,8 @@
           onOpenHelp: () => openModal('help'),
           onOpenPrivacy: () => openModal('privacy'),
           onOpenFeedback: () => openModal('feedbackBoard'),
-          onChangePassword: (dataService && !dataService.isDemo) ? handleChangePassword : null
+          onChangePassword: (dataService && !dataService.isDemo) ? handleChangePassword : null,
+          dataService, userId: user?.id
         }),
         // Admin-Panel (Phase 6 — nur für Admins sichtbar)
         showAdmin && isAdminRole(user) && React.createElement(AdminPanel, {
