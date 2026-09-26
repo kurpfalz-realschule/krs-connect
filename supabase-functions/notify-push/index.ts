@@ -3,16 +3,18 @@
 // Native iOS-Benachrichtigungen über APNs für die App „KRS Schule".
 //
 // Auslöser: Supabase Database Webhooks (INSERT), genau wie bei notify-email:
-//   1) public.posts    → Dringend-Beiträge und @alle
+//   1) public.posts    → Dringend-Beiträge, @alle, @Name, Antworten im Thread
 //   2) public.messages → Direktnachrichten
 //   Beide schicken den Header  x-krs-hook-secret: <HOOK_SECRET>
+//
+// Paket D (25.09.2026): D1 @Name + Antworten im eigenen Thread (nur Push,
+// keine Mail), D3 Feierabend über RPC krs_quiet_users (Dringend kommt durch).
 //
 // Paket A (23.09.2026): Empfänger bei Beiträgen = Mitglieder des Teams (A1),
 // Text nur Hinweis + Team/Kanal ohne Inhalt (E-2), Secret aus Vault (A9).
 //
-// Bewusst KEIN zweites Regelwerk: Für Beiträge gilt dieselbe Regel wie beim
-// E-Mail-Versand (nur Haupt-Posts, nicht gelöscht, Dringend ODER @alle).
-// Neu ist nur der Kanal — und Direktnachrichten, die per E-Mail nie gingen.
+// Dringend/@alle: dieselbe Regel wie beim E-Mail-Versand (nur Haupt-Posts,
+// nicht gelöscht). @Name, Antworten und Direktnachrichten gibt es nur als Push.
 //
 // Secrets (setzt Norbert selbst, nie im Repo):
 //   HOOK_SECRET        — dasselbe wie bei notify-email
@@ -155,6 +157,29 @@ async function sende(
   return { ok: false, status: res.status, grund };
 }
 
+// ── D1: Erwähnungen ─────────────────────────────────────────────────────────
+type Gruppe = { ids: number[]; titel: string; text: string; ref?: string };
+
+function antwort(obj: unknown, status = 200): Response {
+  return new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json" } });
+}
+
+function regexEscape(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** true, wenn im Klartext „@<Anzeigename>" oder „@<Nachname>" als ganzes Wort steht. */
+export function wirdErwaehnt(klartext: string, u: { display_name: string; nachname: string }): boolean {
+  const namen = [u.display_name, u.nachname]
+    .map((n) => (n || "").trim())
+    .filter((n) => n.length >= 3 && n.toLowerCase() !== "alle");
+  for (const n of namen) {
+    const re = new RegExp("(?<![\\w.@])@" + regexEscape(n) + "(?![\\wäöüÄÖÜß])", "i");
+    if (re.test(klartext)) return true;
+  }
+  return false;
+}
+
 // ── Hauptlogik ───────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
@@ -180,20 +205,26 @@ Deno.serve(async (req) => {
   const record = (payload?.record ?? {}) as Record<string, unknown>;
 
   let absenderId = 0;
-  let empfaengerIds: number[] = [];
-  let titel = "";
-  let text = "";
-  let modul = "connect";
-  let ref: string | undefined;
+  // D1 (Paket D, 25.09.2026): verschiedene Empfänger bekommen verschiedene
+  // Hinweise (erwähnt / Antwort im Thread). Deshalb Gruppen statt einer Liste.
+  let gruppen: Gruppe[] = [];
+  // D3: Dringend kommt immer durch, alles andere respektiert den Feierabend.
+  let dringend = false;
+  const modul = "connect";
 
   // ── Fall 1: Beitrag ────────────────────────────────────────────────
   if (tabelle === "posts") {
-    const content = String(record.content ?? "");
-    const dringend = record.is_urgent === true;
-    const anAlle = /@alle\b/i.test(stripHtml(content));
-
-    if (record.parent_id || record.is_deleted === true || (!dringend && !anAlle)) {
-      return new Response(JSON.stringify({ skipped: "keine Dringend/@alle" }), { status: 200 });
+    if (record.is_deleted === true) {
+      return antwort({ skipped: "geloescht" });
+    }
+    const klartext = stripHtml(String(record.content ?? ""));
+    const istAntwort = !!record.parent_id;
+    dringend = !istAntwort && record.is_urgent === true;
+    const anAlle = !istAntwort && /@alle\b/i.test(klartext);
+    // Schneller Ausstieg ohne DB-Zugriff: Haupt-Post ohne Dringend/@alle und
+    // ohne irgendein @ kann niemanden benachrichtigen.
+    if (!istAntwort && !dringend && !anAlle && !klartext.includes("@")) {
+      return antwort({ skipped: "keine Dringend/@alle/Erwähnung" });
     }
 
     absenderId = Number(record.author_id ?? 0);
@@ -202,57 +233,103 @@ Deno.serve(async (req) => {
     const { data: kanal } = await sb
       .from("channels").select("id, name, team_id").eq("id", Number(record.channel_id ?? 0)).maybeSingle();
     if (!kanal?.team_id) {
-      return new Response(JSON.stringify({ skipped: "kein Kanal" }), { status: 200 });
+      return antwort({ skipped: "kein Kanal" });
     }
     const { data: team } = await sb.from("teams").select("name").eq("id", kanal.team_id).maybeSingle();
     const { data: mitglieder } = await sb
       .from("team_members").select("user_id").eq("team_id", kanal.team_id);
     const mitgliedIds = [...new Set((mitglieder || []).map((m) => Number(m.user_id)))]
       .filter((id) => id !== absenderId);
+    let aktive: { id: number; display_name: string; nachname: string }[] = [];
     if (mitgliedIds.length > 0) {
       const { data: aktiv } = await sb
-        .from("users").select("id, status").in("id", mitgliedIds);
-      empfaengerIds = (aktiv || [])
+        .from("users").select("id, status, display_name, nachname").in("id", mitgliedIds);
+      aktive = (aktiv || [])
         .filter((u) => (u.status ?? "active") === "active")
-        .map((u) => Number(u.id));
+        .map((u) => ({ id: Number(u.id), display_name: String(u.display_name ?? ""), nachname: String(u.nachname ?? "") }));
     }
 
     // E-2: kein Inhalt, kein Titel — nur Hinweis + Team/Kanal.
     const teamName = String(team?.name ?? "Connect").trim();
     const kanalName = String(kanal.name ?? "").trim();
-    titel = dringend ? `🔴 Dringend: ${teamName}` : `📣 @alle: ${teamName}`;
-    text = kanalName ? `Neuer Beitrag in #${kanalName}` : "Neuer Beitrag in Connect";
-    ref = String(record.id ?? "");
+    const ref = String(record.parent_id ?? record.id ?? "");
+
+    if (dringend || anAlle) {
+      gruppen.push({
+        ids: aktive.map((u) => u.id),
+        titel: dringend ? `🔴 Dringend: ${teamName}` : `📣 @alle: ${teamName}`,
+        text: kanalName ? `Neuer Beitrag in #${kanalName}` : "Neuer Beitrag in Connect",
+        ref,
+      });
+    } else {
+      // D1a: @Name — dieselbe Schreibweise, die die Vorschlagsliste im Client
+      // einfügt (@display_name), zusätzlich @Nachname.
+      const erwaehnt = new Set(aktive.filter((u) => wirdErwaehnt(klartext, u)).map((u) => u.id));
+      // D1b: Antwort → Autor:in des Eltern-Beitrags + alle, die schon geantwortet haben.
+      const beteiligt = new Set<number>();
+      if (istAntwort) {
+        const elternId = Number(record.parent_id);
+        const { data: eltern } = await sb
+          .from("posts").select("author_id").eq("id", elternId).maybeSingle();
+        if (eltern?.author_id) beteiligt.add(Number(eltern.author_id));
+        const { data: antworten } = await sb
+          .from("posts").select("author_id").eq("parent_id", elternId).eq("is_deleted", false).limit(1000);
+        for (const a of antworten || []) beteiligt.add(Number(a.author_id));
+      }
+      const aktivIds = new Set(aktive.map((u) => u.id));
+      const threadIds = [...beteiligt].filter((id) => aktivIds.has(id) && id !== absenderId && !erwaehnt.has(id));
+      if (erwaehnt.size > 0) {
+        gruppen.push({
+          ids: [...erwaehnt],
+          titel: `💬 Du wurdest erwähnt — ${teamName}`,
+          text: kanalName ? `in #${kanalName}` : "in Connect",
+          ref,
+        });
+      }
+      if (threadIds.length > 0) {
+        gruppen.push({
+          ids: threadIds,
+          titel: `↩︎ Neue Antwort in deinem Thread — ${teamName}`,
+          text: kanalName ? `in #${kanalName}` : "in Connect",
+          ref,
+        });
+      }
+    }
 
   // ── Fall 2: Direktnachricht ────────────────────────────────────────
   } else if (tabelle === "messages") {
     if (record.is_deleted === true) {
-      return new Response(JSON.stringify({ skipped: "geloescht" }), { status: 200 });
+      return antwort({ skipped: "geloescht" });
     }
     absenderId = Number(record.sender_id ?? 0);
     const convId = Number(record.conversation_id ?? 0);
 
     const { data: mitglieder } = await sb
       .from("conversation_members").select("user_id").eq("conversation_id", convId);
-    empfaengerIds = (mitglieder || [])
+    const ids = (mitglieder || [])
       .map((m) => Number(m.user_id))
       .filter((id) => id !== absenderId);
 
     const { data: absender } = await sb
       .from("users").select("display_name").eq("id", absenderId).maybeSingle();
 
-    titel = absender?.display_name ?? "Neue Nachricht";
-    text = ZEIGE_DM_INHALT
-      ? stripHtml(String(record.content ?? "")).slice(0, 180)
-      : "Neue Direktnachricht in Connect";
-    ref = String(convId);
+    gruppen.push({
+      ids,
+      titel: absender?.display_name ?? "Neue Nachricht",
+      text: ZEIGE_DM_INHALT
+        ? stripHtml(String(record.content ?? "")).slice(0, 180)
+        : "Neue Direktnachricht in Connect",
+      ref: String(convId),
+    });
 
   } else {
-    return new Response(JSON.stringify({ skipped: `Tabelle ${tabelle}` }), { status: 200 });
+    return antwort({ skipped: `Tabelle ${tabelle}` });
   }
 
-  if (empfaengerIds.length === 0) {
-    return new Response(JSON.stringify({ skipped: "keine Empfaenger" }), { status: 200 });
+  gruppen = gruppen.filter((g) => g.ids.length > 0);
+  const alleIds = [...new Set(gruppen.flatMap((g) => g.ids))];
+  if (alleIds.length === 0) {
+    return antwort({ skipped: "keine Empfaenger" });
   }
 
   // ── Wer will überhaupt Benachrichtigungen? ─────────────────────────
@@ -260,11 +337,25 @@ Deno.serve(async (req) => {
   const { data: prefs } = await sb
     .from("user_preferences")
     .select("user_id, notifications_enabled")
-    .in("user_id", empfaengerIds);
+    .in("user_id", alleIds);
   const abgelehnt = new Set(
     (prefs || []).filter((p) => p.notifications_enabled === false).map((p) => Number(p.user_id)),
   );
-  const wollen = empfaengerIds.filter((id) => !abgelehnt.has(id));
+
+  // ── D3: Feierabend (ein RPC für die ganze Liste) ────────────────────
+  // Dringend kommt immer durch. Bei einem RPC-Fehler wird trotzdem gesendet
+  // (lieber ein Hinweis zu viel als ein verlorener) — und geloggt.
+  let still = new Set<number>();
+  if (!dringend) {
+    const { data: ruhig, error: qErr } = await sb.rpc("krs_quiet_users", { p_users: alleIds });
+    if (qErr) console.error("notify-push: krs_quiet_users", qErr.message);
+    else still = new Set((ruhig || []).map((x: unknown) => Number(x)));
+  }
+
+  const wollen = alleIds.filter((id) => !abgelehnt.has(id) && !still.has(id));
+  if (wollen.length === 0) {
+    return antwort({ skipped: "Feierabend/Opt-out", still: still.size });
+  }
 
   const { data: tokens } = await sb
     .from("push_tokens")
@@ -273,7 +364,7 @@ Deno.serve(async (req) => {
     .is("disabled_at", null);
 
   if (!tokens || tokens.length === 0) {
-    return new Response(JSON.stringify({ skipped: "keine Geraete" }), { status: 200 });
+    return antwort({ skipped: "keine Geraete", still: still.size });
   }
 
   let jwt: string;
@@ -282,16 +373,22 @@ Deno.serve(async (req) => {
   } catch (e) {
     console.error("APNs-JWT:", (e as Error).message);
     // 200, damit der Webhook nicht endlos wiederholt.
-    return new Response(JSON.stringify({ error: "apns config" }), { status: 200 });
+    return antwort({ error: "apns config" });
   }
+
+  // Jede Person bekommt genau einen Hinweis: den der ersten passenden Gruppe.
+  const gruppeVon = new Map<number, Gruppe>();
+  for (const g of gruppen) for (const id of g.ids) if (!gruppeVon.has(id)) gruppeVon.set(id, g);
 
   let zugestellt = 0;
   const stillgelegt: number[] = [];
 
   for (const t of tokens) {
+    const g = gruppeVon.get(Number(t.user_id));
+    if (!g) continue;
     const r = await sende(
       { id: Number(t.id), token: String(t.token), environment: String(t.environment) },
-      { titel, text, modul, ref },
+      { titel: g.titel, text: g.text, modul, ref: g.ref },
       jwt,
     );
     if (r.ok) {
@@ -313,10 +410,7 @@ Deno.serve(async (req) => {
   }
 
   console.log(
-    `notify-push: ${tabelle}, ${zugestellt}/${tokens.length} zugestellt, ${stillgelegt.length} stillgelegt`,
+    `notify-push: ${tabelle}, ${zugestellt}/${tokens.length} zugestellt, ${stillgelegt.length} stillgelegt, ${still.size} Feierabend`,
   );
-  return new Response(
-    JSON.stringify({ ok: true, zugestellt, gesamt: tokens.length, stillgelegt: stillgelegt.length }),
-    { status: 200 },
-  );
+  return antwort({ ok: true, zugestellt, gesamt: tokens.length, stillgelegt: stillgelegt.length, still: still.size });
 });

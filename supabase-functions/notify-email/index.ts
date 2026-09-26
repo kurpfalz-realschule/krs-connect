@@ -1,5 +1,5 @@
 // =====================================================================
-// KRS Connect — notify-email  (Paket A, 23.09.2026)
+// KRS Connect — notify-email  (Paket A, 23.09.2026; D3 Feierabend 25.09.2026)
 // E-Mail-Hinweis bei Dringend-Beiträgen und @alle.
 //
 // Auslöser: DB-Trigger notify_email_on_post (AFTER INSERT public.posts)
@@ -104,11 +104,23 @@ Deno.serve(async (req) => {
   const declined = new Set(
     (prefs || []).filter((p) => p.notifications_enabled === false).map((p) => Number(p.user_id)),
   );
+  // D3 (Paket D, 25.09.2026): Feierabend — Dringend kommt immer durch; @alle
+  // geht im Feierabend nicht per Mail raus (der Beitrag steht in Connect). Bei einem
+  // RPC-Fehler wird trotzdem gesendet (lieber zu viel als verloren) und geloggt.
+  let still = new Set<number>();
+  if (!isUrgent) {
+    const { data: ruhig, error: qErr } = await sb.rpc("krs_quiet_users", {
+      p_users: aktive.map((u) => Number(u.id)),
+    });
+    if (qErr) console.error("notify-email: krs_quiet_users", qErr.message);
+    else still = new Set((ruhig || []).map((x: unknown) => Number(x)));
+  }
+
   const recipients = aktive
-    .filter((u) => !declined.has(Number(u.id)))
+    .filter((u) => !declined.has(Number(u.id)) && !still.has(Number(u.id)))
     .map((u) => String(u.email).toLowerCase());
 
-  if (recipients.length === 0) return antwort({ skipped: "no recipients" });
+  if (recipients.length === 0) return antwort({ skipped: "no recipients", still: still.size });
 
   // ── E-2: nur Hinweis + Team/Kanal, kein Inhalt ─────────────────────
   const teamName = String(team?.name ?? "Connect").trim();
