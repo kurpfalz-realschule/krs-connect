@@ -3036,7 +3036,7 @@
       { id: 5, username: 'mk', display_name: 'Markus K.', avatar_color: '#1b6df5', role: 'member' },
       { id: 6, username: 'sh', display_name: 'Sabine H.', avatar_color: '#e81414', role: 'member' },
       { id: 7, username: 'lw', display_name: 'Laura W.', avatar_color: '#8553f5', role: 'member' },
-      { id: 8, username: 'tr', display_name: 'Tim R.', avatar_color: '#048096', role: 'member' },
+      { id: 8, username: 'tr', display_name: 'Tim Robin R.', avatar_color: '#048096', role: 'member' },
     ];
 
     const MOCK_TEAMS = [
@@ -4548,7 +4548,7 @@
       }
 
       // ── Profile Update ──────────────────────────────
-      async updateProfile(userId, updates) {
+      async updateProfile(userId, updates, opts = {}) {
         // Whitelist: Nur erlaubte Felder durchlassen
         const ALLOWED_FIELDS = ['display_name', 'avatar_color', 'avatar_url', 'status'];
         const safeUpdates = {};
@@ -4568,7 +4568,7 @@
           return data;
         } catch (err) {
           console.error('updateProfile error:', err);
-          showToast('Profil konnte nicht aktualisiert werden.', 'error');
+          if (!opts.quiet) showToast('Profil konnte nicht aktualisiert werden.', 'error');
           return null;
         }
       }
@@ -10878,7 +10878,48 @@
     // ============================================================
     // PROFILE MODAL — Profilansicht mit Avatar-Upload
     // ============================================================
-    function ProfileModal({ user, onClose, onAvatarUpload, onLogout }) {
+    // H-7b (4.44.0): Rufname — Vornamen weglassen, Nachname bleibt. Server prüft dasselbe
+    // (krs_name_change_ok) und lehnt zusätzlich Namen ab, die schon eine andere Person trägt.
+    function RufnameEditor({ user, onRename }) {
+      const parts = String(user.display_name || '').trim().split(/\s+/).filter(Boolean);
+      const [open, setOpen] = useState(false);
+      const [keep, setKeep] = useState(() => parts.map(() => true));
+      const [saving, setSaving] = useState(false);
+      if (parts.length < 3) return null;   // nur wer mehr als Vorname + Nachname hat
+      const chosen = parts.filter((_, i) => keep[i]);
+      const valid = chosen.length >= 2 && chosen.length < parts.length;
+      if (!open) {
+        return React.createElement('button', {
+          'data-testid': 'rufname-open', onClick: () => setOpen(true),
+          style: { display: 'block', margin: '0 auto 10px', background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '12px', minHeight: '32px' }
+        }, '✏️ Nur Rufname anzeigen');
+      }
+      return React.createElement('div', { 'data-testid': 'rufname-editor', style: { margin: '0 0 12px', textAlign: 'left', fontSize: '12px' } },
+        React.createElement('div', { style: { color: 'var(--text-muted)', marginBottom: '6px' } }, 'Welche Vornamen sollen angezeigt werden? Der Nachname bleibt.'),
+        React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' } },
+          parts.map((p, i) => {
+            const last = i === parts.length - 1;
+            return React.createElement('button', {
+              key: i, 'data-testid': 'rufname-teil', disabled: last, 'aria-pressed': keep[i],
+              onClick: () => setKeep(k => k.map((v, j) => j === i ? !v : v)),
+              style: { padding: '6px 10px', minHeight: '32px', borderRadius: '16px', border: '1px solid var(--border)', cursor: last ? 'default' : 'pointer',
+                background: keep[i] ? 'var(--accent)' : 'transparent', color: keep[i] ? 'white' : 'var(--text-muted)', textDecoration: keep[i] ? 'none' : 'line-through' }
+            }, p);
+          })
+        ),
+        React.createElement('div', { style: { display: 'flex', gap: '6px', justifyContent: 'flex-end' } },
+          React.createElement('button', { onClick: () => { setOpen(false); setKeep(parts.map(() => true)); }, style: { padding: '6px 10px', minHeight: '32px', background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer' } }, 'Abbrechen'),
+          React.createElement('button', {
+            'data-testid': 'rufname-save', disabled: !valid || saving,
+            onClick: async () => { setSaving(true); const ok = await onRename(chosen.join(' ')); setSaving(false); if (ok) setOpen(false); },
+            style: { padding: '6px 12px', minHeight: '32px', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: 'var(--radius)', cursor: valid ? 'pointer' : 'not-allowed', opacity: valid ? 1 : 0.5 }
+          }, saving ? 'Speichere…' : 'Speichern')
+        ),
+        React.createElement('div', { style: { color: 'var(--text-muted)', marginTop: '6px' } }, 'Andere Namensänderungen bitte über die Administration.')
+      );
+    }
+
+    function ProfileModal({ user, onClose, onAvatarUpload, onLogout, onRename }) {
       return React.createElement('div', {
         className: 'online-panel',
         style: { bottom: '70px', left: '76px', minWidth: '220px' }
@@ -10887,6 +10928,7 @@
           React.createElement(Avatar, { user, size: 56 }),
           React.createElement('div', { style: { marginTop: '8px', fontWeight: '600', fontSize: '15px' } }, user.display_name),
           React.createElement('div', { style: { fontSize: '12px', color: 'var(--text-muted)', marginBottom: '12px' } }, user.email || user.role || ''),
+          onRename && React.createElement(RufnameEditor, { user, onRename }),
           React.createElement('label', {
             style: { display: 'inline-block', padding: '6px 14px', background: 'var(--accent)', color: 'white', borderRadius: 'var(--radius)', cursor: 'pointer', fontSize: '13px', fontWeight: '500' }
           },
@@ -10912,7 +10954,7 @@
     const KRS_CHANGELOG = [
       { v: '4.44.0', date: '25.09.2026', items: [
         'Datenschutz: E-Mail-Adressen der Kolleginnen und Kollegen sind nur noch für die Administration sichtbar',
-        'Rückmeldungen (Feedback) sieht jede Person nur noch selbst — die Administration sieht alle'
+        'Profil: Wer mit mehreren Vornamen eingetragen ist, kann selbst festlegen, dass nur der Rufname angezeigt wird'
       ]},
       { v: '4.43.0', date: '24.09.2026', items: [
         'iPad quer: Teamnamen sind wieder lesbar — 🔔 und 👁 erscheinen nur noch beim gewählten Team',
@@ -11665,6 +11707,18 @@
         } catch (err) {
           showToast('Profilbild konnte nicht hochgeladen werden.', 'error');
         }
+      };
+
+      // H-7b (4.44.0): Anzeigename auf Rufname kürzen
+      const handleRename = async (newName) => {
+        const updated = await dataService.updateProfile(user.id, { display_name: newName }, { quiet: true });
+        if (!updated) {
+          showToast('Name nicht geändert – vielleicht trägt schon jemand genau diesen Namen. Bitte an die Administration wenden.', 'error');
+          return false;
+        }
+        setUser(prev => ({ ...prev, display_name: updated.display_name }));
+        showToast('Name geändert: ' + updated.display_name, 'success');
+        return true;
       };
 
       // ── Channel Management Handlers ──────────────────
@@ -13683,7 +13737,7 @@
           )
         ),
           // Profile Panel
-          showProfile && user && React.createElement(ProfileModal, { user, onClose: () => setShowProfile(false), onAvatarUpload: handleAvatarUpload, onLogout: () => { setShowProfile(false); handleLogout(); } }),
+          showProfile && user && React.createElement(ProfileModal, { user, onClose: () => setShowProfile(false), onAvatarUpload: handleAvatarUpload, onRename: handleRename, onLogout: () => { setShowProfile(false); handleLogout(); } }),
         // v4.25.0 — Merkliste und Suche haben keine eigene Spalte. Ohne diesen
         // Mini-Drawer würde das ☰ dort ins Leere greifen und man käme im
         // Hub-Einbau (ohne Connect-Leiste) nicht mehr heraus.
