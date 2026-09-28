@@ -4538,15 +4538,37 @@
       }
 
       // ── Read Receipts (Lesebestätigungen) ──────────────
-      async markPostRead(postId, userId) {
+      // PERF-05 (4.46.0): gebündelter Upsert statt 1 Request pro Beitrag.
+      // Vorher: markPostRead() pro Post → beim ersten Öffnen eines Kanals bis
+      // zu 50 parallele POSTs auf post_reads = 35% der App-DB-Zeit (siehe
+      // PERFORMANCE-CHECK-2026-09-28.md). Jetzt: ein Upsert mit Array,
+      // gerufen aus PostList über eine 1,5s-Entprellung.
+      async markPostsRead(postIds, userId) {
         if (this.isDemo) return true;
+        const ids = Array.from(new Set((postIds || []).filter(id => id != null)));
+        if (ids.length === 0) return true;
         try {
-          await this.sb.from('post_reads').upsert({ post_id: postId, user_id: userId }, { onConflict: 'post_id,user_id' });
+          const CHUNK = 100;
+          for (let i = 0; i < ids.length; i += CHUNK) {
+            const chunk = ids.slice(i, i + CHUNK);
+            const rows = chunk.map(id => ({ post_id: id, user_id: userId }));
+            const { error } = await this.sb.from('post_reads')
+              .upsert(rows, { onConflict: 'post_id,user_id', ignoreDuplicates: true });
+            if (error) throw error;
+          }
           return true;
-        } catch (err) { return false; }
+        } catch (err) {
+          console.warn('markPostsRead error:', err);
+          return false;
+        }
       }
 
-      async getPostReads(postIds) {
+      // Dünne Hülle für Rückwärtskompatibilität (Einzel-Aufruf).
+      async markPostRead(postId, userId) {
+        return this.markPostsRead([postId], userId);
+      }
+
+      async getPostReads(postIds, channelId) {
         // Returns Map<postId, [{user_id, display_name, read_at}]>
         const result = new Map();
         if (!postIds || postIds.length === 0) return result;
@@ -4560,9 +4582,27 @@
           }
           return result;
         }
+        // PERF-05 (4.46.0): Das UI zeigt „Gelesen von N" sofort an jedem
+        // Beitrag an (kein Aufklappen nötig, um überhaupt einen Zähler zu
+        // sehen) — daher lässt sich das Laden nicht auf „aufgeklappt"
+        // verschieben (Sprint-Vorgabe für diesen Fall: 60s pro Kanal
+        // cachen). Bei erneutem Kanalwechsel innerhalb von 60s kommt die
+        // Antwort aus dem Cache statt einem neuen GET.
+        if (!this._postReadsCache) this._postReadsCache = new Map();
+        if (channelId != null) {
+          const cached = this._postReadsCache.get(channelId);
+          if (cached && (Date.now() - cached.ts) < 60000) {
+            for (const id of postIds) {
+              if (cached.data.has(id)) result.set(id, cached.data.get(id));
+            }
+            return result;
+          }
+        }
         try {
+          // FK-Hinweis explizit (Lehre aus Hotfix 0BJ: ohne Hinweis kann die
+          // Einbettung bei mehreren FKs auf users mehrdeutig werden/HTTP 300).
           const { data, error } = await this.sb.from('post_reads')
-            .select('post_id, user_id, read_at, users(display_name)')
+            .select('post_id, user_id, read_at, users!post_reads_user_id_fkey(display_name)')
             .in('post_id', postIds);
           if (error) throw error;
           for (const r of (data || [])) {
@@ -4573,6 +4613,7 @@
               read_at: r.read_at
             });
           }
+          if (channelId != null) this._postReadsCache.set(channelId, { ts: Date.now(), data: result });
           return result;
         } catch (err) {
           console.error('getPostReads error:', err);
@@ -7007,7 +7048,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.45.0';
+    window.KRS_VERSION = '4.46.0';
     // PERF-01: Cold-Boot-Zähler für Hub keep-alive Abnahme (Connect→Hub-Start→Connect → bleibt 1)
     window.__krsConnectBootCount = (window.__krsConnectBootCount || 0) + 1;
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
@@ -8201,7 +8242,7 @@
         postIds.forEach(id => reactionsLoadedRef.current.add(id));
         Promise.all([
           dataService.getReactions('post', postIds),
-          readReceiptsEnabled ? dataService.getPostReads(postIds) : Promise.resolve(new Map())
+          readReceiptsEnabled ? dataService.getPostReads(postIds, channelId) : Promise.resolve(new Map())
         ]).then(([reactionsMap, readsMap]) => {
           if (readsMap.size > 0) setReadReceipts(prev => { const next = new Map(prev); readsMap.forEach((v, k) => next.set(k, v)); return next; });
           if (reactionsMap.size > 0) {
@@ -8259,16 +8300,51 @@
 
       // Mark posts as read when they are displayed (nur mit Opt-in)
       // B9: jede ID nur einmal melden (vorher bei jeder posts-Änderung 50 Upserts)
+      // PERF-05 (4.46.0): IDs erst in eine Warteschlange sammeln und gebündelt
+      // mit 1,5s Entprellung senden (vorher: 1 einzelner Upsert pro Beitrag,
+      // bis zu 50 parallele POSTs beim ersten Öffnen eines Kanals — siehe
+      // PERFORMANCE-CHECK-2026-09-28.md). Throttle statt reinem Debounce:
+      // ein laufender Timer wird nicht immer wieder verschoben, damit
+      // Scrollen/Realtime-Neuzugänge höchstens 1 Request je 1,5s erzeugen.
       const reportedReadsRef = useRef(new Set());
+      const pendingReadsRef = useRef(new Set());
+      const readsFlushTimerRef = useRef(null);
+      const flushPendingReads = useCallback(() => {
+        if (readsFlushTimerRef.current) { clearTimeout(readsFlushTimerRef.current); readsFlushTimerRef.current = null; }
+        if (pendingReadsRef.current.size === 0 || !user) return;
+        const ids = Array.from(pendingReadsRef.current);
+        pendingReadsRef.current = new Set();
+        dataService.markPostsRead(ids, user.id).then(ok => {
+          // Fehlschlag (z.B. RLS/Netz): IDs wieder freigeben, damit ein
+          // späterer Durchlauf des Effekts sie erneut einreiht. Kein Toast —
+          // Lesebestätigungen sind unkritisch und sollen nicht stören.
+          if (!ok) { for (const id of ids) reportedReadsRef.current.delete(id); }
+        });
+      }, [dataService, user]);
       useEffect(() => {
         if (!user || posts.length === 0 || !readReceiptsEnabled) return;
+        let queued = false;
         for (const post of posts) {
           if (!post.id || post.parent_id || post.author_id === user.id) continue; // Eigene Posts nicht markieren
           if (reportedReadsRef.current.has(post.id)) continue;
           reportedReadsRef.current.add(post.id);
-          dataService.markPostRead(post.id, user.id);
+          pendingReadsRef.current.add(post.id);
+          queued = true;
         }
-      }, [posts, user, dataService, readReceiptsEnabled]);
+        if (queued && !readsFlushTimerRef.current) {
+          readsFlushTimerRef.current = setTimeout(flushPendingReads, 1500);
+        }
+      }, [posts, user, dataService, readReceiptsEnabled, flushPendingReads]);
+      // Kanal verlassen (Unmount) oder Tab geht in den Hintergrund: Warte-
+      // schlange sofort abschicken statt zu verlieren.
+      useEffect(() => {
+        const onVisibility = () => { if (document.visibilityState === 'hidden') flushPendingReads(); };
+        document.addEventListener('visibilitychange', onVisibility);
+        return () => {
+          document.removeEventListener('visibilitychange', onVisibility);
+          flushPendingReads();
+        };
+      }, [flushPendingReads]);
 
       const handleTogglePin = async (post) => {
         const updated = await dataService.togglePin(post.id, !!post.is_pinned);
@@ -11176,6 +11252,9 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.46.0', date: '28.09.2026', items: [
+        'Schneller: Lesebestätigungen werden gesammelt gesendet, nicht mehr einzeln pro Beitrag'
+      ]},
       { v: '4.45.0', date: '26.09.2026', items: [
         'Feierabend: werktags von 18 bis 7 Uhr, am Wochenende und in den Ferien kommen keine Push- und Mail-Hinweise mehr. Dringende Beiträge kommen immer durch. Zeiten ändern oder abschalten: ⚙️ Einstellungen → „Feierabend"',
         'Wer dich mit @Name erwähnt, schickt dir jetzt einen Push-Hinweis aufs iPhone (App „KRS Schule")',
