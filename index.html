@@ -340,6 +340,41 @@
     .team-tab:hover { background: var(--bg-tertiary); }
     .team-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
 
+    /* DATEI-01: echte Team-Dateiablage */
+    .tf-section { position: relative; min-width: 0; }
+    .tf-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0 12px; }
+    .tf-toolbar button { min-height: 44px; }
+    .tf-drag-hint { color: var(--text-muted); font-size: 12px; }
+    .tf-crumbs { display: flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden; margin-bottom: 8px; }
+    .tf-crumb { border: 0; background: none; color: var(--accent); cursor: pointer; padding: 6px 2px; min-width: 0; max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tf-crumb[aria-current="page"] { color: var(--text-primary); cursor: default; font-weight: 600; }
+    .tf-back { display: none; min-height: 44px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-secondary); color: var(--text-primary); }
+    .tf-list { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+    .tf-item { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 7px 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-secondary); }
+    .tf-item-main { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; padding: 4px; border: 0; background: transparent; color: var(--text-primary); text-align: left; cursor: pointer; }
+    .tf-item-icon { flex: 0 0 auto; font-size: 21px; }
+    .tf-item-copy { flex: 1; min-width: 0; }
+    .tf-item-name { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tf-item-meta { display: block; margin-top: 2px; color: var(--text-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tf-actions { display: flex; flex: 0 0 auto; }
+    .tf-summary { margin: 10px 0 0; color: var(--text-muted); font-size: 12px; }
+    .tf-dropzone { position: absolute; z-index: 5; inset: 54px 0 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 20px; border: 2px dashed var(--accent); border-radius: var(--radius); background: var(--bg-secondary); opacity: .94; color: var(--accent); font-weight: 700; }
+    .tf-upload-panel { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-secondary); padding: 12px; margin: 0 0 12px; }
+    .tf-upload-head { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; }
+    .tf-progress { height: 7px; border-radius: 999px; overflow: hidden; background: var(--bg-tertiary); margin: 8px 0; }
+    .tf-progress > span { display: block; height: 100%; background: var(--accent); }
+    .tf-upload-row { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; padding: 4px 0; min-width: 0; }
+    .tf-upload-row > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tf-empty, .tf-error, .tf-loading { color: var(--text-muted); font-size: 13px; padding: 14px 4px; }
+    .tf-modal-error { color: var(--danger); font-size: 12px; margin: -5px 0 8px; }
+    @media (max-width: 768px) {
+      .tf-back { display: inline-flex; align-items: center; padding: 0 12px; }
+      .tf-drag-hint { display: none; }
+      .tf-item { align-items: flex-start; flex-wrap: wrap; }
+      .tf-actions { margin-left: auto; }
+      .tf-crumb { max-width: 120px; }
+    }
+
     .header-actions {
       display: flex;
       gap: 8px;
@@ -2419,7 +2454,7 @@
         return w;
       }
       window.__krsOpenBlankForNav = _dlOpenBlankForNav;
-      window.__krsIsIOSDownload = _dlIsIOS;
+      window.__krsIsIOSDownload = window.__krsIsIOSDownload || _dlIsIOS;
       function _dlResult(requestId, state, extra){
         var value = Object.assign({ requestId: requestId, state: state }, extra || {});
         try { window.dispatchEvent(new CustomEvent('krs-download-state', { detail: value })); } catch (e) {}
@@ -7315,7 +7350,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.47.0';
+    window.KRS_VERSION = '4.48.0';
     // PERF-01: Cold-Boot-Zähler für Hub keep-alive Abnahme (Connect→Hub-Start→Connect → bleibt 1)
     window.__krsConnectBootCount = (window.__krsConnectBootCount || 0) + 1;
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
@@ -10757,6 +10792,337 @@
       );
     }
 
+    function teamFileCanEdit(entry, user, isTeamAdmin) {
+      return !!(isTeamAdmin || (entry && user && String(entry.created_by) === String(user.id)));
+    }
+    function teamFileCanDelete(entry, user, isTeamAdmin, entries) {
+      return !!(isTeamAdmin || (teamFileCanEdit(entry, user, false) && (entry.kind === 'file' || !(entries || []).some(x => String(x.parent_id) === String(entry.id)))));
+    }
+    window.__krsTeamFileRights = { canEdit: teamFileCanEdit, canDelete: teamFileCanDelete };
+
+    function TeamFileNameModal({ type, entry, onSave, onClose }) {
+      const original = entry?.name || '';
+      const dot = entry?.kind === 'file' ? original.lastIndexOf('.') : -1;
+      const oldExt = dot > 0 ? original.slice(dot) : '';
+      const [name, setName] = useState(original);
+      const [saving, setSaving] = useState(false);
+      const inputRef = useRef(null);
+      useEffect(() => {
+        const onKey = e => { if (e.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', onKey);
+        const el = inputRef.current;
+        if (el) { el.focus(); if (type === 'rename' && dot > 0) el.setSelectionRange(0, dot); }
+        return () => document.removeEventListener('keydown', onKey);
+      }, []);
+      const slash = /[\\/]/.test(name);
+      let finalName = name.trim();
+      if (type === 'rename' && entry?.kind === 'file' && finalName && !finalName.includes('.') && oldExt) finalName += oldExt;
+      const ext = finalName.includes('.') ? finalName.slice(finalName.lastIndexOf('.') + 1).toLowerCase() : '';
+      const badExt = type === 'rename' && entry?.kind === 'file' && !TEAM_FILES_CONFIG.EXT_MIME[ext];
+      const canSave = !!finalName && !slash && !badExt && !saving;
+      const save = async () => {
+        if (!canSave) return;
+        setSaving(true);
+        const ok = await onSave(finalName);
+        setSaving(false);
+        if (ok) onClose();
+      };
+      return React.createElement('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': type === 'folder' ? 'Ordner anlegen' : 'Eintrag umbenennen', onClick: onClose },
+        React.createElement('div', { className: 'channel-dialog', onClick: e => e.stopPropagation() },
+          React.createElement('h3', null, type === 'folder' ? '📁 Neuer Ordner' : '✏️ Umbenennen'),
+          React.createElement('label', { htmlFor: 'tf-name-field', style: { display: 'block', fontSize: '12px', marginBottom: '5px' } }, type === 'folder' ? 'Ordnername' : 'Neuer Name'),
+          React.createElement('input', { id: 'tf-name-field', ref: inputRef, 'data-testid': type === 'folder' ? 'tf-folder-name' : 'tf-rename-name', maxLength: 200, value: name, onChange: e => setName(e.target.value), onKeyDown: e => { if (e.key === 'Enter') save(); } }),
+          slash && React.createElement('p', { className: 'tf-modal-error' }, 'Schrägstriche sind im Namen nicht erlaubt.'),
+          badExt && React.createElement('p', { className: 'tf-modal-error' }, 'Diese Endung ist nicht erlaubt.'),
+          React.createElement('div', { className: 'dialog-actions' },
+            React.createElement('button', { onClick: onClose }, 'Abbrechen'),
+            React.createElement('button', { className: 'btn-primary', disabled: !canSave, onClick: save }, saving ? 'Speichert …' : (type === 'folder' ? 'Anlegen' : 'Speichern'))
+          )
+        )
+      );
+    }
+
+    async function readTeamFileEntry(entry, prefix, out) {
+      if (entry.isFile) {
+        const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
+        out.push({ file, relPath: prefix + file.name });
+        return;
+      }
+      if (!entry.isDirectory) return;
+      const dir = prefix + entry.name + '/';
+      const reader = entry.createReader();
+      while (true) {
+        const batch = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+        if (!batch.length) break;
+        for (const child of batch) await readTeamFileEntry(child, dir, out);
+      }
+    }
+
+    function TeamFilesSection({ team, dataService, user, isTeamAdmin, allUsers }) {
+      const [entries, setEntries] = useState([]);
+      const entriesRef = useRef([]);
+      const [loading, setLoading] = useState(true);
+      const [loadError, setLoadError] = useState(false);
+      const [folderId, setFolderId] = useState(null);
+      const [uploads, setUploads] = useState(null);
+      const [dialog, setDialog] = useState(null);
+      const [dragging, setDragging] = useState(false);
+      const dragDepth = useRef(0);
+      const fileInput = useRef(null);
+      const folderInput = useRef(null);
+      const currentTeamIdRef = useRef(team.id);
+      currentTeamIdRef.current = team.id;
+      const setTeamEntries = useCallback(updater => {
+        setEntries(prev => {
+          const next = typeof updater === 'function' ? updater(prev) : updater;
+          entriesRef.current = next;
+          return next;
+        });
+      }, []);
+
+      const load = useCallback(async () => {
+        setLoading(true); setLoadError(false);
+        try {
+          const result = await dataService.getTeamFiles(team.id);
+          if (currentTeamIdRef.current !== team.id) return;
+          const before = entriesRef.current.slice();
+          setTeamEntries(result);
+          setFolderId(prev => {
+            let id = prev;
+            while (id != null && !result.some(x => String(x.id) === String(id) && x.kind === 'folder')) {
+              const old = before.find(x => String(x.id) === String(id));
+              id = old?.parent_id ?? null;
+            }
+            return id;
+          });
+        } catch (e) { console.error(e); if (currentTeamIdRef.current === team.id) setLoadError(true); }
+        finally { if (currentTeamIdRef.current === team.id) setLoading(false); }
+      }, [dataService, team.id, setTeamEntries]);
+
+      useEffect(() => {
+        let cancelled = false;
+        setFolderId(null); setLoading(true); setLoadError(false); entriesRef.current = [];
+        dataService.getTeamFiles(team.id).then(result => {
+          if (!cancelled) { setTeamEntries(result); setLoading(false); }
+        }).catch(e => { console.error(e); if (!cancelled) { setLoadError(true); setLoading(false); } });
+        return () => { cancelled = true; };
+      }, [dataService, team.id, setTeamEntries]);
+
+      useEffect(() => { if (folderInput.current) folderInput.current.setAttribute('webkitdirectory', ''); }, []);
+
+      const sortEntries = list => list.slice().sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name, 'de', { numeric: true, sensitivity: 'base' }) : (a.kind === 'folder' ? -1 : 1)));
+      const direct = sortEntries(entries.filter(x => (x.parent_id ?? null) === (folderId ?? null)));
+      const directFiles = direct.filter(x => x.kind === 'file');
+      const path = [];
+      let walk = folderId;
+      while (walk != null) {
+        const found = entries.find(x => String(x.id) === String(walk));
+        if (!found) break;
+        path.unshift(found); walk = found.parent_id;
+      }
+      const parentId = path.length ? path[path.length - 1].parent_id : null;
+      const accept = Object.keys(TEAM_FILES_CONFIG.EXT_MIME).map(e => '.' + e).join(',');
+      const isIOS = !!(window.__krsIsIOSDownload && window.__krsIsIOSDownload());
+      const coarse = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+
+      const enqueue = useCallback(async (rawItems) => {
+        const startTeamId = team.id;
+        const startFolderId = folderId;
+        let items = Array.from(rawItems || []).map((it, i) => ({ file: it.file || it, relPath: it.relPath || '', key: Date.now() + '-' + i + '-' + Math.random() }));
+        items = items.filter(it => {
+          const n = it.file?.name || '';
+          return n && n !== '.DS_Store' && n !== 'Thumbs.db' && n !== 'desktop.ini' && !n.startsWith('._') && !n.startsWith('~$') && !(it.file.size === 0 && !n.includes('.'));
+        });
+        if (items.length > 300 && !confirm('Du lädst ' + items.length + ' Dateien hoch. Fortfahren?')) return;
+        const rows = items.map(it => {
+          let status = 'wartet', message = 'wartet';
+          if (!teamFileMime(it.file)) { status = 'uebersprungen'; message = 'übersprungen: Dateityp nicht erlaubt'; }
+          else if (it.file.size > TEAM_FILES_CONFIG.MAX_BYTES) { status = 'uebersprungen'; message = 'übersprungen: zu groß (max. 50 MB)'; }
+          return { ...it, status, message };
+        });
+        const runId = Date.now() + '-' + Math.random();
+        setUploads({ runId, teamId: startTeamId, rows, done: false });
+        const updateRow = (key, patch) => setUploads(prev => prev && prev.runId === runId ? { ...prev, rows: prev.rows.map(r => r.key === key ? { ...r, ...patch } : r) } : prev);
+        const valid = rows.filter(r => r.status === 'wartet');
+        const folderPaths = new Set();
+        valid.forEach(it => {
+          const parts = String(it.relPath || '').split('/').filter(Boolean);
+          parts.pop();
+          for (let i = 1; i <= parts.length; i++) folderPaths.add(parts.slice(0, i).join('/'));
+        });
+        const folderMap = new Map([['', startFolderId]]);
+        const runEntries = entriesRef.current.slice();
+        for (const folderPath of Array.from(folderPaths).sort((a, b) => a.split('/').length - b.split('/').length)) {
+          const parts = folderPath.split('/');
+          const name = parts.pop();
+          const parentPath = parts.join('/');
+          const targetParent = folderMap.get(parentPath) ?? null;
+          let found = runEntries.find(x => x.kind === 'folder' && (x.parent_id ?? null) === (targetParent ?? null) && x.name.localeCompare(name, 'de', { sensitivity: 'base' }) === 0);
+          if (!found) {
+            try { found = await dataService.createTeamFolder(startTeamId, targetParent, name, user?.id, { quiet: true, throwOnDuplicate: true }); }
+            catch (e) {
+              if (e?.code !== '23505') throw e;
+              const fresh = await dataService.getTeamFiles(startTeamId);
+              runEntries.splice(0, runEntries.length, ...fresh);
+              found = runEntries.find(x => x.kind === 'folder' && (x.parent_id ?? null) === (targetParent ?? null) && x.name.localeCompare(name, 'de', { sensitivity: 'base' }) === 0);
+            }
+            if (found) {
+              runEntries.push(found);
+              if (currentTeamIdRef.current === startTeamId) setTeamEntries(prev => prev.some(x => String(x.id) === String(found.id)) ? prev : [...prev, found]);
+            }
+          }
+          if (!found) throw new Error('Ordner „' + name + '“ konnte nicht angelegt werden.');
+          folderMap.set(folderPath, found.id);
+        }
+        let index = 0;
+        const worker = async () => {
+          while (true) {
+            const i = index++;
+            if (i >= valid.length) return;
+            const item = valid[i];
+            updateRow(item.key, { status: 'laedt', message: 'lädt …' });
+            const bits = String(item.relPath || '').split('/').filter(Boolean); bits.pop();
+            const target = folderMap.get(bits.join('/')) ?? startFolderId;
+            try {
+              const created = await dataService.uploadTeamFile(startTeamId, target, item.file, user?.id);
+              updateRow(item.key, { status: 'fertig', message: '✓ fertig', createdName: created.name });
+              if (currentTeamIdRef.current === startTeamId) setTeamEntries(prev => [...prev, created]);
+            } catch (e) { updateRow(item.key, { status: 'fehler', message: '⚠ ' + (e?.message || 'Hochladen fehlgeschlagen') }); }
+          }
+        };
+        await Promise.all(Array.from({ length: Math.min(TEAM_FILES_CONFIG.PARALLEL, valid.length) }, worker));
+        setUploads(prev => prev && prev.runId === runId ? { ...prev, done: true } : prev);
+        const snapshot = await new Promise(resolve => setUploads(prev => { resolve(prev); return prev; }));
+        const latestRows = snapshot?.rows || rows;
+        const ok = latestRows.filter(r => r.status === 'fertig').length;
+        const problems = latestRows.length - ok;
+        showToast(problems ? (ok + ' hochgeladen, ' + problems + ' mit Problemen — siehe Liste') : (ok + ' Dateien hochgeladen'), problems ? 'info' : 'success');
+      }, [dataService, folderId, setTeamEntries, team.id, user?.id]);
+
+      useEffect(() => {
+        if (!dataService.isDemo) return;
+        window.__krsTeamFilesEnqueue = enqueue;
+        return () => { if (window.__krsTeamFilesEnqueue === enqueue) delete window.__krsTeamFilesEnqueue; };
+      }, [dataService, enqueue]);
+
+      const filesChosen = e => { const fs = Array.from(e.target.files || []).map(file => ({ file, relPath: '' })); e.target.value = ''; enqueue(fs); };
+      const folderChosen = e => { const fs = Array.from(e.target.files || []).map(file => ({ file, relPath: file.webkitRelativePath || file.name })); e.target.value = ''; enqueue(fs); };
+      const hasFiles = e => Array.from(e.dataTransfer?.types || []).includes('Files');
+      const onDragEnter = e => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth.current++; setDragging(true); };
+      const onDragLeave = e => { if (!hasFiles(e)) return; dragDepth.current = Math.max(0, dragDepth.current - 1); if (!dragDepth.current) setDragging(false); };
+      const onDrop = async e => {
+        e.preventDefault(); dragDepth.current = 0; setDragging(false);
+        const nativeEntries = Array.from(e.dataTransfer?.items || []).filter(i => i.kind === 'file').map(i => i.webkitGetAsEntry ? i.webkitGetAsEntry() : null).filter(Boolean);
+        if (nativeEntries.length) {
+          const out = [];
+          for (const entry of nativeEntries) await readTeamFileEntry(entry, '', out);
+          enqueue(out);
+        } else enqueue(Array.from(e.dataTransfer?.files || []).map(file => ({ file, relPath: '' })));
+      };
+
+      const saveDialog = async name => {
+        if (dialog.type === 'folder') {
+          const created = await dataService.createTeamFolder(team.id, folderId, name, user?.id);
+          if (!created) return false;
+          setTeamEntries(prev => [...prev, created]); showToast('Ordner „' + created.name + '“ angelegt', 'success'); return true;
+        }
+        const updated = await dataService.renameTeamFile(dialog.entry.id, name);
+        if (!updated) return false;
+        setTeamEntries(prev => prev.map(x => String(x.id) === String(updated.id) ? updated : x)); showToast('Umbenannt', 'success'); return true;
+      };
+      const deleteEntry = async entry => {
+        const descendants = [];
+        const queue = [entry];
+        for (let i = 0; i < queue.length; i++) {
+          const children = entriesRef.current.filter(x => String(x.parent_id) === String(queue[i].id));
+          descendants.push(...children); queue.push(...children.filter(x => x.kind === 'folder'));
+        }
+        const files = descendants.filter(x => x.kind === 'file').length;
+        const folders = descendants.filter(x => x.kind === 'folder').length;
+        const prompt = entry.kind === 'file' ? ('„' + entry.name + '“ wirklich löschen?') : (descendants.length ? ('Ordner „' + entry.name + '“ mit ' + files + ' ' + (files === 1 ? 'Datei' : 'Dateien') + ' und ' + folders + ' ' + (folders === 1 ? 'Unterordner' : 'Unterordnern') + ' endgültig löschen?') : ('Ordner „' + entry.name + '“ löschen?'));
+        if (!confirm(prompt)) return;
+        const all = entriesRef.current;
+        const result = await dataService.deleteTeamEntry(entry, all);
+        if (!result?.ok) return;
+        const ids = new Set([entry, ...descendants].map(x => String(x.id)));
+        setTeamEntries(prev => prev.filter(x => !ids.has(String(x.id))));
+        if (folderId != null && ids.has(String(folderId))) setFolderId(entry.parent_id ?? null);
+        showToast('Gelöscht', 'success');
+      };
+      const openEntry = entry => {
+        if (entry.kind === 'folder') { setFolderId(entry.id); return; }
+        const viewer = directFiles.map(x => ({ url: x.url, name: x.name, type: x.mime_type, size: x.size_bytes, noForward: true }));
+        window.openFileViewer(viewer, directFiles.findIndex(x => String(x.id) === String(entry.id)));
+      };
+      const metaFor = entry => {
+        if (entry.kind === 'folder') {
+          const kids = entries.filter(x => String(x.parent_id) === String(entry.id));
+          const f = kids.filter(x => x.kind === 'file').length, d = kids.filter(x => x.kind === 'folder').length;
+          if (!kids.length) return 'leer';
+          return f + ' ' + (f === 1 ? 'Datei' : 'Dateien') + ' · ' + d + ' ' + (d === 1 ? 'Ordner' : 'Ordner');
+        }
+        const author = (allUsers || []).find(u => String(u.id) === String(entry.created_by));
+        const date = entry.created_at ? new Date(entry.created_at).toLocaleDateString('de-DE') : '';
+        return [window.fvHelpers.fmtSize(entry.size_bytes || 0), date, author?.display_name].filter(Boolean).join(' · ');
+      };
+      const panel = uploads && uploads.teamId === team.id ? uploads : null;
+      const completed = panel ? panel.rows.filter(r => r.status === 'fertig').length : 0;
+      const processed = panel ? panel.rows.filter(r => ['fertig', 'fehler', 'uebersprungen'].includes(r.status)).length : 0;
+      const problems = panel ? panel.rows.filter(r => ['fehler', 'uebersprungen'].includes(r.status)) : [];
+      const successes = panel ? panel.rows.filter(r => r.status === 'fertig') : [];
+      const totalFiles = entries.filter(x => x.kind === 'file');
+      const totalBytes = totalFiles.reduce((n, x) => n + (Number(x.size_bytes) || 0), 0);
+
+      return React.createElement('section', { className: 'tf-section', 'data-testid': 'team-files-section', onDragEnter, onDragLeave, onDragOver: e => { if (hasFiles(e)) e.preventDefault(); }, onDrop },
+        dragging && React.createElement('div', { className: 'tf-dropzone', 'data-testid': 'tf-dropzone' }, 'Hier ablegen — Dateien oder ganze Ordner'),
+        React.createElement('div', { className: 'tf-crumbs' },
+          folderId != null && React.createElement('button', { className: 'tf-back', 'data-testid': 'tf-back', onClick: () => setFolderId(parentId) }, '‹ Zurück'),
+          React.createElement('button', { className: 'tf-crumb', 'data-testid': 'tf-crumb', 'aria-current': folderId == null ? 'page' : undefined, onClick: folderId == null ? undefined : () => setFolderId(null) }, '📁 Dateiablage'),
+          path.map((p, i) => React.createElement(React.Fragment, { key: p.id }, React.createElement('span', { 'aria-hidden': 'true' }, '›'), React.createElement('button', { className: 'tf-crumb', 'data-testid': 'tf-crumb', 'aria-current': i === path.length - 1 ? 'page' : undefined, onClick: i === path.length - 1 ? undefined : () => setFolderId(p.id) }, p.name)))
+        ),
+        React.createElement('div', { className: 'tf-toolbar' },
+          React.createElement('button', { className: 'btn-primary', 'data-testid': 'tf-upload', onClick: () => fileInput.current?.click() }, '⬆ Hochladen'),
+          React.createElement('input', { ref: fileInput, type: 'file', multiple: true, accept, 'data-testid': 'tf-file-input', onChange: filesChosen, style: { display: 'none' } }),
+          !isIOS && React.createElement(React.Fragment, null,
+            React.createElement('button', { 'data-testid': 'tf-upload-folder', onClick: () => folderInput.current?.click() }, '📂 Ordner hochladen'),
+            React.createElement('input', { ref: folderInput, type: 'file', multiple: true, accept, onChange: folderChosen, style: { display: 'none' } })
+          ),
+          React.createElement('button', { 'data-testid': 'tf-new-folder', onClick: () => setDialog({ type: 'folder' }) }, '＋ Ordner'),
+          !coarse && React.createElement('span', { className: 'tf-drag-hint' }, 'oder hierher ziehen')
+        ),
+        panel && React.createElement('div', { className: 'tf-upload-panel', 'data-testid': 'tf-upload-panel', role: 'status', 'aria-live': 'polite', 'data-uploading': panel.done ? 'false' : 'true' },
+          React.createElement('div', { className: 'tf-upload-head' }, React.createElement('span', null, completed + ' von ' + panel.rows.length + ' hochgeladen'), React.createElement('span', null, processed + '/' + panel.rows.length)),
+          React.createElement('div', { className: 'tf-progress', role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': panel.rows.length, 'aria-valuenow': processed }, React.createElement('span', { style: { width: (panel.rows.length ? processed / panel.rows.length * 100 : 0) + '%' } })),
+          problems.map(r => React.createElement('div', { key: r.key, className: 'tf-upload-row', 'data-testid': 'tf-upload-row', 'data-status': r.status }, React.createElement('span', null, r.file.name), React.createElement('span', null, r.message))),
+          panel.rows.filter(r => ['wartet', 'laedt'].includes(r.status)).map(r => React.createElement('div', { key: r.key, className: 'tf-upload-row', 'data-testid': 'tf-upload-row', 'data-status': r.status }, React.createElement('span', null, r.file.name), React.createElement('span', null, r.message))),
+          successes.length > 0 && React.createElement('details', null, React.createElement('summary', null, successes.length + ' fertig'), successes.map(r => React.createElement('div', { key: r.key, className: 'tf-upload-row', 'data-testid': 'tf-upload-row', 'data-status': 'fertig' }, React.createElement('span', null, r.createdName || r.file.name), React.createElement('span', null, '✓ fertig')))),
+          React.createElement('button', { 'data-testid': 'tf-upload-close', disabled: !panel.done, onClick: () => setUploads(null), style: { marginTop: '8px' } }, 'Schließen')
+        ),
+        loading && React.createElement('div', { className: 'tf-loading' }, 'Dateien werden geladen …'),
+        loadError && React.createElement('div', { className: 'tf-error' }, 'Die Dateien konnten gerade nicht geladen werden. ', React.createElement('button', { onClick: load }, 'Erneut laden')),
+        !loading && !loadError && direct.length === 0 && React.createElement('div', { className: 'tf-empty' }, folderId == null ? React.createElement(React.Fragment, null, 'Noch keine Dateien in diesem Team. Lade die ersten hoch — z. B. die Unterlagen zum Elternabend.', !coarse && React.createElement('span', null, ' Du kannst Dateien und ganze Ordner auch einfach hierher ziehen.')) : 'Dieser Ordner ist leer.'),
+        !loading && !loadError && React.createElement('div', { className: 'tf-list' }, direct.map(entry => {
+          const canEdit = teamFileCanEdit(entry, user, isTeamAdmin);
+          const canDelete = teamFileCanDelete(entry, user, isTeamAdmin, entries);
+          const fullOwnFolder = entry.kind === 'folder' && canEdit && !isTeamAdmin && !canDelete;
+          return React.createElement('div', { key: entry.id, className: 'tf-item', 'data-testid': 'tf-item', 'data-kind': entry.kind },
+            React.createElement('button', { className: 'tf-item-main', onClick: () => openEntry(entry), onKeyDown: e => { if (e.key === ' ') { e.preventDefault(); openEntry(entry); } } },
+              React.createElement('span', { className: 'tf-item-icon', 'aria-hidden': 'true' }, entry.kind === 'folder' ? '📁' : window.fvHelpers.iconFor({ name: entry.name, type: entry.mime_type, url: entry.url })),
+              React.createElement('span', { className: 'tf-item-copy' }, React.createElement('span', { className: 'tf-item-name' }, entry.name), React.createElement('span', { className: 'tf-item-meta' }, metaFor(entry)))
+            ),
+            React.createElement('span', { className: 'tf-actions' },
+              entry.kind === 'file' && React.createElement('button', { className: 'icon-btn', 'aria-label': 'Herunterladen', title: 'Herunterladen', 'data-testid': 'tf-download', onClick: e => { e.stopPropagation(); window.__krsDownloadFile({ url: entry.url, name: entry.name, type: entry.mime_type, size: entry.size_bytes }); } }, '⬇'),
+              canEdit && React.createElement('button', { className: 'icon-btn', 'aria-label': 'Umbenennen', title: 'Umbenennen', 'data-testid': 'tf-rename', onClick: e => { e.stopPropagation(); setDialog({ type: 'rename', entry }); } }, '✏️'),
+              canDelete && React.createElement('button', { className: 'icon-btn', 'aria-label': 'Löschen', title: 'Löschen', 'data-testid': 'tf-delete', onClick: e => { e.stopPropagation(); deleteEntry(entry); } }, '🗑'),
+              fullOwnFolder && React.createElement('span', { title: 'Nur leere Ordner kannst du selbst löschen. Volle Ordner löschen Team-Admins.', 'aria-label': 'Nur leere Ordner kannst du selbst löschen. Volle Ordner löschen Team-Admins.', style: { display: 'inline-flex', width: '44px', height: '44px', alignItems: 'center', justifyContent: 'center' } }, 'ⓘ')
+            )
+          );
+        })),
+        !loading && !loadError && React.createElement('p', { className: 'tf-summary', 'data-testid': 'tf-summary' }, totalFiles.length + ' ' + (totalFiles.length === 1 ? 'Datei' : 'Dateien') + ' · ' + window.fvHelpers.fmtSize(totalBytes) + ' in diesem Team'),
+        dialog && React.createElement(TeamFileNameModal, { type: dialog.type, entry: dialog.entry, onSave: saveDialog, onClose: () => setDialog(null) })
+      );
+    }
+
     // Liste der Team-Links (im Dateiablage-Tab des Teams und im Dateiablage-Modal).
     // Rechte: Hinzufügen dürfen alle Team-Mitglieder; Bearbeiten/Löschen nur
     // Ersteller:in oder (Team-/globale) Admins — serverseitig per RLS gespiegelt.
@@ -11559,6 +11925,10 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.48.0', date: '29.10.2026', items: [
+        'Neu: Dateiablage im Team — Dateien und ganze Ordner direkt hochladen (Knopf „Hochladen“ oder einfach hineinziehen), ansehen, herunterladen, umbenennen und löschen. Nur Mitglieder des Teams sehen sie.',
+        'Links zu anderen Ablagen (z. B. OneDrive) stehen weiterhin darunter'
+      ]},
       { v: '4.47.0', date: '28.09.2026', items: [
         'Mehr Privatsphäre: Wer gerade online ist und wer einen Beitrag gelesen hat, sehen nur noch die Admins — nicht mehr alle Kolleg:innen'
       ]},
@@ -14046,14 +14416,19 @@
               )
             )
           ),
-          // v4.12.0: Dateiablage-Links des Teams (kein eigener Datei-Speicher)
+          // DATEI-01: Team-Dateien oben, externe Ablage-Links darunter.
           selectedTeam && teamTab === 'links' && React.createElement(React.Fragment, null,
             React.createElement('div', { className: 'content-header' },
               React.createElement('h1', null, '📁 Dateiablage — ' + selectedTeam.name)
             ),
             React.createElement('div', { className: 'content-body' },
               React.createElement('p', { style: { fontSize: '13px', color: 'var(--text-muted)', margin: 0 } },
-                'Benannte Links zu gemeinsamen Ordnern (z. B. Nextcloud). Die Dateien selbst bleiben dort — ' + (window.T ? window.T('app.name', 'die App') : 'die App') + ' speichert nur die Verweise.'),
+                'Dateien und Ordner für dieses Team. Nur Mitglieder sehen sie.'),
+              React.createElement(TeamFilesSection, {
+                team: selectedTeam, dataService, user, allUsers,
+                isTeamAdmin: userTeamRole === 'admin' || isAdminRole(user)
+              }),
+              React.createElement('h2', { style: { fontSize: '15px', margin: '10px 0 0' } }, '🔗 Links zu anderen Ablagen'),
               React.createElement(TeamLinksSection, {
                 team: selectedTeam, dataService, user,
                 isTeamAdmin: userTeamRole === 'admin' || isAdminRole(user)
