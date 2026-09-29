@@ -3,8 +3,9 @@ import { test, expect } from '../fixtures/connect';
 /**
  * Team-Dateiablage-Links (v4.12.0) — Demo-Modus
  *
- * Pro Team pflegbare, benannte Links (z. B. iServ-/Nextcloud-Ordner) im
- * Dateiablage-Tab des Teams. Kein eigener Datei-Speicher — nur Verweise.
+ * Pro Team gespeicherte Links (z. B. OneDrive- oder Nextcloud-Ordner).
+ * Ab 4.50.0 liegen sie im Datei-Tab zugeklappt unter den Dateien, nur zum
+ * Öffnen. Ohne Links fehlt der Block. Anlegen läuft weiter über die Datenschicht.
  *
  * Logik wird bevorzugt über window.DataService(null) getestet (zuverlässiger
  * als fragiles UI), UI-Verhalten defensiv mit test.skip bei Varianten.
@@ -86,8 +87,8 @@ test.describe('Team-Links — DataService-Logik (Demo)', () => {
   });
 });
 
-test.describe('Team-Links — UI (Demo)', () => {
-  test('Dateiablage-Tab im Team zeigt Links als klickbare http-Links (target _blank, rel noopener)', async ({ connectPage: page }) => {
+test.describe('Team-Links — zugeklappt unter den Dateien (Demo)', () => {
+  test('Vorhandene Links öffnen sich erst nach dem Aufklappen', async ({ connectPage: page }) => {
     const teamBtn = page.locator('.list-item', { hasText: 'Kollegium' }).first();
     if (await teamBtn.count() === 0) {
       test.skip(true, 'Team „Kollegium" nicht gefunden — UI-Variante');
@@ -100,79 +101,30 @@ test.describe('Team-Links — UI (Demo)', () => {
     }
     await tab.click();
 
-    const section = page.locator('[data-testid="team-links-section"]').first();
-    await expect(section).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('[data-testid="team-files-section"]')).toBeVisible();
+    const legacy = page.locator('[data-testid="team-links-legacy"]');
+    await expect(legacy).toBeVisible();
+    await expect(legacy).not.toHaveAttribute('open');
+    await expect(page.locator('[data-testid="team-link-add"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="team-link-edit"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="team-link-delete"]')).toHaveCount(0);
 
-    const items = page.locator('[data-testid="team-link-item"]');
-    await expect(items.first()).toBeVisible({ timeout: 5_000 });
-
-    const firstLink = items.first().locator('a').first();
+    await page.locator('[data-testid="team-links-summary"]').click();
+    const firstLink = page.locator('[data-testid="team-link-item"]').first().locator('a').first();
+    await expect(firstLink).toBeVisible();
     await expect(firstLink).toHaveAttribute('target', '_blank');
     await expect(firstLink).toHaveAttribute('rel', /noopener/);
-    const href = await firstLink.getAttribute('href');
-    expect(href).toMatch(/^https?:\/\//);
-
-    // Hinzufügen-Button für Team-Mitglieder sichtbar
-    await expect(page.locator('[data-testid="team-link-add"]').first()).toBeVisible();
+    expect(await firstLink.getAttribute('href')).toMatch(/^https?:\/\//);
   });
 
-  test('Link über das Formular anlegen: mehrere Felder ausfüllen, alle Werte kommen an (Stale-Closure-Check)', async ({ connectPage: page }) => {
-    const teamBtn = page.locator('.list-item', { hasText: 'Kollegium' }).first();
+  test('Ein Team ohne gespeicherte Links zeigt den Block nicht', async ({ connectPage: page }) => {
+    const teamBtn = page.locator('.list-item', { hasText: 'Informatik Fachschaft' }).first();
     if (await teamBtn.count() === 0) {
-      test.skip(true, 'Team „Kollegium" nicht gefunden — UI-Variante');
+      test.skip(true, 'Team „Informatik Fachschaft" nicht gefunden — UI-Variante');
     }
     await teamBtn.click();
-    const tab = page.locator('[data-testid="team-tab-links"]').first();
-    if (await tab.count() === 0) {
-      test.skip(true, 'Dateiablage-Tab nicht gefunden — UI-Variante');
-    }
-    await tab.click();
-
-    await page.locator('[data-testid="team-link-add"]').first().click();
-    const dialog = page.locator('.modal-overlay[aria-label="Link hinzufügen"]').first();
-    await expect(dialog).toBeVisible({ timeout: 5_000 });
-
-    // Bewusst MEHRERE Felder nacheinander füllen — deckt die Stale-Closure-
-    // Falle auf (Felder dürfen sich nicht gegenseitig überschreiben).
-    await dialog.locator('[data-testid="team-link-titel"]').fill('E2E-Ordner');
-    await dialog.locator('[data-testid="team-link-url"]').fill('https://example.org/e2e');
-    await dialog.locator('[data-testid="team-link-beschreibung"]').fill('Vom Test angelegt');
-
-    await dialog.getByRole('button', { name: 'Speichern' }).click();
-    await expect(dialog).toHaveCount(0, { timeout: 5_000 });
-
-    const neu = page.locator('[data-testid="team-link-item"]', { hasText: 'E2E-Ordner' }).first();
-    await expect(neu).toBeVisible({ timeout: 5_000 });
-    await expect(neu).toContainText('Vom Test angelegt');
-    await expect(neu.locator('a').first()).toHaveAttribute('href', 'https://example.org/e2e');
+    await page.locator('[data-testid="team-tab-links"]').first().click();
+    await expect(page.locator('[data-testid="team-files-section"]')).toBeVisible();
+    await expect(page.locator('[data-testid="team-links-legacy"]')).toHaveCount(0);
   });
-
-  test('Ungültige URL blockiert das Speichern (Button deaktiviert, Inline-Hinweis)', async ({ connectPage: page }) => {
-    const teamBtn = page.locator('.list-item', { hasText: 'Kollegium' }).first();
-    if (await teamBtn.count() === 0) {
-      test.skip(true, 'Team „Kollegium" nicht gefunden — UI-Variante');
-    }
-    await teamBtn.click();
-    const tab = page.locator('[data-testid="team-tab-links"]').first();
-    if (await tab.count() === 0) {
-      test.skip(true, 'Dateiablage-Tab nicht gefunden — UI-Variante');
-    }
-    await tab.click();
-
-    await page.locator('[data-testid="team-link-add"]').first().click();
-    const dialog = page.locator('.modal-overlay[aria-label="Link hinzufügen"]').first();
-    await expect(dialog).toBeVisible({ timeout: 5_000 });
-
-    await dialog.locator('[data-testid="team-link-titel"]').fill('Böser Link');
-    await dialog.locator('[data-testid="team-link-url"]').fill('javascript:alert(1)');
-
-    await expect(dialog.getByRole('button', { name: 'Speichern' })).toBeDisabled();
-    await expect(dialog).toContainText(/http:\/\/ oder https:\/\//);
-  });
-
-  // v4.18.0: Das Dateiablage-Modal (Sidebar) wurde entfernt — der Nav-Button
-  // ist jetzt ein Direktlink zur Nextcloud, ohne eingebetteten Team-Links-
-  // Bereich. Siehe smoke-dateiablage.spec.ts (Modal wirklich weg) und
-  // smoke-dateiablage-direktlink.spec.ts (Direktlink-Verhalten). Die
-  // Team-Links selbst bleiben oben über den Team-Tab „📁 Dateiablage" getestet.
 });

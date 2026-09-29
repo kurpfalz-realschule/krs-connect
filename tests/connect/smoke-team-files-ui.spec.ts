@@ -18,11 +18,15 @@ test.describe('DATEI-01 — Team-Dateiablage UI', () => {
     await expect(page.locator('[data-testid="team-tab-links"]').first()).toHaveAttribute('aria-selected', 'true');
   });
 
-  test('T1 Dateien oben, Links darunter; Tab ist axe-sauber', async ({ connectPage: page }) => {
+  test('T1 Dateien vorn, ältere Links zugeklappt; Tab ist axe-sauber', async ({ connectPage: page }) => {
     await openFiles(page);
     await expect(page.locator('[data-testid="tf-item"]', { hasText: 'Elternabend 2026' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: '🔗 Links zu anderen Ablagen' })).toBeVisible();
-    await expect(page.locator('[data-testid="team-links-section"]')).toBeVisible();
+    const legacy = page.locator('[data-testid="team-links-legacy"]');
+    await expect(legacy).toBeVisible();
+    await expect(legacy).not.toHaveAttribute('open');
+    await expect(page.locator('[data-testid="team-link-item"]').first()).toBeHidden();
+    await expect(page.locator('[data-testid="team-link-add"]')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: '🔗 Links zu anderen Ablagen' })).toHaveCount(0);
     const axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
     expect(axe.violations.filter(v => v.impact === 'critical' || v.impact === 'serious')).toEqual([]);
   });
