@@ -1962,8 +1962,15 @@
         // (storagePath gibt dann null) oder Demo ohne Client.
         if (!path) return ref;
         if (!sb || !sb.storage) return ref;
+        // DATEI-01 (4.48.0): Team-Dateiablage liegt in einem eigenen privaten
+        // Bucket. Referenzen dafür tragen das Präfix "team-files/" — im Bucket
+        // "images" kann es diesen Ordner nicht geben (Upload-Policy erlaubt nur
+        // uploads/ und avatars/), die Zuordnung ist also eindeutig.
+        var bucket = 'images';
+        if (path.indexOf('team-files/') === 0) { bucket = 'team-files'; path = path.slice(11); }
+        var cacheKey = bucket + ':' + path;
         var now = Date.now();
-        var hit = cache.get(path);
+        var hit = cache.get(cacheKey);
         if (hit && hit.exp > now + 60000) return hit.url;         // >1 min Restlaufzeit
         // S1/O2 (21.09.2026): Ab hier ist klar, dass es ein echter Storage-Pfad
         // ist. Schlaegt das Signieren fehl, ist das ein FEHLER, kein Durchreich-
@@ -1975,7 +1982,7 @@
         // eingefrorenes Supabase (Free-Plan, siehe HANDOVER 0P) hier fuer immer,
         // und das synchron geoeffnete Fenster bleibt bei about:blank stehen, ohne
         // dass je ein Fehler beim Nutzer ankommt.
-        var signPromise = sb.storage.from('images').createSignedUrl(path, TTL);
+        var signPromise = sb.storage.from(bucket).createSignedUrl(path, TTL);
         var res = await Promise.race([
           signPromise,
           new Promise(function(_, reject){
@@ -1986,7 +1993,7 @@
         if ((res && res.error) || !signed) {
           throw new Error((res && res.error && res.error.message) || 'Signierte URL konnte nicht erstellt werden');
         }
-        cache.set(path, { url: signed, exp: now + TTL * 1000 });
+        cache.set(cacheKey, { url: signed, exp: now + TTL * 1000 });
         return signed;
       }
 
@@ -2565,7 +2572,9 @@
 
         var tools = document.createElement('div'); tools.className = 'fv-tools';
         var dl = document.createElement('button'); dl.className = 'fv-btn'; dl.textContent = '⬇ Herunterladen'; dl.onclick = function(){ forceDownload(file); }; tools.appendChild(dl);
-        if (window.__krsForwardFile) { var fw = document.createElement('button'); fw.className = 'fv-btn'; fw.textContent = '↪ Weiterleiten'; fw.onclick = function(){ close(); window.__krsForwardFile(file); }; tools.appendChild(fw); }
+        // DATEI-01: Team-Dateien nicht in Chats weiterleiten — Empfänger:innen
+        // außerhalb des Teams dürften sie gar nicht öffnen (Bucket-RLS).
+        if (window.__krsForwardFile && !file.noForward) { var fw = document.createElement('button'); fw.className = 'fv-btn'; fw.textContent = '↪ Weiterleiten'; fw.onclick = function(){ close(); window.__krsForwardFile(file); }; tools.appendChild(fw); }
         var nt = document.createElement('a'); nt.className = 'fv-btn'; nt.href = file.url; nt.target = '_blank'; nt.rel = 'noopener'; nt.textContent = '↗ Neuer Tab';
         // S1 (21.09.2026): Fenster SOFORT in der Nutzergeste öffnen (synchron im
         // Klick), Inhalt erst danach nachreichen. window.open() NACH einem await
@@ -3110,6 +3119,21 @@
       ],
       2: [
         { id: 'tl3', team_id: 2, titel: 'Noten & Arrangements (Nextcloud)', url: 'https://cloud.musterschule.example/s/musik', beschreibung: 'Ablage der Fachschaft Musik', icon: '🎵', created_by: 1, created_at: '2026-06-27T12:00:00.000Z', sort_order: 0 }
+      ]
+    };
+
+    // Demo-Store für die Team-Dateiablage (DATEI-01, 4.48.0): { [teamId]: [eintrag, ...] }
+    // Einträge bilden einen Baum über parent_id (null = oberste Ebene).
+    // Demo-Dateien tragen eine data:-URL, damit Vorschau/Download ohne Server gehen.
+    let MOCK_TEAM_FILES = {
+      1: [
+        { id: 'tf1', team_id: 1, parent_id: null, kind: 'folder', name: 'Elternabend 2026', created_by: 2, created_at: '2026-09-20T08:00:00.000Z' },
+        { id: 'tf2', team_id: 1, parent_id: 'tf1', kind: 'file', name: 'Ablauf Elternabend.txt', mime_type: 'text/plain', size_bytes: 118,
+          url: 'data:text/plain;charset=utf-8,' + encodeURIComponent('Ablauf Elternabend (Demo)\n1. Begrüßung\n2. Wahl der Elternvertretung\n3. Klassenfahrt\n4. Verschiedenes'),
+          created_by: 2, created_at: '2026-09-20T08:05:00.000Z' },
+        { id: 'tf3', team_id: 1, parent_id: null, kind: 'file', name: 'Konferenzprotokoll September.txt', mime_type: 'text/plain', size_bytes: 64,
+          url: 'data:text/plain;charset=utf-8,' + encodeURIComponent('Protokoll (Demo) — nur ein Beispiel für die Dateiablage.'),
+          created_by: 1, created_at: '2026-09-22T12:00:00.000Z' }
       ]
     };
 
@@ -4346,6 +4370,249 @@
             : 'Link konnte nicht gelöscht werden. Bitte versuche es erneut.', 'error');
           return false;
         }
+      }
+
+      // ── Team-Dateiablage (DATEI-01, 4.48.0) ────────────────
+      // Echte Dateien + Ordner pro Team. Metadaten in public.team_files (Baum
+      // über parent_id), Inhalte im PRIVATEN Bucket "team-files" unter
+      // <team_id>/<uuid>.<ext>. Lesen/Hochladen: Team-Mitglieder; Umbenennen/
+      // Löschen: Ersteller:in oder Team-Admins (RLS spiegelt das serverseitig).
+      // Normalizer-Regel wie bei den Links: _normalizeTeamFile ist das EINZIGE
+      // Mapping DB/Mock → UI. `url` ist die Referenz für Viewer/Download
+      // ("team-files/<pfad>" → der Resolver signiert aus dem richtigen Bucket).
+      _normalizeTeamFile(row) {
+        if (!row) return null;
+        const isFile = row.kind === 'file';
+        return {
+          id: row.id,
+          team_id: row.team_id,
+          parent_id: row.parent_id ?? null,
+          kind: isFile ? 'file' : 'folder',
+          name: row.name || '',
+          storage_path: row.storage_path || null,
+          mime_type: row.mime_type || '',
+          size_bytes: row.size_bytes != null ? Number(row.size_bytes) : null,
+          created_by: row.created_by ?? null,
+          created_at: row.created_at || null,
+          updated_at: row.updated_at || null,
+          url: isFile ? (row.url || (row.storage_path ? 'team-files/' + row.storage_path : null)) : null
+        };
+      }
+
+      _teamFileError(err, fallback) {
+        const msg = String((err && (err.message || err.error)) || '');
+        const code = err && err.code;
+        if (code === '23505' || /duplicate key|team_files_name_uq/i.test(msg)) return 'Es gibt hier schon einen Eintrag mit diesem Namen.';
+        if (/row-level security|policy|permission|not authorized|denied|42501/i.test(msg) || code === '42501') return 'Keine Berechtigung für diese Aktion.';
+        if (/exceeded the maximum allowed size|payload too large|413/i.test(msg)) return 'Datei zu groß (max. 50 MB).';
+        if (/mime|content type|invalid_mime/i.test(msg)) return 'Dieser Dateityp ist nicht erlaubt.';
+        if (/network|fetch|offline|Failed to fetch/i.test(msg)) return 'Keine Verbindung — bitte Internet prüfen.';
+        if (/gehört nicht zu diesem Team|Zielordner/i.test(msg)) return 'Der Ordner gehört nicht zu diesem Team.';
+        if (/team_files_ext_chk/i.test(msg)) return 'Die Dateiendung muss erhalten bleiben (z. B. .pdf, .docx, .pptx).';
+        return fallback;
+      }
+
+      // Server verlangt eine erlaubte Endung (Constraint team_files_ext_chk).
+      // Fehlt sie (z. B. „README" als text/plain), wird sie aus dem Typ ergänzt.
+      _ensureTeamFileExt(name, mime) {
+        const ext = (name.includes('.') ? name.split('.').pop() : '').toLowerCase();
+        if (TEAM_FILES_CONFIG.EXT_MIME[ext]) return name;
+        const ALIAS = { 'image/jpg': 'jpg', 'audio/mp3': 'mp3', 'audio/x-m4a': 'm4a', 'audio/x-wav': 'wav', 'text/rtf': 'rtf' };
+        const add = ALIAS[mime] || Object.keys(TEAM_FILES_CONFIG.EXT_MIME).find(k => TEAM_FILES_CONFIG.EXT_MIME[k] === mime);
+        return add ? (name + '.' + add).substring(0, 200) : name;
+      }
+
+      _hasAllowedTeamFileExt(name) {
+        const ext = (String(name).includes('.') ? String(name).split('.').pop() : '').toLowerCase();
+        return !!TEAM_FILES_CONFIG.EXT_MIME[ext];
+      }
+
+      _cleanTeamFileName(name) {
+        return String(name || '').replace(/[\u0000-\u001f\u007f]/g, '').replace(/[\/\\]/g, '-').trim().substring(0, 200);
+      }
+
+      async getTeamFiles(teamId) {
+        if (this.isDemo) {
+          return (MOCK_TEAM_FILES[teamId] || []).map(r => this._normalizeTeamFile(r));
+        }
+        try {
+          const { data, error } = await this.sb.from('team_files')
+            .select('id, team_id, parent_id, kind, name, storage_path, mime_type, size_bytes, created_by, created_at, updated_at')
+            .eq('team_id', teamId)
+            .order('name', { ascending: true })
+            .limit(5000);
+          if (error) throw error;
+          return (data || []).map(r => this._normalizeTeamFile(r));
+        } catch (err) {
+          console.error('getTeamFiles error:', err);
+          throw err;
+        }
+      }
+
+      // Legt einen Ordner an. Gibt das neue Objekt zurück oder null (Toast gezeigt).
+      // opts.quiet: kein Toast bei „Name existiert" (Ordner-Upload sucht dann den vorhandenen).
+      async createTeamFolder(teamId, parentId, name, userId = null, opts = {}) {
+        const clean = this._cleanTeamFileName(name);
+        if (!clean) { showToast('Bitte gib dem Ordner einen Namen.', 'error'); return null; }
+        if (this.isDemo) {
+          const list = MOCK_TEAM_FILES[teamId] || (MOCK_TEAM_FILES[teamId] = []);
+          if (list.some(x => (x.parent_id ?? null) === (parentId ?? null) && x.name.toLowerCase() === clean.toLowerCase())) {
+            const e = new Error('duplicate key value violates unique constraint "team_files_name_uq"'); e.code = '23505';
+            if (opts.throwOnDuplicate) throw e;
+            if (!opts.quiet) showToast(this._teamFileError(e, ''), 'error');
+            return null;
+          }
+          const row = { id: 'tf' + Date.now() + Math.random().toString(36).slice(2, 7), team_id: teamId, parent_id: parentId ?? null, kind: 'folder', name: clean, created_by: userId ?? null, created_at: new Date().toISOString() };
+          list.push(row);
+          return this._normalizeTeamFile(row);
+        }
+        try {
+          const insertObj = { team_id: teamId, parent_id: parentId ?? null, kind: 'folder', name: clean };
+          if (userId) insertObj.created_by = userId;
+          const { data, error } = await this.sb.from('team_files').insert(insertObj).select('*').single();
+          if (error) throw error;
+          return this._normalizeTeamFile(data);
+        } catch (err) {
+          if (opts.throwOnDuplicate && (err && (err.code === '23505' || /duplicate key/i.test(err.message || '')))) throw err;
+          console.error('createTeamFolder error:', err);
+          if (!opts.quiet) showToast(this._teamFileError(err, 'Ordner konnte nicht angelegt werden.'), 'error');
+          return null;
+        }
+      }
+
+      // Lädt EINE Datei hoch und legt den Eintrag an. Wirft bei Fehlern
+      // (Aufrufer sammelt die Meldungen für die Upload-Liste). Gibt den Eintrag zurück.
+      // Namenskonflikt im Zielordner → automatisch „Name (2).ext" usw.
+      async uploadTeamFile(teamId, parentId, file, userId = null, nameOverride = null) {
+        const mime = teamFileMime(file);
+        if (!file) throw new Error('Datei ohne Namen');
+        if (!mime) throw new Error('Dieser Dateityp ist nicht erlaubt.');
+        const originalName = this._ensureTeamFileExt(this._cleanTeamFileName(nameOverride || file.name || 'Datei') || 'Datei', mime);
+        if (file.size > TEAM_FILES_CONFIG.MAX_BYTES) throw new Error('Zu groß (' + Math.round(file.size / 1048576) + ' MB, max. 50 MB).');
+        const dot = originalName.lastIndexOf('.');
+        const base = dot > 0 ? originalName.slice(0, dot) : originalName;
+        const extPart = dot > 0 ? originalName.slice(dot) : '';
+        const nameFor = (i) => i === 1 ? originalName : (base + ' (' + i + ')' + extPart).substring(0, 200);
+
+        if (this.isDemo) {
+          const list = MOCK_TEAM_FILES[teamId] || (MOCK_TEAM_FILES[teamId] = []);
+          let i = 1;
+          while (list.some(x => (x.parent_id ?? null) === (parentId ?? null) && x.name.toLowerCase() === nameFor(i).toLowerCase())) i++;
+          const row = { id: 'tf' + Date.now() + Math.random().toString(36).slice(2, 7), team_id: teamId, parent_id: parentId ?? null, kind: 'file', name: nameFor(i),
+            mime_type: mime, size_bytes: file.size, url: URL.createObjectURL(file), created_by: userId ?? null, created_at: new Date().toISOString() };
+          list.push(row);
+          return this._normalizeTeamFile(row);
+        }
+
+        const ext = (extPart.slice(1) || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 8) || 'bin';
+        const uuid = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2));
+        const path = String(teamId) + '/' + uuid + '.' + ext;
+        let body = file;
+        if (mime !== file.type) { try { body = new File([file], originalName, { type: mime }); } catch (e) { body = file; } }
+        window.__krsActiveUploads = (window.__krsActiveUploads || 0) + 1;
+        try {
+          const up = await this.sb.storage.from(TEAM_FILES_CONFIG.BUCKET).upload(path, body, { contentType: mime, cacheControl: '3600', upsert: false });
+          if (up.error) throw up.error;
+          let lastErr = null;
+          for (let i = 1; i <= 25; i++) {
+            const insertObj = { team_id: teamId, parent_id: parentId ?? null, kind: 'file', name: nameFor(i), storage_path: path, mime_type: mime, size_bytes: file.size };
+            if (userId) insertObj.created_by = userId;
+            const { data, error } = await this.sb.from('team_files').insert(insertObj).select('*').single();
+            if (!error) return this._normalizeTeamFile(data);
+            lastErr = error;
+            if (!(error.code === '23505' && /team_files_name_uq/.test(error.message || ''))) break;
+          }
+          // Eintrag ließ sich nicht anlegen → hochgeladenes Objekt wieder entfernen (keine Leichen)
+          try { await this.sb.storage.from(TEAM_FILES_CONFIG.BUCKET).remove([path]); } catch (e) { /* bleibt als Waise, s. Migration */ }
+          throw lastErr || new Error('Eintrag konnte nicht angelegt werden');
+        } catch (err) {
+          console.error('uploadTeamFile error:', err);
+          throw new Error(this._teamFileError(err, 'Hochladen fehlgeschlagen.'));
+        } finally {
+          window.__krsActiveUploads = Math.max(0, (window.__krsActiveUploads || 1) - 1);
+        }
+      }
+
+      async renameTeamFile(id, newName) {
+        const clean = this._cleanTeamFileName(newName);
+        if (!clean) { showToast('Der Name darf nicht leer sein.', 'error'); return null; }
+        const pruefeEndung = (kind) => {
+          if (kind === 'file' && !this._hasAllowedTeamFileExt(clean)) {
+            showToast('Die Dateiendung muss erhalten bleiben (z. B. .pdf, .docx, .pptx).', 'error');
+            return false;
+          }
+          return true;
+        };
+        if (this.isDemo) {
+          for (const list of Object.values(MOCK_TEAM_FILES)) {
+            const row = list.find(x => String(x.id) === String(id));
+            if (!row) continue;
+            if (!pruefeEndung(row.kind)) return null;
+            if (list.some(x => x !== row && (x.parent_id ?? null) === (row.parent_id ?? null) && x.name.toLowerCase() === clean.toLowerCase())) {
+              showToast('Es gibt hier schon einen Eintrag mit diesem Namen.', 'error'); return null;
+            }
+            row.name = clean; row.updated_at = new Date().toISOString();
+            return this._normalizeTeamFile(row);
+          }
+          return null;
+        }
+        try {
+          const { data, error } = await this.sb.from('team_files').update({ name: clean }).eq('id', id).select('*');
+          if (error) throw error;
+          if (!data || data.length === 0) { showToast('Keine Berechtigung: Nur Ersteller:in oder Team-Admins können umbenennen.', 'error'); return null; }
+          return this._normalizeTeamFile(data[0]);
+        } catch (err) {
+          console.error('renameTeamFile error:', err);
+          showToast(this._teamFileError(err, 'Umbenennen fehlgeschlagen.'), 'error');
+          return null;
+        }
+      }
+
+      // Löscht Einträge. `entry` = Datei oder Ordner; `allEntries` = komplette
+      // Team-Liste (für die Unterbäume von Ordnern). Reihenfolge: erst die
+      // Zeile (Kaskade entfernt Unterordner/Dateien), dann die Objekte im
+      // Speicher — schlägt Letzteres fehl, bleibt höchstens eine unsichtbare
+      // Waise, nie ein Eintrag, der ins Leere zeigt.
+      async deleteTeamEntry(entry, allEntries = []) {
+        const byParent = new Map();
+        for (const e of allEntries) {
+          const k = e.parent_id == null ? '' : String(e.parent_id);
+          if (!byParent.has(k)) byParent.set(k, []);
+          byParent.get(k).push(e);
+        }
+        const subtree = [entry];
+        for (let i = 0; i < subtree.length; i++) {
+          if (subtree[i].kind === 'folder') (byParent.get(String(subtree[i].id)) || []).forEach(c => subtree.push(c));
+        }
+        const paths = subtree.filter(e => e.kind === 'file' && e.storage_path).map(e => e.storage_path);
+        const ids = new Set(subtree.map(e => String(e.id)));
+
+        if (this.isDemo) {
+          const list = MOCK_TEAM_FILES[entry.team_id] || [];
+          MOCK_TEAM_FILES[entry.team_id] = list.filter(x => !ids.has(String(x.id)));
+          return { ok: true, removed: ids.size };
+        }
+        try {
+          const { data, error } = await this.sb.from('team_files').delete().eq('id', entry.id).select('id');
+          if (error) throw error;
+          if (!data || data.length === 0) {
+            showToast(entry.kind === 'folder'
+              ? 'Löschen nicht möglich: Nur leere Ordner dürfen von Ersteller:innen gelöscht werden — volle Ordner nur von Team-Admins.'
+              : 'Keine Berechtigung: Nur Ersteller:in oder Team-Admins können löschen.', 'error');
+            return { ok: false, removed: 0 };
+          }
+        } catch (err) {
+          console.error('deleteTeamEntry error:', err);
+          showToast(this._teamFileError(err, 'Löschen fehlgeschlagen.'), 'error');
+          return { ok: false, removed: 0 };
+        }
+        for (let i = 0; i < paths.length; i += 100) {
+          try {
+            const { error } = await this.sb.storage.from(TEAM_FILES_CONFIG.BUCKET).remove(paths.slice(i, i + 100));
+            if (error) console.warn('deleteTeamEntry: Speicher-Objekte nicht entfernt (Waisen):', error);
+          } catch (e) { console.warn('deleteTeamEntry: Speicher-Objekte nicht entfernt (Waisen):', e); }
+        }
+        return { ok: true, removed: ids.size };
       }
 
       // ── Team-Termine (v4.12.0) ─────────────────────────────
@@ -7048,7 +7315,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.46.0';
+    window.KRS_VERSION = '4.47.0';
     // PERF-01: Cold-Boot-Zähler für Hub keep-alive Abnahme (Connect→Hub-Start→Connect → bleibt 1)
     window.__krsConnectBootCount = (window.__krsConnectBootCount || 0) + 1;
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
@@ -7150,6 +7417,42 @@
     // ============================================================
     // Muss synchron mit der Storage-Policy "images_insert_validated"
     // (siehe migrations/2026-05-01_storage-upload-fix.sql) gehalten werden.
+    // DATEI-01 (4.48.0): Team-Dateiablage — eigener privater Bucket "team-files".
+    // Muss synchron zur Migration migrations/2026-09-29_DATEI-01-team-dateiablage.sql
+    // bleiben (file_size_limit + allowed_mime_types des Buckets).
+    const TEAM_FILES_CONFIG = {
+      BUCKET: 'team-files',
+      MAX_BYTES: 50 * 1024 * 1024, // 50 MB pro Datei (Bucket-Limit)
+      PARALLEL: 3,                 // gleichzeitige Uploads
+      EXT_MIME: {
+        jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', heic: 'image/heic', heif: 'image/heif',
+        pdf: 'application/pdf',
+        doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ppt: 'application/vnd.ms-powerpoint', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        ppsx: 'application/vnd.openxmlformats-officedocument.presentationml.slideshow',
+        odt: 'application/vnd.oasis.opendocument.text', ods: 'application/vnd.oasis.opendocument.spreadsheet', odp: 'application/vnd.oasis.opendocument.presentation',
+        txt: 'text/plain', csv: 'text/csv', md: 'text/markdown', rtf: 'application/rtf',
+        mp3: 'audio/mpeg', m4a: 'audio/mp4', wav: 'audio/wav',
+        mp4: 'video/mp4', mov: 'video/quicktime'
+      },
+      // Zusätzliche Schreibweisen, die Browser für dieselben Typen melden
+      MIME_ALIASES: { 'image/jpg': 1, 'audio/mp3': 1, 'audio/x-m4a': 1, 'audio/x-wav': 1, 'text/rtf': 1 }
+    };
+    // Liefert den MIME-Typ, der hochgeladen wird — oder null, wenn der Typ nicht erlaubt ist.
+    function teamFileMime(file) {
+      const name = String((file && file.name) || '');
+      const ext = (name.includes('.') ? name.split('.').pop() : '').toLowerCase();
+      const byExt = TEAM_FILES_CONFIG.EXT_MIME[ext] || null;
+      const t = String((file && file.type) || '').toLowerCase();
+      const allowed = new Set(Object.values(TEAM_FILES_CONFIG.EXT_MIME));
+      if (t && (allowed.has(t) || TEAM_FILES_CONFIG.MIME_ALIASES[t])) return t;
+      // Kein/unklarer Typ (iPad, Windows bei .md/.csv …) → aus der Endung ableiten
+      if (!t || t === 'application/octet-stream' || byExt) return byExt;
+      return null;
+    }
+    window.__krsTeamFileMime = teamFileMime; // Test-Hook
+
     const UPLOAD_CONFIG = {
       MAX_BYTES: 25 * 1024 * 1024, // 25 MB pro Datei (Bucket-Limit)
       ALLOWED_MIME: new Set([
@@ -8141,7 +8444,9 @@
       );
     }
 
-    function PostList({ posts, setPosts, channelId, dataService, user, allUsers, onOpenThread, hasMore, onLoadMore, loadingMore, onForward, onSave, onTask, savedPosts, onDragDrop, readReceiptsEnabled }) {
+    function PostList({ posts, setPosts, channelId, dataService, user, allUsers, onOpenThread, hasMore, onLoadMore, loadingMore, onForward, onSave, onTask, savedPosts, onDragDrop, readReceiptsEnabled, canSeeReadReceipts }) {
+      // PRIV-01 (4.47.0): „Gelesen von“ sehen nur Admins/Owner — Kolleg:innen
+      // bekommen die Leserliste weder angezeigt noch geladen (Privatsphäre).
       const [newPostTitle, setNewPostTitle] = useState('');
       const [newPostContent, setNewPostContent] = useState('');
       const [showPostEmoji, setShowPostEmoji] = useState(false);
@@ -8242,7 +8547,7 @@
         postIds.forEach(id => reactionsLoadedRef.current.add(id));
         Promise.all([
           dataService.getReactions('post', postIds),
-          readReceiptsEnabled ? dataService.getPostReads(postIds, channelId) : Promise.resolve(new Map())
+          (readReceiptsEnabled && canSeeReadReceipts) ? dataService.getPostReads(postIds, channelId) : Promise.resolve(new Map())
         ]).then(([reactionsMap, readsMap]) => {
           if (readsMap.size > 0) setReadReceipts(prev => { const next = new Map(prev); readsMap.forEach((v, k) => next.set(k, v)); return next; });
           if (reactionsMap.size > 0) {
@@ -8792,10 +9097,12 @@
               // D2 (4.45.0, nur mit FEATURES.ACK): Kenntnisnahme bei Dringend
               post.is_urgent && !post.parent_id && krsAckEnabled(dataService) && React.createElement(AckBar, { post, dataService, user }),
               (() => {
+                if (!canSeeReadReceipts) return null; // PRIV-01: nur Admins
                 const readers = readReceipts.get(post.id);
                 if (!readers || readers.length === 0) return null;
                 const isExpanded = expandedReads === post.id;
                 return React.createElement('button', {
+                  'data-testid': 'post-read-receipts',
                   onClick: () => setExpandedReads(isExpanded ? null : post.id),
                   style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px', padding: '2px 6px' }
                 },
@@ -9614,7 +9921,7 @@
               },
               conv.is_group ? React.createElement('div', { className: 'group-avatar', style: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '40px', height: '40px', borderRadius: '8px', background: 'var(--accent)', color: 'white', fontWeight: '600', fontSize: '18px' } }, '👥') : React.createElement('div', { className: 'avatar-wrapper' },
                 React.createElement(Avatar, { user: conv.user || { display_name: '?', avatar_color: '#757575' }, size: 40 }),
-                React.createElement('span', { className: 'avatar-status online-dot small' + (onlineUsers && onlineUsers.has(Number(conv.user?.id)) ? '' : ' offline') })
+                onlineUsers && React.createElement('span', { className: 'avatar-status online-dot small' + (onlineUsers.has(Number(conv.user?.id)) ? '' : ' offline') })
               ),
               React.createElement('div', { className: 'conversation-info' },
                 React.createElement('div', { className: 'conversation-name' }, conv.is_group ? (conv.name || 'Gruppenchat') : ((conv.user || {}).display_name || 'Unbekannt')),
@@ -9991,7 +10298,7 @@
           ) : React.createElement(React.Fragment, null,
             React.createElement('div', { className: 'avatar-wrapper' },
               React.createElement(Avatar, { user: conversation.user || { display_name: 'Chat', avatar_color: '#757575' }, size: 32 }),
-              React.createElement('span', { className: 'avatar-status online-dot small' + (onlineUsers && onlineUsers.has(Number(conversation.user?.id)) ? '' : ' offline') })
+              onlineUsers && React.createElement('span', { className: 'avatar-status online-dot small' + (onlineUsers.has(Number(conversation.user?.id)) ? '' : ' offline') })
             ),
             React.createElement('div', null,
               React.createElement('span', { className: 'chat-header-name' }, (conversation.user || {}).display_name || 'Chat'),
@@ -11252,6 +11559,9 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.47.0', date: '28.09.2026', items: [
+        'Mehr Privatsphäre: Wer gerade online ist und wer einen Beitrag gelesen hat, sehen nur noch die Admins — nicht mehr alle Kolleg:innen'
+      ]},
       { v: '4.46.0', date: '28.09.2026', items: [
         'Schneller: Lesebestätigungen werden gesammelt gesendet, nicht mehr einzeln pro Beitrag'
       ]},
@@ -11611,7 +11921,7 @@
             React.createElement('div', { style: rowStyle },
               React.createElement('div', null,
                 React.createElement('div', { style: labelStyle }, '✓✓ Lesebestätigungen'),
-                React.createElement('div', { style: hintStyle }, 'Andere sehen, dass du eine Nachricht gelesen hast (DSGVO).')
+                React.createElement('div', { style: hintStyle }, 'Freiwillig (DSGVO): Nur die Admins sehen, dass du einen Beitrag gelesen hast — Kolleg:innen sehen das nicht.')
               ),
               toggleBtn(readReceiptsEnabled, onToggleReadReceipts, 'Lesebestätigungen umschalten')
             )
@@ -13785,7 +14095,7 @@
             React.createElement('div', { className: 'content-body' },
               postsLoading
                 ? React.createElement(SkeletonPosts, { count: 4 })
-                : React.createElement(PostList, { posts, setPosts, channelId: selectedChannel?.id, dataService, user, allUsers, onOpenThread: setOpenThread, hasMore: hasMorePosts, onLoadMore: loadMorePosts, loadingMore, onForward: setShowForwardModal, onSave: toggleSavePost, onTask: handleTaskFromPost, savedPosts, readReceiptsEnabled })
+                : React.createElement(PostList, { posts, setPosts, channelId: selectedChannel?.id, dataService, user, allUsers, onOpenThread: setOpenThread, hasMore: hasMorePosts, onLoadMore: loadMorePosts, loadingMore, onForward: setShowForwardModal, onSave: toggleSavePost, onTask: handleTaskFromPost, savedPosts, readReceiptsEnabled, canSeeReadReceipts: isAdminRole(user) })
             )
           )
         )
@@ -13831,14 +14141,15 @@
             onSelect: handleConversationSelect,
             onNewChat: handleNewChat,
             allUsers,
-            onlineUsers,
+            // PRIV-01 (4.47.0): Online-Status nur für Admins/Owner sichtbar
+            onlineUsers: isAdminRole(user) ? onlineUsers : null,
             onGroupChat: handleGroupChat,
             hiddenConversations,
             showHiddenChats,
             setShowHiddenChats,
             onToggleHide: handleToggleConvHidden,
             onSearch: () => setView('search'),
-            onShowOnline: () => setShowOnlinePanel(prev => !prev)
+            onShowOnline: isAdminRole(user) ? () => setShowOnlinePanel(prev => !prev) : null
           })
         ),
         React.createElement('div', { className: 'content' },
@@ -13850,7 +14161,7 @@
             dataService,
             currentUser: user,
             onBack: null,
-            onlineUsers,
+            onlineUsers: isAdminRole(user) ? onlineUsers : null, // PRIV-01
             hasMore: hasMoreMessages,
             onLoadMore: loadMoreMessages,
             loadingMore,
@@ -14082,8 +14393,10 @@
             'data-testid': 'app-help-link'
           }, '❓ Hilfe'),
           React.createElement('div', { className: 'sidebar-bottom' },
-            React.createElement('button', {
+            // PRIV-01 (4.47.0): „Wer ist online" nur für Admins/Owner
+            isAdminRole(user) && React.createElement('button', {
               className: 'online-indicator',
+              'data-testid': 'online-indicator',
               onClick: () => setShowOnlinePanel(prev => !prev),
               title: 'Online-Status',
               'aria-label': (onlineUsers.size || 0) + ' Kolleg:innen online — Liste anzeigen'
@@ -14103,7 +14416,7 @@
             React.createElement('button', { className: 'icon-btn', onClick: handleLogout, title: 'Abmelden', 'aria-label': 'Abmelden', dangerouslySetInnerHTML: { __html: Icons.logout } })
           ),
           // Online Users Panel (Popup)
-          showOnlinePanel && React.createElement('div', { className: 'online-panel' },
+          showOnlinePanel && isAdminRole(user) && React.createElement('div', { className: 'online-panel' },
             React.createElement('div', { className: 'online-panel-header' },
               onlineUsers.size + ' Online'
             ),
