@@ -8,6 +8,16 @@ async function openFiles(page: import('@playwright/test').Page) {
 }
 
 test.describe('DATEI-01 — Team-Dateiablage UI', () => {
+  test('Hub-Menü öffnet den Datei-Tab des Teams', async ({ connectPage: page }) => {
+    await page.locator('.list-item', { hasText: 'Kollegium' }).first().click();
+    await expect(page.locator('[data-testid="team-tab-posts"]').first()).toHaveAttribute('aria-selected', 'true');
+    await page.evaluate(() => {
+      window.postMessage({ type: 'KRS_CONNECT_SET_VIEW', view: 'teams', teamTab: 'links' }, window.location.origin);
+    });
+    await expect(page.locator('[data-testid="team-files-section"]')).toBeVisible();
+    await expect(page.locator('[data-testid="team-tab-links"]').first()).toHaveAttribute('aria-selected', 'true');
+  });
+
   test('T1 Dateien oben, Links darunter; Tab ist axe-sauber', async ({ connectPage: page }) => {
     await openFiles(page);
     await expect(page.locator('[data-testid="tf-item"]', { hasText: 'Elternabend 2026' })).toBeVisible();

@@ -7350,7 +7350,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.48.0';
+    window.KRS_VERSION = '4.49.0';
     // PERF-01: Cold-Boot-Zähler für Hub keep-alive Abnahme (Connect→Hub-Start→Connect → bleibt 1)
     window.__krsConnectBootCount = (window.__krsConnectBootCount || 0) + 1;
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
@@ -11925,6 +11925,9 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.49.0', date: '29.09.2026', items: [
+        'Vom Hub aus öffnet „Dateiablage Teams“ direkt die Dateien des Teams'
+      ]},
       { v: '4.48.0', date: '29.10.2026', items: [
         'Neu: Dateiablage im Team — Dateien und ganze Ordner direkt hochladen (Knopf „Hochladen“ oder einfach hineinziehen), ansehen, herunterladen, umbenennen und löschen. Nur Mitglieder des Teams sehen sie.',
         'Links zu anderen Ablagen (z. B. OneDrive) stehen weiterhin darunter'
@@ -13041,6 +13044,12 @@
           if (d.type === 'KRS_CONNECT_SET_VIEW') {
             if (d.view === 'teams' || d.view === 'chat') {
               setView(d.view);
+              setMobileSidebarOpen(false);
+            }
+            // Hub-Menü „Dateiablage Teams“: direkt den Datei-Tab des Teams öffnen.
+            if (d.teamTab === 'posts' || d.teamTab === 'links' || d.teamTab === 'termine') {
+              setView('teams');
+              setTeamTab(d.teamTab);
               setMobileSidebarOpen(false);
             }
           }
