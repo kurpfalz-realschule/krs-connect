@@ -190,7 +190,7 @@ test.describe('DATEI-01 Datenschicht — Fake-Supabase (Server-Pfad)', () => {
       const w = window as any;
       const mk = (deleted: boolean, log: any[]) => ({
         storage: { from: (bucket: string) => ({ remove: (paths: string[]) => { log.push({ op: 'remove', bucket, paths }); return Promise.resolve({ error: null }); } }) },
-        from: (table: string) => ({ delete: () => ({ eq: (col: string, val: any) => ({ select: () => { log.push({ op: 'delete', table, col, val }); return Promise.resolve({ data: deleted ? [{ id: val }] : [], error: null }); } }) }) }),
+        from: (table: string) => ({ delete: () => ({ in: (col: string, vals: any[]) => ({ select: () => { log.push({ op: 'delete', table, col, vals }); return Promise.resolve({ data: deleted ? vals.map((v: any) => ({ id: v })) : [], error: null }); } }) }) }),
       });
       const all = [
         { id: 'o', team_id: 12, parent_id: null, kind: 'folder', name: 'Oben' },
@@ -207,10 +207,16 @@ test.describe('DATEI-01 Datenschicht — Fake-Supabase (Server-Pfad)', () => {
       const no = await ds.deleteTeamEntry(all[0], all);
       return { ok, logOk, no, logNo };
     });
-    expect(r.ok).toEqual({ ok: true, removed: 4 });
-    expect(r.logOk[0]).toMatchObject({ op: 'delete', table: 'team_files', col: 'id', val: 'o' });
-    expect(r.logOk[1].bucket).toBe('team-files');
-    expect([...r.logOk[1].paths].sort()).toEqual(['12/a.pdf', '12/b.pdf']);
+    // Seit 4.51.0: erst alle Dateien (ein Aufruf), dann die Ordner von unten nach oben, zuletzt die Speicher-Objekte.
+    expect(r.ok.ok).toBe(true);
+    expect(r.ok.removed).toBe(4);
+    expect([...r.ok.deletedIds].sort()).toEqual(['d1', 'd2', 'o', 'u']);
+    expect(r.logOk[0]).toMatchObject({ op: 'delete', table: 'team_files', col: 'id' });
+    expect([...r.logOk[0].vals].sort()).toEqual(['d1', 'd2']);
+    expect(r.logOk[1]).toMatchObject({ op: 'delete', vals: ['u'] });
+    expect(r.logOk[2]).toMatchObject({ op: 'delete', vals: ['o'] });
+    expect(r.logOk[3].bucket).toBe('team-files');
+    expect([...r.logOk[3].paths].sort()).toEqual(['12/a.pdf', '12/b.pdf']);
     expect(r.no.ok).toBe(false);
     expect(r.logNo.some((x: any) => x.op === 'remove')).toBe(false);
   });
