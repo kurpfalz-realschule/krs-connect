@@ -131,15 +131,30 @@ test.describe('DATEI-01 — Team-Dateiablage UI', () => {
       const h = (window as any).__krsTeamFileRights;
       const member = { id: 4 }, foreign = { id: 'f', kind: 'file', created_by: 2 }, own = { id: 'o', kind: 'file', created_by: 4 };
       const full = { id: 'd', kind: 'folder', created_by: 4 }, empty = { id: 'e', kind: 'folder', created_by: 4 };
-      const all = [foreign, own, full, empty, { id: 'c', parent_id: 'd', kind: 'file', created_by: 4 }];
+      const mixed = { id: 'm', kind: 'folder', created_by: 4 };
+      const mineInsideForeign = { id: 'mf', parent_id: 'ff', kind: 'file', created_by: 4 };
+      const foreignFolder = { id: 'ff', kind: 'folder', created_by: 2 };
+      const all = [
+        foreign, own, full, empty,
+        { id: 'c', parent_id: 'd', kind: 'file', created_by: 4 },
+        mixed, { id: 'mc', parent_id: 'm', kind: 'file', created_by: 2 },
+        foreignFolder, mineInsideForeign
+      ];
       return {
         foreign: [h.canEdit(foreign, member, false), h.canDelete(foreign, member, false, all)],
         own: [h.canEdit(own, member, false), h.canDelete(own, member, false, all)],
         full: [h.canEdit(full, member, false), h.canDelete(full, member, false, all)],
+        mixed: h.canDelete(mixed, member, false, all),
+        mineInsideForeign: h.canDelete(mineInsideForeign, member, false, all),
+        foreignFolder: h.canDelete(foreignFolder, member, false, all),
         empty: h.canDelete(empty, member, false, all), admin: h.canDelete(full, member, true, all)
       };
     });
-    expect(r).toEqual({ foreign: [false, false], own: [true, true], full: [true, false], empty: true, admin: true });
+    expect(r).toEqual({
+      foreign: [false, false], own: [true, true], full: [true, true],
+      mixed: false, mineInsideForeign: true, foreignFolder: false,
+      empty: true, admin: true
+    });
   });
 
   test('T11 Admin löscht vollen Ordner mit korrektem Bestätigungstext', async ({ connectPage: page }) => {

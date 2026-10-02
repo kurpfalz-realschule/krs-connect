@@ -1850,12 +1850,16 @@
       display: flex; align-items: center; justify-content: center;
     }
     .lightbox-close:hover { background: rgba(255,255,255,.3); }
+    .lightbox-back { position: fixed; top: max(20px, env(safe-area-inset-top)); left: max(20px, env(safe-area-inset-left)); height: 48px; padding: 0 18px 0 12px; display: flex; align-items: center; gap: 4px; background: rgba(255,255,255,.15); border: none; border-radius: 24px; color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; }
+    .lightbox-back:hover { background: rgba(255,255,255,.3); }
     @keyframes lbFadeIn { from { opacity: 0; } to { opacity: 1; } }
     @media (max-width: 768px), (max-width: 1024px) and (orientation: portrait) {
       .lightbox-nav { width: 40px; height: 40px; font-size: 20px; }
       .lightbox-prev { left: 8px; }
       .lightbox-next { right: 8px; }
-      .lightbox-close { top: 12px; right: 12px; width: 40px; height: 40px; }
+      .lightbox-close { top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); width: 44px; height: 44px; }
+      .lightbox-back { top: max(12px, env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left)); height: 44px; }
+      .lightbox-zoomhint { top: max(64px, calc(env(safe-area-inset-top) + 56px)); }
       .lightbox-caption { font-size: 12px; padding: 6px 14px; bottom: 16px; }
     }
 
@@ -2070,6 +2074,12 @@
         var img = _lbImgs[_lbIdx];
         var imgUrl = typeof img === 'string' ? img : img.url;
         var imgName = typeof img === 'string' ? imgUrl.split('/').pop().split('?')[0] : (img.name || 'Bild');
+
+        var backBtn = document.createElement('button'); backBtn.type = 'button'; backBtn.className = 'lightbox-back'; backBtn.setAttribute('data-testid', 'lb-back');
+        var lbChev = document.createElement('span'); lbChev.setAttribute('aria-hidden', 'true'); lbChev.textContent = '‹'; lbChev.style.cssText = 'font-size:22px;line-height:1;margin-top:-2px';
+        backBtn.appendChild(lbChev); backBtn.appendChild(document.createTextNode('Zurück'));
+        backBtn.onclick = function(e) { e.stopPropagation(); closeLB(); };
+        ov.appendChild(backBtn);
 
         // Close button
         var closeBtn = document.createElement('button');
@@ -2360,14 +2370,17 @@
       var css = '' +
         '.fv-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px}' +
         '.fv-box{position:relative;background:var(--bg,#fff);color:var(--text-primary,#1a1a1a);width:min(980px,96vw);height:min(90vh,920px);border-radius:12px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.45)}' +
-        '.fv-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border,#e2e4e8);flex-wrap:wrap}' +
-        '.fv-title{font-weight:600;font-size:14px;display:flex;align-items:center;min-width:0}' +
-        '.fv-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:38vw}' +
-        '.fv-size,.fv-count{color:var(--text-muted,#888);font-weight:500;font-size:12px;margin-left:2px}' +
-        '.fv-tools{display:flex;gap:6px;align-items:center;flex-wrap:wrap}' +
+        '.fv-head{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;grid-template-areas:"back title tools close";align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border,#e2e4e8)}' +
+        '.fv-title{grid-area:title;font-weight:600;font-size:14px;display:flex;align-items:center;min-width:0}' +
+        '.fv-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}' +
+        '.fv-size,.fv-count{color:var(--text-muted,#888);font-weight:500;font-size:12px;margin-left:2px;white-space:nowrap;flex:none}' +
+        '.fv-tools{grid-area:tools;display:flex;gap:6px;align-items:center;flex-wrap:nowrap}' +
         '.fv-btn{display:inline-flex;align-items:center;gap:4px;padding:6px 10px;background:var(--bg-tertiary,#f1f3f5);border:1px solid var(--border,#e2e4e8);border-radius:8px;cursor:pointer;font-size:13px;color:var(--text-primary,#1a1a1a);text-decoration:none;min-height:36px}' +
         '.fv-btn:hover{background:var(--bg-secondary,#e9ecef)}' +
-        '.fv-close{font-weight:700}' +
+        '.fv-back{grid-area:back;background:var(--accent,#2563eb);color:var(--accent-text,#fff);border-color:transparent;font-weight:600;min-height:44px;padding:6px 14px 6px 10px;white-space:nowrap}' +
+        '.fv-back:hover{background:var(--accent-hover,#1d4ed8)}' +
+        '.fv-back-chev{font-size:20px;line-height:1;margin-top:-2px}' +
+        '.fv-close{grid-area:close;font-weight:700;min-width:44px;min-height:44px;justify-content:center}' +
         '.fv-body{flex:1;overflow:auto;background:var(--bg-secondary,#f6f7f9);display:flex;flex-direction:column}' +
         '.fv-img{max-width:100%;max-height:100%;margin:auto;object-fit:contain;display:block}' +
         '.fv-frame{width:100%;height:100%;border:0;flex:1}' +
@@ -2386,7 +2399,8 @@
         '.fv-pdflbl{font-size:12px;color:var(--text-muted,#888);margin-left:2px}' +
         '.fv-pdfpages{flex:1;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch;padding:12px;display:flex;flex-direction:column;align-items:center;gap:12px}' +
         '.fv-pdfpage{max-width:100%;box-shadow:0 1px 6px rgba(0,0,0,.18);background:#fff;border-radius:2px}' +
-        '@media(max-width:768px){.fv-box{width:100vw;height:100vh;border-radius:0}.fv-name{max-width:46vw}.fv-pdfpages{padding:6px}}';
+        '@media(max-width:768px){.fv-overlay{padding:0}.fv-box{width:100vw;height:100vh;height:100dvh;border-radius:0}.fv-head{grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"back title close" "tools tools tools";padding:max(8px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) 8px max(10px,env(safe-area-inset-left))}.fv-tools{flex-wrap:wrap}.fv-tools .fv-btn{flex:1 1 auto;min-height:44px;justify-content:center;white-space:nowrap;padding:6px 8px}.fv-pdfpages{padding:6px}}' +
+        '@media(max-width:359px){.fv-size{display:none}}';
       var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
 
       // ---- Helfer ----
@@ -2587,17 +2601,23 @@
       };
 
       function close(){ var o = document.querySelector('.fv-overlay'); if (o) o.remove(); if (_key) { document.removeEventListener('keydown', _key); _key = null; } }
-      function next(){ _idx = (_idx + 1) % _files.length; render(); }
-      function prev(){ _idx = (_idx - 1 + _files.length) % _files.length; render(); }
+      function next(){ _idx = (_idx + 1) % _files.length; render('.fv-navnext'); }
+      function prev(){ _idx = (_idx - 1 + _files.length) % _files.length; render('.fv-navprev'); }
 
-      function render(){
+      function render(focusSel){
         close();
         var file = _files[_idx]; if (!file) return;
         var ov = document.createElement('div'); ov.className = 'fv-overlay';
         ov.onclick = function(e){ if (e.target === ov) close(); };
+        ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true');
+        ov.setAttribute('aria-label', 'Vorschau: ' + (file.name || 'Datei'));
         var box = document.createElement('div'); box.className = 'fv-box';
 
         var head = document.createElement('div'); head.className = 'fv-head';
+        var bk = document.createElement('button'); bk.type = 'button'; bk.className = 'fv-btn fv-back'; bk.setAttribute('data-testid', 'fv-back');
+        var chev = document.createElement('span'); chev.className = 'fv-back-chev'; chev.setAttribute('aria-hidden', 'true'); chev.textContent = '‹';
+        bk.appendChild(chev); bk.appendChild(document.createTextNode('Zurück')); bk.onclick = close;
+        head.appendChild(bk);
         var title = document.createElement('div'); title.className = 'fv-title';
         title.appendChild(document.createTextNode(iconFor(file) + ' '));
         var nameSpan = document.createElement('span'); nameSpan.className = 'fv-name'; nameSpan.textContent = file.name || 'Datei'; title.appendChild(nameSpan);
@@ -2630,11 +2650,18 @@
           });
         };
         tools.appendChild(nt);
-        var cl = document.createElement('button'); cl.className = 'fv-btn fv-close'; cl.setAttribute('aria-label', 'Schließen'); cl.textContent = '✕'; cl.onclick = close; tools.appendChild(cl);
+        var cl = document.createElement('button'); cl.className = 'fv-btn fv-close'; cl.setAttribute('aria-label', 'Schließen'); cl.textContent = '✕'; cl.onclick = close; cl.setAttribute('data-testid', 'fv-close');
         head.appendChild(tools);
+        head.appendChild(cl);
         box.appendChild(head);
 
         var body = document.createElement('div'); body.className = 'fv-body'; box.appendChild(body);
+        body.onclick = function(e){
+          if (e.target !== body) return;
+          if (!body.classList.contains('fv-is-image')) return;
+          if (!window.matchMedia || !window.matchMedia('(max-width:768px)').matches) return;
+          close();
+        };
 
         if (_files.length > 1) {
           var pb = document.createElement('button'); pb.className = 'fv-nav fv-navprev'; pb.setAttribute('aria-label', 'Vorherige Datei'); pb.textContent = '‹'; pb.onclick = prev; box.appendChild(pb);
@@ -2642,6 +2669,7 @@
         }
 
         ov.appendChild(box); document.body.appendChild(ov);
+        if (focusSel) { var ft = ov.querySelector(focusSel); if (ft) { try { ft.focus(); } catch (e) {} } }
         _key = function(e){ if (!document.querySelector('.fv-overlay')) return; if (e.key === 'Escape') close(); else if (e.key === 'ArrowRight' && _files.length > 1) next(); else if (e.key === 'ArrowLeft' && _files.length > 1) prev(); };
         document.addEventListener('keydown', _key);
         renderPreview(file, body);
@@ -2809,7 +2837,7 @@
         var ext = extOf(file);
         try {
           if (isImage(file)) {
-            body.innerHTML = ''; var img = document.createElement('img'); img.className = 'fv-img'; img.src = url; img.alt = file.name || ''; body.appendChild(img); return;
+            body.innerHTML = ''; body.classList.add('fv-is-image'); var img = document.createElement('img'); img.className = 'fv-img'; img.src = url; img.alt = file.name || ''; body.appendChild(img); return;
           }
           if (ext === 'pdf') {
             return renderPdf(file, body, url);
@@ -4604,9 +4632,12 @@
       }
 
       // Löscht Einträge. `entry` = Datei oder Ordner; `allEntries` = komplette
-      // Team-Liste (für die Unterbäume von Ordnern). Reihenfolge: erst die
-      // Zeile (Kaskade entfernt Unterordner/Dateien), dann die Objekte im
-      // Speicher — schlägt Letzteres fehl, bleibt höchstens eine unsichtbare
+      // Team-Liste (für die Unterbäume von Ordnern).
+      // Die Datenbank lässt eine Person einen Ordner nur löschen, wenn er keine
+      // Kinder mehr hat. Deshalb zuerst die Dateien, danach die Ordner von innen
+      // nach außen. So kann jemand einen selbst hochgeladenen Ordner entfernen,
+      // ohne dass dabei Dateien anderer Personen mitgelöscht werden. Danach die
+      // Objekte im Speicher — schlägt das fehl, bleibt höchstens eine unsichtbare
       // Waise, nie ein Eintrag, der ins Leere zeigt.
       async deleteTeamEntry(entry, allEntries = []) {
         const byParent = new Map();
@@ -4619,35 +4650,53 @@
         for (let i = 0; i < subtree.length; i++) {
           if (subtree[i].kind === 'folder') (byParent.get(String(subtree[i].id)) || []).forEach(c => subtree.push(c));
         }
-        const paths = subtree.filter(e => e.kind === 'file' && e.storage_path).map(e => e.storage_path);
         const ids = new Set(subtree.map(e => String(e.id)));
 
         if (this.isDemo) {
           const list = MOCK_TEAM_FILES[entry.team_id] || [];
           MOCK_TEAM_FILES[entry.team_id] = list.filter(x => !ids.has(String(x.id)));
-          return { ok: true, removed: ids.size };
+          return { ok: true, removed: ids.size, deletedIds: [...ids] };
         }
+
+        const deleted = new Set();
+        const removeRows = async (rows) => {
+          const gone = [];
+          for (let i = 0; i < rows.length; i += 100) {
+            const chunk = rows.slice(i, i + 100);
+            const { data, error } = await this.sb.from('team_files').delete().in('id', chunk.map(r => r.id)).select('id');
+            if (error) throw error;
+            (data || []).forEach(r => { deleted.add(String(r.id)); gone.push(String(r.id)); });
+          }
+          return gone.length;
+        };
         try {
-          const { data, error } = await this.sb.from('team_files').delete().eq('id', entry.id).select('id');
-          if (error) throw error;
-          if (!data || data.length === 0) {
-            showToast(entry.kind === 'folder'
-              ? 'Löschen nicht möglich: Nur leere Ordner dürfen von Ersteller:innen gelöscht werden — volle Ordner nur von Team-Admins.'
-              : 'Keine Berechtigung: Nur Ersteller:in oder Team-Admins können löschen.', 'error');
-            return { ok: false, removed: 0 };
+          const files = subtree.filter(e => e.kind === 'file');
+          const removedFiles = await removeRows(files);
+          if (removedFiles !== files.length) {
+            showToast('Keine Berechtigung: Nur die Person, die die Datei hochgeladen hat, oder ein Team-Admin kann sie löschen.', 'error');
+            return { ok: false, removed: deleted.size, deletedIds: [...deleted] };
+          }
+          const folders = subtree.filter(e => e.kind === 'folder').reverse();
+          for (const folder of folders) {
+            const n = await removeRows([folder]);
+            if (n !== 1) {
+              showToast('Löschen nicht möglich: In dem Ordner liegen noch Dateien von anderen. Die löscht ein Team-Admin.', 'error');
+              return { ok: false, removed: deleted.size, deletedIds: [...deleted] };
+            }
           }
         } catch (err) {
           console.error('deleteTeamEntry error:', err);
           showToast(this._teamFileError(err, 'Löschen fehlgeschlagen.'), 'error');
-          return { ok: false, removed: 0 };
+          return { ok: false, removed: deleted.size, deletedIds: [...deleted] };
         }
+        const paths = subtree.filter(e => e.kind === 'file' && e.storage_path && deleted.has(String(e.id))).map(e => e.storage_path);
         for (let i = 0; i < paths.length; i += 100) {
           try {
             const { error } = await this.sb.storage.from(TEAM_FILES_CONFIG.BUCKET).remove(paths.slice(i, i + 100));
             if (error) console.warn('deleteTeamEntry: Speicher-Objekte nicht entfernt (Waisen):', error);
           } catch (e) { console.warn('deleteTeamEntry: Speicher-Objekte nicht entfernt (Waisen):', e); }
         }
-        return { ok: true, removed: ids.size };
+        return { ok: true, removed: deleted.size, deletedIds: [...deleted] };
       }
 
       // ── Team-Termine (v4.12.0) ─────────────────────────────
@@ -7350,7 +7399,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.50.0';
+    window.KRS_VERSION = '4.52.0';
     // PERF-01: Cold-Boot-Zähler für Hub keep-alive Abnahme (Connect→Hub-Start→Connect → bleibt 1)
     window.__krsConnectBootCount = (window.__krsConnectBootCount || 0) + 1;
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
@@ -10795,8 +10844,19 @@
     function teamFileCanEdit(entry, user, isTeamAdmin) {
       return !!(isTeamAdmin || (entry && user && String(entry.created_by) === String(user.id)));
     }
+    // Eigene Datei: ja. Eigener Ordner: ja, wenn jede Datei und jeder Unterordner
+    // darin ebenfalls von dieser Person stammt. Fremde Dateien: nein.
+    function teamFileOwnsSubtree(entry, user, entries) {
+      if (!entry || !user || String(entry.created_by) !== String(user.id)) return false;
+      const id = String(entry.id);
+      for (const child of entries || []) {
+        if (String(child.parent_id) !== id) continue;
+        if (!teamFileOwnsSubtree(child, user, entries)) return false;
+      }
+      return true;
+    }
     function teamFileCanDelete(entry, user, isTeamAdmin, entries) {
-      return !!(isTeamAdmin || (teamFileCanEdit(entry, user, false) && (entry.kind === 'file' || !(entries || []).some(x => String(x.parent_id) === String(entry.id)))));
+      return !!(isTeamAdmin || teamFileOwnsSubtree(entry, user, entries));
     }
     window.__krsTeamFileRights = { canEdit: teamFileCanEdit, canDelete: teamFileCanDelete };
 
@@ -11043,9 +11103,9 @@
         if (!confirm(prompt)) return;
         const all = entriesRef.current;
         const result = await dataService.deleteTeamEntry(entry, all);
+        const ids = new Set(result?.deletedIds || []);
+        if (ids.size) setTeamEntries(prev => prev.filter(x => !ids.has(String(x.id))));
         if (!result?.ok) return;
-        const ids = new Set([entry, ...descendants].map(x => String(x.id)));
-        setTeamEntries(prev => prev.filter(x => !ids.has(String(x.id))));
         if (folderId != null && ids.has(String(folderId))) setFolderId(entry.parent_id ?? null);
         showToast('Gelöscht', 'success');
       };
@@ -11104,7 +11164,7 @@
         !loading && !loadError && React.createElement('div', { className: 'tf-list' }, direct.map(entry => {
           const canEdit = teamFileCanEdit(entry, user, isTeamAdmin);
           const canDelete = teamFileCanDelete(entry, user, isTeamAdmin, entries);
-          const fullOwnFolder = entry.kind === 'folder' && canEdit && !isTeamAdmin && !canDelete;
+          const blockedOwnFolder = entry.kind === 'folder' && canEdit && !isTeamAdmin && !canDelete;
           return React.createElement('div', { key: entry.id, className: 'tf-item', 'data-testid': 'tf-item', 'data-kind': entry.kind },
             React.createElement('button', { className: 'tf-item-main', onClick: () => openEntry(entry), onKeyDown: e => { if (e.key === ' ') { e.preventDefault(); openEntry(entry); } } },
               React.createElement('span', { className: 'tf-item-icon', 'aria-hidden': 'true' }, entry.kind === 'folder' ? '📁' : window.fvHelpers.iconFor({ name: entry.name, type: entry.mime_type, url: entry.url })),
@@ -11114,7 +11174,7 @@
               entry.kind === 'file' && React.createElement('button', { className: 'icon-btn', 'aria-label': 'Herunterladen', title: 'Herunterladen', 'data-testid': 'tf-download', onClick: e => { e.stopPropagation(); window.__krsDownloadFile({ url: entry.url, name: entry.name, type: entry.mime_type, size: entry.size_bytes }); } }, '⬇'),
               canEdit && React.createElement('button', { className: 'icon-btn', 'aria-label': 'Umbenennen', title: 'Umbenennen', 'data-testid': 'tf-rename', onClick: e => { e.stopPropagation(); setDialog({ type: 'rename', entry }); } }, '✏️'),
               canDelete && React.createElement('button', { className: 'icon-btn', 'aria-label': 'Löschen', title: 'Löschen', 'data-testid': 'tf-delete', onClick: e => { e.stopPropagation(); deleteEntry(entry); } }, '🗑'),
-              fullOwnFolder && React.createElement('span', { title: 'Nur leere Ordner kannst du selbst löschen. Volle Ordner löschen Team-Admins.', 'aria-label': 'Nur leere Ordner kannst du selbst löschen. Volle Ordner löschen Team-Admins.', style: { display: 'inline-flex', width: '44px', height: '44px', alignItems: 'center', justifyContent: 'center' } }, 'ⓘ')
+              blockedOwnFolder && React.createElement('span', { title: 'In diesem Ordner liegen auch Dateien von anderen. Deine eigenen Dateien löschst du darin einzeln. Den ganzen Ordner löscht ein Team-Admin.', 'aria-label': 'In diesem Ordner liegen auch Dateien von anderen. Deine eigenen Dateien löschst du darin einzeln. Den ganzen Ordner löscht ein Team-Admin.', style: { display: 'inline-flex', width: '44px', height: '44px', alignItems: 'center', justifyContent: 'center' } }, 'ⓘ')
             )
           );
         })),
@@ -11883,13 +11943,20 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.52.0', date: '02.10.2026', items: [
+        'Anhang-Vorschau: Oben links steht jetzt „‹ Zurück“. Das ✕ sitzt fest oben rechts. Auf dem Handy schließt bei Bildern auch ein Tipp neben das Bild.',
+        'Auf dem Handy nutzt die Vorschau die ganze Breite, die Knöpfe sind größer.'
+      ]},
+      { v: '4.51.0', date: '30.09.2026', items: [
+        'Eigene Dateien in der Dateiablage löschst du über das Mülleimer-Symbol. Einen Ordner, den du selbst hochgeladen hast, auch — solange nur deine Dateien darin liegen.'
+      ]},
       { v: '4.50.0', date: '30.09.2026', items: [
         'Im Team steht oben die Dateiablage zum Hochladen. Ältere Links (OneDrive, Nextcloud) liegen darunter zugeklappt und öffnen sich in einem neuen Tab. Neue Links legt man dort nicht mehr an.'
       ]},
       { v: '4.49.0', date: '29.09.2026', items: [
         'Vom Hub aus öffnet „Dateiablage Teams“ direkt die Dateien des Teams'
       ]},
-      { v: '4.48.0', date: '29.10.2026', items: [
+      { v: '4.48.0', date: '29.09.2026', items: [
         'Neu: Dateiablage im Team — Dateien und ganze Ordner direkt hochladen (Knopf „Hochladen“ oder einfach hineinziehen), ansehen, herunterladen, umbenennen und löschen. Nur Mitglieder des Teams sehen sie.',
         'Links zu anderen Ablagen (z. B. OneDrive) stehen weiterhin darunter'
       ]},
@@ -14393,7 +14460,7 @@
             ),
             React.createElement('div', { className: 'content-body' },
               React.createElement('p', { style: { fontSize: '13px', color: 'var(--text-muted)', margin: 0 } },
-                'Dateien und Ordner für dieses Team. Nur Mitglieder sehen sie.'),
+                'Dateien und Ordner für dieses Team. Nur Mitglieder sehen sie. Was du selbst hochgeladen hast, löschst du über das Mülleimer-Symbol rechts in der Zeile.'),
               React.createElement(TeamFilesSection, {
                 team: selectedTeam, dataService, user, allUsers,
                 isTeamAdmin: userTeamRole === 'admin' || isAdminRole(user)
