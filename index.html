@@ -2156,15 +2156,17 @@
           // verschluckt (Safari/Chrome), sichtbar passiert dann nichts.
           // 0AU/v4.37.0: kein 'noopener' beim Reservieren — sonst liefert open() null
           // und location= läuft nie (iPhone Safari / Web Clip).
-          var openBlank = window.__krsOpenBlankForNav || function(){ var ww = window.open('', '_blank'); try { if (ww) ww.opener = null; } catch (e) {} return ww; };
+          var openBlank = window.__krsOpenBlankForNav || function(){ return window.open('', '_blank'); };
+          // VIEWER-02 (4.52.1): erst navigieren, dann opener trennen (Sandbox im Hub).
+          var goTo = function(win, url){ win.location = url; try { win.opener = null; } catch (e) {} };
           if (!window.__krsResolveStorageUrl) {
             var w0 = openBlank();
-            if (w0) w0.location = imgUrl; else if (typeof window.showToast === 'function') window.showToast('Popup blockiert — bitte Download im Datei-Viewer nutzen.', 'error');
+            if (w0) goTo(w0, imgUrl); else if (typeof window.showToast === 'function') window.showToast('Popup blockiert — bitte Download im Datei-Viewer nutzen.', 'error');
             return;
           }
           var w = openBlank();
           window.__krsResolveStorageUrl(imgUrl).then(function(u){
-            if (w) w.location = u;
+            if (w) goTo(w, u);
             else if (typeof window.showToast === 'function') window.showToast('Popup blockiert — bitte Download im Datei-Viewer nutzen.', 'error');
           }).catch(function(){
             if (w) try { w.close(); } catch (e) {}
@@ -2462,12 +2464,23 @@
       }
       function _dlOpenBlankForNav(){
         // KEIN 'noopener' hier — sonst ist der Rückgabewert null und wir können
-        // das Fenster später nicht mehr navigieren. opener danach auf null setzen.
-        var w = window.open('', '_blank');
-        try { if (w) w.opener = null; } catch (e) {}
-        return w;
+        // das Fenster später nicht mehr navigieren.
+        // VIEWER-02 (4.52.1): opener NICHT schon hier auf null setzen. Im Hub läuft
+        // Connect in einem iframe mit sandbox. Ein solcher Rahmen darf ein Fenster
+        // nur navigieren, solange er dessen opener ist. Mit opener = null blieb der
+        // neue Tab leer (about:blank; Norbert, 02.10.2026). Darum: erst navigieren,
+        // dann trennen, siehe _dlNavigateReserved().
+        return window.open('', '_blank');
+      }
+      // Schickt ein reserviertes Fenster ans Ziel und trennt es erst danach vom
+      // Öffner. Die Zuweisung an location wird sofort geprüft; die Zielseite lädt
+      // später und sieht dann kein window.opener mehr.
+      function _dlNavigateReserved(w, url){
+        w.location = url;
+        try { w.opener = null; } catch (e) {}
       }
       window.__krsOpenBlankForNav = _dlOpenBlankForNav;
+      window.__krsNavigateReserved = _dlNavigateReserved;
       window.__krsIsIOSDownload = window.__krsIsIOSDownload || _dlIsIOS;
       function _dlResult(requestId, state, extra){
         var value = Object.assign({ requestId: requestId, state: state }, extra || {});
@@ -2518,6 +2531,7 @@
             if (reserved) {
               try { reserved.location = target; }
               catch (e) { try { reserved.location.href = target; } catch (e2) { try { reserved.close(); } catch (e3) {} return false; } }
+              try { reserved.opener = null; } catch (e) {} // erst nach dem Navigieren trennen (Sandbox im Hub)
               finish('handed_off', { method: 'download-url' }); return true;
             }
             try { window.location.assign(target); finish('handed_off', { method: 'download-url-same-tab' }); return true; }
@@ -2631,22 +2645,60 @@
         // außerhalb des Teams dürften sie gar nicht öffnen (Bucket-RLS).
         if (window.__krsForwardFile && !file.noForward) { var fw = document.createElement('button'); fw.className = 'fv-btn'; fw.textContent = '↪ Weiterleiten'; fw.onclick = function(){ close(); window.__krsForwardFile(file); }; tools.appendChild(fw); }
         var nt = document.createElement('a'); nt.className = 'fv-btn'; nt.href = file.url; nt.target = '_blank'; nt.rel = 'noopener'; nt.textContent = '↗ Neuer Tab';
+        // VIEWER-02 (4.52.1): Im href nur den Objekt-Pfad führen, nie eine alte
+        // /public/-Adresse. In der iOS-App reicht krs-native-client.js jeden Link
+        // mit http(s)-Adresse sofort und UNSIGNIERT an den System-Browser weiter;
+        // bei alten Beiträgen käme dort eine Fehlerseite. Mit dem Pfad greift
+        // allein der Klick-Handler unten, und der signiert.
+        var ntPath = window.__krsStoragePath ? window.__krsStoragePath(file.url) : null;
+        if (ntPath) nt.setAttribute('href', ntPath);
+        var ntDirectUntil = 0; // bis dahin trägt nt.href eine frisch signierte Adresse
         // S1 (21.09.2026): Fenster SOFORT in der Nutzergeste öffnen (synchron im
         // Klick), Inhalt erst danach nachreichen. window.open() NACH einem await
         // (wie vorher) wird von Safari/Chrome als Popup geblockt -- sichtbar
         // passierte dann gar nichts (Tanjas Meldung R1-R3).
         nt.onclick = function(e){
           if (!window.__krsResolveStorageUrl) return; // normaler <a href> greift
+          var toast = function(msg, type, action){ if (typeof window.showToast === 'function') window.showToast(msg, type, action); };
+          // VIEWER-02 (4.52.1): In der iOS-App (WKWebView) gibt es kein zweites
+          // Fenster. window.open('') liefert dort immer null, das Reservieren
+          // scheiterte also jedes Mal mit „Popup blockiert" (Norbert, 02.10.2026).
+          // Die App hat dafür eine Brücke: KRSNative.openExternal(url) öffnet die
+          // Adresse im Browser-Fenster der App. Die Brücke braucht keine
+          // Nutzergeste, also erst signieren, dann übergeben.
+          var nat = window.KRSNative;
+          var inApp = !!(nat && nat.available && typeof nat.openExternal === 'function');
+          // Fremde http(s)-Adresse in der App: krs-native-client.js hat den Link in
+          // der Capture-Phase schon übergeben. Nicht doppelt öffnen.
+          if (inApp && e.defaultPrevented) return;
+          // Zweiter Tipp nach blockiertem Fenster: href ist signiert, der Browser
+          // folgt dem Link selbst. Einen echten Link-Klick blockt kein Popup-Blocker.
+          if (!inApp && Date.now() < ntDirectUntil) return;
           e.preventDefault();
           // 0AU/v4.37.0: ohne noopener reservieren (sonst null → stiller Fail)
-          var openBlank = window.__krsOpenBlankForNav || function(){ var ww = window.open('', '_blank'); try { if (ww) ww.opener = null; } catch (e) {} return ww; };
-          var w = openBlank();
+          var w = inApp ? null : _dlOpenBlankForNav();
           window.__krsResolveStorageUrl(file.url).then(function(u){
-            if (w) w.location = u;
-            else if (typeof window.showToast === 'function') window.showToast('Popup blockiert — Datei konnte nicht in neuem Tab geöffnet werden.', 'error');
+            if (inApp) {
+              if (!/^https?:/i.test(String(u))) { toast('Diese Datei lässt sich in der App nicht im Browser öffnen. Bitte „Herunterladen“ nutzen.', 'info'); return; }
+              return Promise.resolve(nat.openExternal(u)).then(function(ok){ if (ok === false) toast('Datei konnte nicht geöffnet werden.', 'error'); });
+            }
+            if (w) {
+              try { _dlNavigateReserved(w, u); return; }
+              // Navigieren verweigert: weiter wie bei blockiertem Fenster.
+              catch (e) { try { w.close(); } catch (e2) {} w = null; }
+            }
+            // Fenster blockiert (strenger Popup-Blocker, Web-App auf dem
+            // Home-Bildschirm): keine Sackgasse mehr. Der Link trägt jetzt die
+            // signierte Adresse. 45 s, weil der Resolver nur Adressen mit
+            // mindestens 60 s Restlaufzeit herausgibt.
+            nt.setAttribute('href', u); ntDirectUntil = Date.now() + 45000;
+            // Die Meldung liegt je nach Fensterbreite einige Sekunden über dem Knopf.
+            // Darum trägt sie selbst einen Knopf: Der Klick darauf ist eine neue
+            // Nutzergeste und löst den echten Link aus.
+            toast('Der Browser hat das neue Fenster blockiert. Bitte noch einmal auf „Neuer Tab“ tippen.', 'info', { label: 'Jetzt öffnen', onClick: function(){ nt.click(); } });
           }).catch(function(){
             if (w) try { w.close(); } catch (e) {}
-            if (typeof window.showToast === 'function') window.showToast('Datei konnte nicht geöffnet werden.', 'error');
+            toast('Datei konnte nicht geöffnet werden.', 'error');
           });
         };
         tools.appendChild(nt);
@@ -7399,7 +7451,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.52.0';
+    window.KRS_VERSION = '4.52.1';
     // PERF-01: Cold-Boot-Zähler für Hub keep-alive Abnahme (Connect→Hub-Start→Connect → bleibt 1)
     window.__krsConnectBootCount = (window.__krsConnectBootCount || 0) + 1;
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
@@ -11943,6 +11995,11 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.52.1', date: '02.10.2026', items: [
+        '„↗ Neuer Tab“ in der Anhang-Vorschau öffnet die Datei jetzt wirklich. Im Browser blieb der neue Tab bisher leer, in der iPhone- und iPad-App kam nur „Popup blockiert“.',
+        'In der App öffnet sich die Datei im Browser-Fenster der App.',
+        'Blockiert ein Browser das neue Fenster, genügt ein zweiter Tipp auf „Neuer Tab“.'
+      ]},
       { v: '4.52.0', date: '02.10.2026', items: [
         'Anhang-Vorschau: Oben links steht jetzt „‹ Zurück“. Das ✕ sitzt fest oben rechts. Auf dem Handy schließt bei Bildern auch ein Tipp neben das Bild.',
         'Auf dem Handy nutzt die Vorschau die ganze Breite, die Knöpfe sind größer.'
