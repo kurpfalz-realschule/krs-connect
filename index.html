@@ -551,6 +551,17 @@
        Gilt fuer alle Stellen, an denen sanitizeHtml-Inhalt gerendert wird:
        Beitrag, Thread-Antwort, Chat-Nachricht, Suchtreffer. */
     .post-content, .thread-reply-content, .chat-text { overflow-wrap: anywhere; }
+    /* Adressen, die als Text geschrieben wurden, werden beim Anzeigen zu Links
+       (Klasse setzt der Sanitizer). Auf der blauen eigenen Blase bleibt der
+       Link hell, sonst verschwindet Blau auf Blau. */
+    a.krs-autolink {
+      color: #1d4ed8;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      overflow-wrap: anywhere;
+      cursor: pointer;
+    }
+    .chat-bubble.own a.krs-autolink { color: #fff; }
     .post-content img,
     .thread-reply-content img,
     .chat-text img {
@@ -1282,13 +1293,17 @@
     .drawer-nav { display: none; }
     .mobile-drawer-only { display: none; }
 
-    .chat-messages { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 6px; position: relative; }
+    .chat-messages { flex: 1; overflow-x: hidden; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 6px; position: relative; min-width: 0; }
     .chat-messages.drag-active { outline: 2px dashed var(--accent); outline-offset: -8px; background: var(--accent-light); }
     .chat-drop-overlay { position: sticky; top: 0; z-index: 5; align-self: center; margin: 4px auto 8px; padding: 8px 16px; background: var(--accent); color: var(--accent-text, #fff); border-radius: 999px; font-size: 13px; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,0.18); pointer-events: none; }
-    .chat-msg { display: flex; gap: 8px; max-width: 75%; }
+    /* min-width: 0 ist noetig, damit max-width wirklich greift. Sonst gewinnt
+       bei einem einzeiligen Zitat (white-space: nowrap) die Mindestbreite des
+       Textes, die Blase wird breiter als der Bildschirm und — weil eigene
+       Nachrichten rechts sitzen — links abgeschnitten. */
+    .chat-msg { display: flex; gap: 8px; max-width: 75%; min-width: 0; }
     .chat-msg.own { align-self: flex-end; flex-direction: row-reverse; }
     .chat-msg.other { align-self: flex-start; }
-    .chat-bubble { padding: 10px 14px; border-radius: 16px; background: var(--bg-tertiary); word-break: break-word; }
+    .chat-bubble { padding: 10px 14px; border-radius: 16px; background: var(--bg-tertiary); word-break: break-word; min-width: 0; max-width: 100%; }
     .chat-bubble.own { background: var(--accent); color: var(--accent-text, #fff); border-bottom-right-radius: 4px; }
     .chat-bubble.other { border-bottom-left-radius: 4px; }
     .chat-text { font-size: 14px; line-height: 1.5; }
@@ -1312,10 +1327,10 @@
     }
 
     /* S12 (22.09.2026, R15): Zitatbalken ueber einer Chat-Antwort. */
-    .chat-reply-quote { display: flex; align-items: flex-start; gap: 6px; padding: 4px 8px; margin-bottom: 4px; border-left: 3px solid var(--accent); background: rgba(127,127,127,0.08); border-radius: 4px; font-size: 12px; line-height: 1.4; cursor: pointer; max-width: 100%; }
+    .chat-reply-quote { display: flex; align-items: flex-start; gap: 6px; padding: 4px 8px; margin-bottom: 4px; border-left: 3px solid var(--accent); background: rgba(127,127,127,0.08); border-radius: 4px; font-size: 12px; line-height: 1.4; cursor: pointer; max-width: 100%; min-width: 0; overflow: hidden; }
     .chat-bubble.own .chat-reply-quote { border-left-color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.12); }
-    .chat-reply-quote-author { font-weight: 600; flex-shrink: 0; }
-    .chat-reply-quote-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.85; }
+    .chat-reply-quote-author { font-weight: 600; flex: 0 0 auto; max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .chat-reply-quote-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.85; min-width: 0; flex: 1 1 auto; }
     .chat-reply-quote-deleted { font-style: italic; opacity: 0.7; }
     /* Kurzer Blitz, wenn man auf einen Zitatbalken tippt und zur Originalnachricht springt. */
     @keyframes krsChatMsgFlash { 0% { background: var(--accent-light, rgba(99,102,241,0.25)); } 100% { background: transparent; } }
@@ -7415,6 +7430,67 @@
       ALLOW_DATA_ATTR: false
     };
 
+    // Geschriebene Adressen (https://… oder www.…) werden beim Anzeigen zu
+    // echten Links. Gilt für Chat, Beiträge, Antworten und die Suche, weil
+    // alle durch sanitizeHtml laufen. Bestehende <a> bleiben unverändert.
+    // Kein javascript:-Schema: nur was isSafeHttpUrl durchlässt.
+    function linkifyBareUrls(root) {
+      if (!root) return;
+      const re = /(?:https?:\/\/|www\.)[^\s<>"']+/gi;
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+          if (!node.nodeValue || !/(?:https?:\/\/|www\.)/i.test(node.nodeValue)) return NodeFilter.FILTER_REJECT;
+          const parent = node.parentElement;
+          if (parent && parent.closest('a, code, pre, script, style')) return NodeFilter.FILTER_REJECT;
+          return NodeFilter.FILTER_ACCEPT;
+        }
+      });
+      const nodes = [];
+      while (walker.nextNode()) nodes.push(walker.currentNode);
+      for (const node of nodes) {
+        const text = node.nodeValue || '';
+        re.lastIndex = 0;
+        const frag = document.createDocumentFragment();
+        let last = 0;
+        let changed = false;
+        let match;
+        while ((match = re.exec(text)) !== null) {
+          const raw = match[0];
+          let end = raw.length;
+          while (end > 0 && /[),.;:!?\]}>]/.test(raw.charAt(end - 1))) {
+            if (raw.charAt(end - 1) === ')') {
+              const head = raw.slice(0, end);
+              const opens = (head.match(/\(/g) || []).length;
+              const closes = (head.match(/\)/g) || []).length;
+              if (closes <= opens) break;
+            }
+            end--;
+          }
+          const core = raw.slice(0, end);
+          const tail = raw.slice(end);
+          if (match.index > last) frag.appendChild(document.createTextNode(text.slice(last, match.index)));
+          let href = /^www\./i.test(core) ? 'https://' + core : core;
+          if (!isSafeHttpUrl(href)) {
+            frag.appendChild(document.createTextNode(core + tail));
+          } else {
+            const a = document.createElement('a');
+            a.setAttribute('href', href);
+            a.setAttribute('target', '_blank');
+            a.setAttribute('rel', 'noopener noreferrer');
+            a.className = 'krs-autolink';
+            a.textContent = core;
+            frag.appendChild(a);
+            if (tail) frag.appendChild(document.createTextNode(tail));
+            changed = true;
+          }
+          last = match.index + raw.length;
+        }
+        if (!changed) continue;
+        if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+        if (node.parentNode) node.parentNode.replaceChild(frag, node);
+      }
+    }
+
     function highlightMentions(containerEl) {
       // DOM-basiert statt Regex+HTML (XSS-sicher)
       // Iteriert über TextNodes und wrapped @Mentions in <span>
@@ -7423,6 +7499,8 @@
       const textNodes = [];
       while (walker.nextNode()) textNodes.push(walker.currentNode);
       for (const node of textNodes) {
+        const parent = node.parentElement;
+        if (parent && parent.closest('a, code, pre')) continue;
         const text = node.nodeValue;
         if (!mentionRegex.test(text)) continue;
         mentionRegex.lastIndex = 0;
@@ -7451,7 +7529,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.52.1';
+    window.KRS_VERSION = '4.52.2';
     // PERF-01: Cold-Boot-Zähler für Hub keep-alive Abnahme (Connect→Hub-Start→Connect → bleibt 1)
     window.__krsConnectBootCount = (window.__krsConnectBootCount || 0) + 1;
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
@@ -7654,6 +7732,7 @@
         tmp.querySelectorAll('a').forEach(a => {
           a.setAttribute('target', '_blank');
           a.setAttribute('rel', 'noopener noreferrer');
+          a.classList.add('krs-autolink');
         });
       } else if (window._domPurifyFailed) {
         // KRITISCH: Beide CDNs fehlgeschlagen → nur Klartext
@@ -7663,6 +7742,8 @@
         tmp.textContent = html;
       }
 
+      // Geschriebene Adressen antippbar machen, bevor Mentions den Text zerlegen.
+      linkifyBareUrls(tmp);
       // DOM-basiertes Mention-Highlighting (kein innerHTML-Manipulation)
       highlightMentions(tmp);
       return tmp.innerHTML;
@@ -11995,6 +12076,10 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.52.2', date: '03.10.2026', items: [
+        'Chat auf dem iPhone: Nachrichten bleiben in der Breite. Eine Antwort auf eine lange Nachricht rutscht nicht mehr aus dem Bild.',
+        'Internet-Adressen in Chats, Beiträgen und Antworten lassen sich antippen. In der App öffnet sich die Seite im Browser-Fenster der App.'
+      ]},
       { v: '4.52.1', date: '02.10.2026', items: [
         '„↗ Neuer Tab“ in der Anhang-Vorschau öffnet die Datei jetzt wirklich. Im Browser blieb der neue Tab bisher leer, in der iPhone- und iPad-App kam nur „Popup blockiert“.',
         'In der App öffnet sich die Datei im Browser-Fenster der App.',
