@@ -7529,7 +7529,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.52.2';
+    window.KRS_VERSION = '4.52.3';
     // PERF-01: Cold-Boot-Zähler für Hub keep-alive Abnahme (Connect→Hub-Start→Connect → bleibt 1)
     window.__krsConnectBootCount = (window.__krsConnectBootCount || 0) + 1;
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
@@ -10991,7 +10991,16 @@
     function teamFileCanDelete(entry, user, isTeamAdmin, entries) {
       return !!(isTeamAdmin || teamFileOwnsSubtree(entry, user, entries));
     }
-    window.__krsTeamFileRights = { canEdit: teamFileCanEdit, canDelete: teamFileCanDelete };
+    // FB-56 (4.52.3): Bei fremden Dateien fehlten Stift und Mülleimer kommentarlos.
+    // Jetzt steht dort ein ⓘ. Antippen zeigt den Text als Meldung, weil ein
+    // title-Tooltip auf iPad und iPhone nicht erscheint.
+    const TEAM_FILE_FOREIGN_HINT = 'Diese Datei hat jemand anderes hochgeladen. Löschen oder umbenennen kann sie nur diese Person oder ein Team-Admin. Deine neue Fassung kannst du daneben hochladen.';
+    window.__krsTeamFileRights = { canEdit: teamFileCanEdit, canDelete: teamFileCanDelete, foreignHint: TEAM_FILE_FOREIGN_HINT };
+    // Im Demo-Modus ist jede Person Team-Admin. Die Mitglieder-Sicht (ⓘ statt
+    // Stift/Mülleimer) wäre dort sonst nicht prüfbar: Tests setzen vor dem Laden
+    // window.__KRS_DEMO_TEAM_ROLE = 'member'. Wirkt nur im Demo-Modus und kann
+    // Rechte nur wegnehmen.
+    function demoTeamRole() { return window.__KRS_DEMO_TEAM_ROLE === 'member' ? 'member' : 'admin'; }
 
     function TeamFileNameModal({ type, entry, onSave, onClose }) {
       const original = entry?.name || '';
@@ -11298,6 +11307,7 @@
           const canEdit = teamFileCanEdit(entry, user, isTeamAdmin);
           const canDelete = teamFileCanDelete(entry, user, isTeamAdmin, entries);
           const blockedOwnFolder = entry.kind === 'folder' && canEdit && !isTeamAdmin && !canDelete;
+          const foreignFile = entry.kind === 'file' && !canEdit && !canDelete;
           return React.createElement('div', { key: entry.id, className: 'tf-item', 'data-testid': 'tf-item', 'data-kind': entry.kind },
             React.createElement('button', { className: 'tf-item-main', onClick: () => openEntry(entry), onKeyDown: e => { if (e.key === ' ') { e.preventDefault(); openEntry(entry); } } },
               React.createElement('span', { className: 'tf-item-icon', 'aria-hidden': 'true' }, entry.kind === 'folder' ? '📁' : window.fvHelpers.iconFor({ name: entry.name, type: entry.mime_type, url: entry.url })),
@@ -11307,7 +11317,8 @@
               entry.kind === 'file' && React.createElement('button', { className: 'icon-btn', 'aria-label': 'Herunterladen', title: 'Herunterladen', 'data-testid': 'tf-download', onClick: e => { e.stopPropagation(); window.__krsDownloadFile({ url: entry.url, name: entry.name, type: entry.mime_type, size: entry.size_bytes }); } }, '⬇'),
               canEdit && React.createElement('button', { className: 'icon-btn', 'aria-label': 'Umbenennen', title: 'Umbenennen', 'data-testid': 'tf-rename', onClick: e => { e.stopPropagation(); setDialog({ type: 'rename', entry }); } }, '✏️'),
               canDelete && React.createElement('button', { className: 'icon-btn', 'aria-label': 'Löschen', title: 'Löschen', 'data-testid': 'tf-delete', onClick: e => { e.stopPropagation(); deleteEntry(entry); } }, '🗑'),
-              blockedOwnFolder && React.createElement('span', { title: 'In diesem Ordner liegen auch Dateien von anderen. Deine eigenen Dateien löschst du darin einzeln. Den ganzen Ordner löscht ein Team-Admin.', 'aria-label': 'In diesem Ordner liegen auch Dateien von anderen. Deine eigenen Dateien löschst du darin einzeln. Den ganzen Ordner löscht ein Team-Admin.', style: { display: 'inline-flex', width: '44px', height: '44px', alignItems: 'center', justifyContent: 'center' } }, 'ⓘ')
+              blockedOwnFolder && React.createElement('span', { title: 'In diesem Ordner liegen auch Dateien von anderen. Deine eigenen Dateien löschst du darin einzeln. Den ganzen Ordner löscht ein Team-Admin.', 'aria-label': 'In diesem Ordner liegen auch Dateien von anderen. Deine eigenen Dateien löschst du darin einzeln. Den ganzen Ordner löscht ein Team-Admin.', style: { display: 'inline-flex', width: '44px', height: '44px', alignItems: 'center', justifyContent: 'center' } }, 'ⓘ'),
+              foreignFile && React.createElement('button', { type: 'button', className: 'icon-btn', 'data-testid': 'tf-foreign-info', title: TEAM_FILE_FOREIGN_HINT, 'aria-label': TEAM_FILE_FOREIGN_HINT, onClick: e => { e.stopPropagation(); showToast(TEAM_FILE_FOREIGN_HINT, 'info'); } }, 'ⓘ')
             )
           );
         })),
@@ -12076,6 +12087,10 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.52.3', date: '03.10.2026', items: [ // FB-56
+        'Dateiablage: Die gesammelt hochgeladenen Elternabend-Unterlagen gehören jetzt den jeweiligen Lehrkräften. Deine eigenen kannst du dort selbst umbenennen und löschen, zum Beispiel um eine neue Fassung an ihre Stelle zu legen.',
+        'Bei Dateien, die jemand anderes hochgeladen hat, steht rechts ein ⓘ. Ein Tipp darauf erklärt, wer sie ändern kann.'
+      ]},
       { v: '4.52.2', date: '03.10.2026', items: [
         'Chat auf dem iPhone: Nachrichten bleiben in der Breite. Eine Antwort auf eine lange Nachricht rutscht nicht mehr aus dem Bild.',
         'Internet-Adressen in Chats, Beiträgen und Antworten lassen sich antippen. In der App öffnet sich die Seite im Browser-Fenster der App.'
@@ -13346,7 +13361,7 @@
               })
               .catch(() => setUserTeamRole(null));
           } else {
-            setUserTeamRole('admin'); // Demo: always admin
+            setUserTeamRole(demoTeamRole()); // Demo: Admin (Test-Hook für die Mitglieder-Sicht: demoTeamRole)
           }
 
           try {
@@ -14031,7 +14046,7 @@
           const me = members.find(m => m.id === user.id);
           setUserTeamRole(me?.role || null);
         } else {
-          setUserTeamRole('admin'); // Demo: always admin
+          setUserTeamRole(demoTeamRole()); // Demo: Admin (Test-Hook für die Mitglieder-Sicht: demoTeamRole)
         }
       };
 
@@ -14602,7 +14617,7 @@
             ),
             React.createElement('div', { className: 'content-body' },
               React.createElement('p', { style: { fontSize: '13px', color: 'var(--text-muted)', margin: 0 } },
-                'Dateien und Ordner für dieses Team. Nur Mitglieder sehen sie. Was du selbst hochgeladen hast, löschst du über das Mülleimer-Symbol rechts in der Zeile.'),
+                'Dateien und Ordner für dieses Team. Nur Mitglieder sehen sie. Was du selbst hochgeladen hast, löschst du über das Mülleimer-Symbol rechts in der Zeile. Bei Dateien von anderen steht dort ein ⓘ: Die ändert nur die Person selbst oder ein Team-Admin.'),
               React.createElement(TeamFilesSection, {
                 team: selectedTeam, dataService, user, allUsers,
                 isTeamAdmin: userTeamRole === 'admin' || isAdminRole(user)

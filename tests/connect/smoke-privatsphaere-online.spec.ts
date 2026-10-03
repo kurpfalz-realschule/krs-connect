@@ -46,6 +46,6 @@ base.describe('PRIV-01 Online-Status nur für Admins', () => {
     await page.locator('button[aria-label="Einstellungen öffnen"]').first().click();
     const dialog = page.locator('.modal-overlay[aria-label="Einstellungen"]').first();
     await expect(dialog).toContainText('Nur die Admins sehen, dass du einen Beitrag gelesen hast');
-    await expect(dialog).toContainText('v4.52.2');
+    await expect(dialog).toContainText('v4.52.3');
   });
 });

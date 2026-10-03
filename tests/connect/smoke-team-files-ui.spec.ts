@@ -177,6 +177,56 @@ test.describe('DATEI-01 — Team-Dateiablage UI', () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   });
 
+  // FB-56: Mitglied ohne Admin-Rechte. Fremde Datei: kein Stift, kein Mülleimer,
+  // dafür ein ⓘ mit Erklärung. Eigene Datei: Mülleimer, kein ⓘ.
+  test('T15 Mitglied sieht bei fremder Datei ein ⓘ mit Erklärung, bei eigener den Mülleimer', async ({ page }) => {
+    // Demo-Modus macht sonst jede Person zur Team-Admin:in; der Hook nimmt nur Rechte weg.
+    await page.addInitScript(() => { (window as any).__KRS_DEMO_TEAM_ROLE = 'member'; });
+    await openConnect(page, { user: 'al' }); await waitForAppReady(page); await openFiles(page);
+    const hint = await page.evaluate(() => (window as any).__krsTeamFileRights.foreignHint);
+    expect(hint).toContain('Diese Datei hat jemand anderes hochgeladen.');
+    expect(hint).toContain('Team-Admin');
+
+    const foreign = page.locator('[data-testid="tf-item"]', { hasText: 'Konferenzprotokoll September.txt' });
+    const info = foreign.locator('[data-testid="tf-foreign-info"]');
+    await expect(info).toBeVisible();
+    await expect(info).toHaveAttribute('aria-label', hint);
+    await expect(info).toHaveAttribute('title', hint);
+    await expect(foreign.locator('[data-testid="tf-rename"]')).toHaveCount(0);
+    await expect(foreign.locator('[data-testid="tf-delete"]')).toHaveCount(0);
+    await expect(foreign.locator('[data-testid="tf-download"]')).toBeVisible();
+    const box = await info.boundingBox();
+    expect(box!.width).toBeGreaterThanOrEqual(44);
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+
+    // Die Liste mit dem ⓘ ist axe-sauber (vor dem Upload geprüft, ohne Upload-Panel).
+    const axe = await new AxeBuilder({ page }).include('[data-testid="team-files-section"]').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+    expect(axe.violations.filter(v => v.impact === 'critical' || v.impact === 'serious')).toEqual([]);
+
+    // Antippen zeigt den Text als Meldung (title-Tooltips gibt es auf Touch-Geräten nicht) und öffnet nichts.
+    await info.click();
+    await expect(page.locator('.toast', { hasText: 'Diese Datei hat jemand anderes hochgeladen.' })).toBeVisible();
+    await expect(page.locator('.fv-overlay')).toHaveCount(0);
+    await expect(page.locator('[data-testid="tf-item"]', { hasText: 'Konferenzprotokoll September.txt' })).toBeVisible();
+
+    // Eigene Datei daneben hochladen: Stift und Mülleimer, kein ⓘ.
+    await page.locator('[data-testid="tf-file-input"]').setInputFiles({ name: 'meine-fassung.txt', mimeType: 'text/plain', buffer: Buffer.from('neu') });
+    const own = page.locator('[data-testid="tf-item"]', { hasText: 'meine-fassung.txt' });
+    await expect(own).toBeVisible();
+    await expect(own.locator('[data-testid="tf-rename"]')).toBeVisible();
+    await expect(own.locator('[data-testid="tf-delete"]')).toBeVisible();
+    await expect(own.locator('[data-testid="tf-foreign-info"]')).toHaveCount(0);
+  });
+
+  test('T16 Team-Admin sieht kein ⓘ, sondern Stift und Mülleimer', async ({ connectPage: page }) => {
+    await openFiles(page);
+    await page.locator('[data-testid="tf-item"]', { hasText: 'Elternabend 2026' }).locator('.tf-item-main').click();
+    const foreign = page.locator('[data-testid="tf-item"]', { hasText: 'Ablauf Elternabend.txt' });
+    await expect(foreign.locator('[data-testid="tf-rename"]')).toBeVisible();
+    await expect(foreign.locator('[data-testid="tf-delete"]')).toBeVisible();
+    await expect(page.locator('[data-testid="tf-foreign-info"]')).toHaveCount(0);
+  });
+
   test('T14 Summenzeile aktualisiert sich nach Upload', async ({ connectPage: page }) => {
     await openFiles(page);
     await expect(page.locator('[data-testid="tf-summary"]')).toContainText('2 Dateien');
