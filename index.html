@@ -1303,80 +1303,98 @@
     .chat-msg { display: flex; gap: 8px; max-width: 75%; min-width: 0; }
     .chat-msg.own { align-self: flex-end; flex-direction: row-reverse; }
     .chat-msg.other { align-self: flex-start; }
-    .chat-bubble { padding: 10px 14px; border-radius: 16px; background: var(--bg-tertiary); word-break: break-word; min-width: 0; max-width: 100%; }
+    .chat-bubble { padding: 10px 14px; border-radius: 16px; background: var(--bg-tertiary); word-break: break-word; min-width: 0; max-width: 100%; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
     .chat-bubble.own { background: var(--accent); color: var(--accent-text, #fff); border-bottom-right-radius: 4px; }
     .chat-bubble.other { border-bottom-left-radius: 4px; }
     .chat-text { font-size: 14px; line-height: 1.5; }
     .chat-time { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
     .chat-bubble.own .chat-time { color: rgba(255,255,255,0.7); }
-    /* DM Reagieren/Antworten/Bearbeiten/Löschen — am Desktop bei Hover, auf Touch (iPad) immer sichtbar */
+    /* DM Reagieren/Antworten/Bearbeiten/Löschen als schwebende Leiste an der
+       Nachricht. Maus: beim Überfahren. Touch (iPad, iPhone): erst nach Tipp
+       oder langem Druck auf die Nachricht (v4.53.1; in 4.52.4 standen die vier
+       Symbole dort dauerhaft in jeder Blase). */
     /* v4.52.4: Die Leiste steht NEBEN der Blase (eigene Nachricht: links davon,
-       fremde: rechts davon), senkrecht mittig. Vorher schwebte sie oben rechts
-       auf der Blase und verdeckte dort den Text; mit vier Knöpfen hätte sie
-       außerdem die Reaktionen der Nachricht darüber verdeckt. Neben der Blase
-       ist immer Platz, weil eine Blase höchstens 75 % der Spalte einnimmt. */
-    .chat-msg-actions { position: absolute; top: 50%; right: calc(100% + 6px); transform: translateY(-50%); display: flex; gap: 2px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 16px; padding: 1px 2px; opacity: 0; transition: opacity .12s; box-shadow: 0 1px 4px var(--shadow); z-index: 2; }
-    .chat-bubble.other .chat-msg-actions { right: auto; left: calc(100% + 6px); }
+       fremde: rechts davon). Vorher schwebte sie oben rechts auf der Blase und
+       verdeckte dort den Text. Neben der Blase ist immer Platz, weil eine Blase
+       höchstens 75 % der Spalte einnimmt.
+       --krs-bar-y setzt der Tipp-Handler: Die Leiste erscheint auf Höhe des
+       Fingers, bei langen Nachrichten also nicht außerhalb des Bildes. Ohne
+       Wert (Maus) steht sie senkrecht mittig. */
+    .chat-msg-actions { position: absolute; top: var(--krs-bar-y, 50%); right: calc(100% + 6px); transform: translateY(-50%); display: flex; gap: 2px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 16px; padding: 1px 2px; opacity: 0; pointer-events: none; transition: opacity .12s; box-shadow: 0 1px 4px var(--shadow); z-index: 2; }
+    .chat-msg.other > .chat-msg-actions { right: auto; left: calc(100% + 6px); }
     /* Eigene Nachricht: „Reagieren“ direkt an der Blase, „Löschen“ am weitesten weg. */
-    .chat-bubble.own .chat-msg-actions { flex-direction: row-reverse; }
-    /* Unsichtbare Zone neben der Blase, so hoch wie die Nachricht. Ohne sie
-       verliert die Nachricht auf dem Weg von der Blase zur Leiste den Hover
-       (6 px Abstand, bei hohen Blasen auch schräg daran vorbei), und die
-       Leiste flackert. Absolut positioniert, also kein Flex-Kind. */
+    .chat-msg.own > .chat-msg-actions { flex-direction: row-reverse; }
+    /* Sichtbar UND bedienbar ist die Leiste nur: bei Auswahl per Tipp oder
+       langem Druck (is-selected), bei offener Emoji-Auswahl (is-open), bei
+       Tab-Fokus und (weiter unten) beim Überfahren mit der Maus. Unsichtbar
+       nimmt sie keine Klicks an. Sonst löste ein Tipp neben die Blase einen
+       Knopf aus, den man nicht sieht. */
+    .chat-msg-actions.is-open, .chat-msg-actions.is-selected, .chat-msg-actions:has(:focus-visible) { opacity: 1; pointer-events: auto; }
+    @supports not selector(:has(*)) { .chat-msg-actions:focus-within { opacity: 1; pointer-events: auto; } }
     .chat-msg { position: relative; }
-    .chat-msg::after { content: ''; position: absolute; top: 0; bottom: 0; }
-    .chat-msg.own::after { right: 100%; width: 150px; }
-    .chat-msg.other::after { left: 100%; width: 84px; }
-    .chat-msg:hover .chat-msg-actions, .chat-msg-actions.is-open { opacity: 1; }
-    /* Tastatur: sichtbar, sobald ein Knopf den Fokus per Tab bekommt. Nach einem
-       Mausklick bleibt sie NICHT stehen (:focus-within tat das). */
-    .chat-msg-actions:has(:focus-visible) { opacity: 1; }
-    @supports not selector(:has(*)) { .chat-msg-actions:focus-within { opacity: 1; } }
-    /* Platz für die Leiste links neben einer eigenen Nachricht (vier Knöpfe,
-       rund 140 px): Eine eigene Blase lässt links mindestens 146 px frei. Ab
-       584 px Spaltenbreite ändert das nichts (25 % sind dann ohnehin mehr),
-       darunter wird die Blase etwas schmaler als 75 %. Nur mit Mauszeiger;
-       auf Touch-Geräten steht die Leiste in der Blase. */
+    @media (hover: hover) {
+      /* Unsichtbare Zone neben der Blase, so hoch wie die Nachricht. Ohne sie
+         verliert die Nachricht auf dem Weg von der Blase zur Leiste den Hover
+         (6 px Abstand, bei hohen Blasen auch schräg daran vorbei), und die
+         Leiste flackert. Absolut positioniert, also kein Flex-Kind. */
+      .chat-msg::after { content: ''; position: absolute; top: 0; bottom: 0; }
+      .chat-msg.own::after { right: 100%; width: 150px; }
+      .chat-msg.other::after { left: 100%; width: 84px; }
+      .chat-msg:hover .chat-msg-actions { opacity: 1; pointer-events: auto; }
+    }
+    /* Platz für die Leiste links neben einer eigenen Nachricht (vier Knöpfe):
+       Mit Maus rund 140 px, mit Finger-Maß rund 195 px. Die eigene Blase lässt
+       so viel frei; auf breiten Spalten ändert das nichts (25 % sind dann
+       ohnehin mehr), auf schmalen wird die Blase etwas schmaler als 75 %. */
     @media (hover: hover) and (min-width: 641px) {
       .chat-msg.own { max-width: min(75%, calc(100% - 146px)); }
+    }
+    @media (hover: none) and (min-width: 641px) {
+      .chat-msg.own { max-width: min(75%, calc(100% - 200px)); }
     }
     /* Sehr schmales Fenster mit Maus (bis 640 px): Dort wäre die Blase sonst zu
        schmal. Die Leiste bleibt bei eigenen Nachrichten oben rechts. */
     @media (hover: hover) and (max-width: 640px) {
-      .chat-bubble.own .chat-msg-actions { top: -12px; right: 6px; transform: none; }
+      .chat-msg.own > .chat-msg-actions { top: -12px; right: 6px; transform: none; }
+    }
+    /* Handy (Touch, bis 640 px): Neben der Blase ist kein Platz. Die Leiste
+       sitzt über dem Finger, bündig an der Außenkante der Blase (--krs-bar-top
+       vom Tipp-Handler; ohne Wert knapp über der Blase). Ist darüber kein Platz
+       (oberste sichtbare Nachricht), setzt der Tipp-Handler is-below und sie
+       sitzt unter der Blase. */
+    @media (hover: none) and (max-width: 640px) {
+      .chat-msg-actions, .chat-msg.other > .chat-msg-actions { top: var(--krs-bar-top, -40px); bottom: auto; transform: none; }
+      .chat-msg.own > .chat-msg-actions { right: 0; flex-direction: row; }
+      /* 36 px = Avatar (28 px) + Abstand (8 px): bündig mit der linken Kante der Blase. */
+      .chat-msg.other > .chat-msg-actions { left: 36px; right: auto; }
+      .chat-msg-actions.is-below, .chat-msg.other > .chat-msg-actions.is-below { top: calc(100% - 6px); }
+      .chat-msg.has-reactions .chat-msg-actions.is-below { top: calc(100% + var(--krs-chip-h) - 6px); }
     }
     /* v4.52.4: „Reagieren“ sitzt in dieser Leiste. Vorher hing unter JEDER
-       Blase eine gestrichelte „🙂﹢“-Pille in einer eigenen Zeile. Die Knöpfe
-       der Leiste teilen sich jetzt eine Klasse statt vier Inline-Styles. */
+       Blase eine gestrichelte „🙂﹢“-Pille in einer eigenen Zeile.
+       v4.53.1: alle vier Symbole sind Linien-Symbole (SVG). Der Pfeil „↩“
+       erschien auf dem iPad als blaues Emoji-Kästchen, Stift und Mülleimer
+       als bunte Emojis daneben. */
     .chat-action-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 30px; min-height: 30px; padding: 4px; background: none; border: none; border-radius: 12px; cursor: pointer; font-size: 12px; line-height: 1; color: var(--text-secondary); }
     .chat-action-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .chat-action-btn.danger:hover { background: var(--danger-bg); color: var(--danger-text); }
     .chat-action-btn svg { width: 17px; height: 17px; display: block; }
-    /* Feedback #6 (Stresstest 09.07.): Auf Touch-Geräten die Aktionen UNTER der
-       Nachricht anzeigen (statt schwebend über der Blase) — besser erreichbar. */
     @media (hover: none) {
-      .chat-msg-actions, .chat-bubble.other .chat-msg-actions {
-        position: static;
-        transform: none;
-        opacity: 1;
-        display: inline-flex;
-        /* Die Knöpfe sind 44 px hoch, die Symbole darin 20 px. Die negativen
-           Ränder lassen die Tippfläche in den Innenabstand der Blase ragen,
-           damit die Zeile nicht 48 px, sondern nur 28 px Höhe kostet. Links
-           −12 px: das erste Symbol steht bündig unter dem Text. */
-        margin: -6px 0 -10px -12px;
-        box-shadow: none;
-        background: transparent;
-        border: none;
-      }
       /* Mit dem Finger getippt: 44 px statt 30 px (Maus-Maß). */
-      .chat-action-btn { min-width: 44px; min-height: 44px; font-size: 16px; }
-      .chat-action-btn svg { width: 20px; height: 20px; }
-      .chat-action-btn:hover { background: none; }
-      /* In der eigenen (blauen) Blase liegt die Leiste ohne Hintergrund auf Blau. */
-      .chat-bubble.own .chat-action-btn { color: #fff; }
-      .chat-bubble.own .chat-msg-actions { flex-direction: row; }
-      .chat-msg::after { content: none; }
+      .chat-msg-actions { border-radius: 24px; padding: 0 2px; box-shadow: 0 4px 14px rgba(15, 23, 42, 0.16); }
+      .chat-action-btn { min-width: 44px; min-height: 44px; border-radius: 22px; }
+      .chat-action-btn svg { width: 21px; height: 21px; }
+      .chat-action-btn:hover, .chat-action-btn.danger:hover { background: none; color: var(--text-secondary); }
+      .chat-action-btn:active { background: var(--bg-hover); }
+      .chat-action-btn.danger:active { background: var(--danger-bg); color: var(--danger-text); }
     }
+    /* Ausgewählte Nachricht: Ring mit Abstand, auf grauer und blauer Blase
+       gleich gut zu sehen. Bewusst kein filter/transform an der Blase: Beides
+       machte die Blase zum Bezugsrahmen der Emoji-Auswahl (position: fixed). */
+    .chat-msg.is-selected .chat-bubble { box-shadow: 0 0 0 2px var(--bg-primary), 0 0 0 4px rgba(37, 99, 235, 0.45); }
+    /* Einmaliger Hinweis für Touch-Geräte, bis zum ersten Antippen einer Nachricht. */
+    .chat-tap-hint { align-self: center; margin: 6px 0 2px; padding: 5px 12px; font-size: 12px; line-height: 1.35; color: var(--text-muted); background: var(--bg-tertiary); border-radius: 999px; text-align: center; max-width: 100%; }
+    @media (hover: hover) { .chat-tap-hint { display: none; } }
 
     /* v4.52.4: Reaktionen als kleine Kärtchen an der Unterkante der Blase.
        Die Zeile gibt es nur, wenn jemand reagiert hat. Sie bleibt im
@@ -6366,6 +6384,10 @@
       back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>',
       // v4.52.4: Gesicht mit Plus — „Reagieren“ in der Aktionsleiste einer Chat-Nachricht.
       reactAdd: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20.5 12.5a8.5 8.5 0 1 1-9-8.5"/><path d="M8.6 14.2c.8 1.2 2 1.9 3.4 1.9s2.6-.7 3.4-1.9"/><path d="M9.2 9.6v.6M14.8 9.6v.6"/><path d="M18.5 2.5v6M15.5 5.5h6"/></svg>',
+      // v4.53.1: Antworten, Bearbeiten, Löschen als Linien-Symbole passend zu reactAdd.
+      chatReply: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9.5 14.5 4.5 9.5l5-5"/><path d="M4.5 9.5H14a5.5 5.5 0 0 1 5.5 5.5v4"/></svg>',
+      chatEdit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4.5 19.5h3.6L19 8.6a1.8 1.8 0 0 0 0-2.5l-1.1-1.1a1.8 1.8 0 0 0-2.5 0L4.5 15.9z"/><path d="M13.6 6.8l3.6 3.6"/></svg>',
+      chatDelete: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4.5 7h15"/><path d="M9.5 7V4.8h5V7"/><path d="M6.6 7l.9 12.2h9l.9-12.2"/><path d="M10.2 10.8v5M13.8 10.8v5"/></svg>',
       logout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>',
       x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
       search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
@@ -7664,7 +7686,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.53.0';
+    window.KRS_VERSION = '4.53.1';
     // PERF-01: Cold-Boot-Zähler für Hub keep-alive Abnahme (Connect→Hub-Start→Connect → bleibt 1)
     window.__krsConnectBootCount = (window.__krsConnectBootCount || 0) + 1;
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
@@ -10328,6 +10350,95 @@
       const [showEmoji, setShowEmoji] = useState(false);
       const [msgReactions, setMsgReactions] = useState(new Map()); // #11: Map<msgId,[{emoji,users,count}]>
       const [reactionPickerMsgId, setReactionPickerMsgId] = useState(null);
+      // v4.53.1: Auf Touch-Geräten erscheint die Aktionsleiste erst nach Tipp
+      // oder langem Druck auf die Nachricht. { id, y, top, below }:
+      //   y     = Höhe des Fingers in der Blase. iPad: Die Leiste steht neben
+      //           der Blase auf dieser Höhe, nicht in der Mitte.
+      //   top   = Handy: Oberkante der Leiste, 70 px über dem Finger, höchstens
+      //           bis knapp über die Blase. So bleibt sie auch bei einer Nachricht
+      //           sichtbar, die höher ist als der Bildschirm.
+      //   below = Handy: darüber ist kein Platz, die Leiste sitzt unter der Blase.
+      const [selectedMsg, setSelectedMsg] = useState(null);
+      const longPressRef = useRef({ timer: null, fired: false, x: 0, y: 0 });
+      const [tapHintDone, setTapHintDone] = useState(() => {
+        try { return localStorage.getItem('krs_chat_tap_hint_done') === '1'; } catch (e) { return true; }
+      });
+      // Nach dem ersten Tipp bleibt der Platz des Hinweises noch reserviert
+      // (unsichtbar), bis sich die Liste ohnehin ändert (neue Nachricht, anderer
+      // Chat). Sonst rutschte die Liste genau in dem Moment, in dem die Leiste
+      // erscheint.
+      const [tapHintKeep, setTapHintKeep] = useState(null);
+      const tapHintKey = String(conversation && conversation.id) + ':' + (messages ? messages.length : 0);
+      // Tipp auf diese Elemente gehört ihnen selbst (Link öffnen, Bild ansehen,
+      // Reaktion umschalten …) und wählt die Nachricht nicht aus.
+      const CHAT_TAP_IGNORE = 'a, button, img, video, audio, input, textarea, select, [contenteditable="true"], [role="button"], .chat-reply-quote, .chat-reactions, .chat-msg-actions, .emoji-picker-overlay';
+      const selectMsgAt = (bubbleEl, msgId, clientY, toggle) => {
+        if (!bubbleEl) return;
+        const r = bubbleEl.getBoundingClientRect();
+        const box = bubbleEl.closest('.chat-messages');
+        const boxTop = box ? box.getBoundingClientRect().top : 0;
+        const tapY = Math.max(0, Math.min(r.height, clientY - r.top));
+        const y = r.height >= 60 ? Math.round(Math.max(23, Math.min(r.height - 23, tapY))) : null;
+        let top = Math.round(Math.max(-40, tapY - 70));
+        let below = false;
+        if (r.top + top < boxTop + 4) {                              // darüber kein sichtbarer Platz
+          if (r.height - tapY > 90) top = Math.round(tapY + 28);     // hohe Blase: unter dem Finger
+          else below = true;                                         // sonst unter der Blase
+        }
+        const next = { id: msgId, y, top, below };
+        setSelectedMsg(prev => (toggle && prev && prev.id === msgId) ? null : next);
+        if (!tapHintDone) {
+          setTapHintDone(true);
+          setTapHintKeep(tapHintKey);
+          try { localStorage.setItem('krs_chat_tap_hint_done', '1'); } catch (e) {}
+        }
+      };
+      const handleBubbleTap = (e, msgId) => {
+        const lp = longPressRef.current;
+        if (lp.fired) { lp.fired = false; return; }   // der lange Druck hat schon ausgewählt
+        // Mit Mauszeiger zeigt sich die Leiste beim Überfahren; ein Klick in die
+        // Blase (z. B. zum Markieren von Text) soll sie nicht festhalten.
+        if (!(window.matchMedia && window.matchMedia('(hover: none)').matches)) return;
+        if (e.target.closest(CHAT_TAP_IGNORE)) return;
+        const sel = window.getSelection && window.getSelection();
+        if (sel && !sel.isCollapsed && String(sel).trim()) return;   // Text ist markiert
+        selectMsgAt(e.currentTarget, msgId, e.clientY, true);
+      };
+      const bubbleLongPress = (msgId) => ({
+        onTouchStart: (e) => {
+          const lp = longPressRef.current;
+          lp.fired = false;
+          clearTimeout(lp.timer);
+          if (e.touches.length !== 1 || e.target.closest(CHAT_TAP_IGNORE)) return;
+          const t = e.touches[0];
+          const el = e.currentTarget;
+          lp.x = t.clientX; lp.y = t.clientY;
+          lp.timer = setTimeout(() => { lp.fired = true; selectMsgAt(el, msgId, lp.y, false); }, 450);
+        },
+        onTouchMove: (e) => {
+          const lp = longPressRef.current;
+          const t = e.touches[0];
+          if (!t || Math.abs(t.clientX - lp.x) > 10 || Math.abs(t.clientY - lp.y) > 10) clearTimeout(lp.timer);
+        },
+        onTouchEnd: () => clearTimeout(longPressRef.current.timer),
+        onTouchCancel: () => clearTimeout(longPressRef.current.timer)
+      });
+      // Eine Berührung irgendwo außerhalb der ausgewählten Nachricht schließt die
+      // Leiste. pointerdown statt click: iOS erzeugt für Tipps auf leere Flächen
+      // (ein div ohne eigenen Klick-Handler) gar kein click. Capture-Phase: läuft
+      // vor dem Tipp-Handler einer anderen Blase, die danach sich selbst auswählt.
+      useEffect(() => {
+        if (!selectedMsg) return;
+        const onDocDown = (ev) => {
+          const host = document.getElementById('krs-msg-' + selectedMsg.id);
+          if (host && host.contains(ev.target)) return;
+          setSelectedMsg(null);
+        };
+        document.addEventListener('pointerdown', onDocDown, true);
+        return () => document.removeEventListener('pointerdown', onDocDown, true);
+      }, [selectedMsg && selectedMsg.id]);
+      useEffect(() => { setSelectedMsg(null); }, [conversation && conversation.id]);
+      useEffect(() => () => clearTimeout(longPressRef.current.timer), []);
       const [chatDragActive, setChatDragActive] = useState(false); // Drag&Drop-Overlay im Chat
       // S12 (22.09.2026, R15): Nachricht, auf die gerade geantwortet wird
       // (volle Original-Nachricht fuer den Bezugs-Balken ueber dem Eingabefeld).
@@ -10436,6 +10547,7 @@
 
       const handleToggleMsgReaction = async (msgId, emoji) => {
         setReactionPickerMsgId(null);
+        setSelectedMsg(null);
         // Optimistisches Update
         setMsgReactions(prev => {
           const next = new Map(prev);
@@ -10666,13 +10778,17 @@
             const isFileOnly = msg.content && (msg.content.startsWith('📎 ') || msg.content === '📷 Bild');
             const msgChips = msgReactions.get(msg.id) || [];
             const pickerOpen = reactionPickerMsgId === msg.id;
+            const isSelected = !editing && !!selectedMsg && selectedMsg.id === msg.id;
             return React.createElement('div', {
               key: msg.id,
               id: 'krs-msg-' + msg.id,
-              className: 'chat-msg ' + (own ? 'own' : 'other') + (!editing && msgChips.length > 0 ? ' has-reactions' : '')
+              className: 'chat-msg ' + (own ? 'own' : 'other') + (!editing && msgChips.length > 0 ? ' has-reactions' : '') + ((isSelected || pickerOpen) ? ' is-selected' : '')
             },
               !own && React.createElement(Avatar, { user: msg.sender, size: 28 }),
-              React.createElement('div', { className: 'chat-bubble ' + (own ? 'own' : 'other'), style: { position: 'relative' } },
+              React.createElement('div', Object.assign({
+                className: 'chat-bubble ' + (own ? 'own' : 'other'), style: { position: 'relative' },
+                onClick: editing ? undefined : (e) => handleBubbleTap(e, msg.id)
+              }, editing ? null : bubbleLongPress(msg.id)),
                 // S12 (22.09.2026, R15): flacher Zitatbalken -- keine
                 // Einrueckungsebene, ein Tipp springt zur Originalnachricht.
                 msg.reply_to_id && (() => {
@@ -10704,24 +10820,6 @@
                     )
                   : (msg.content && !isFileOnly && React.createElement('div', { className: 'chat-text', dangerouslySetInnerHTML: { __html: sanitizeHtml(msg.content) } })),
                 !editing && React.createElement('div', { className: 'chat-time' }, formatDate(msg.created_at), msg.edited_at && ' (bearbeitet)'),
-                !editing && React.createElement('div', { className: 'chat-msg-actions' + (pickerOpen ? ' is-open' : '') },
-                  // v4.52.4: „Reagieren“ steht vorn in der Leiste (vorher: gestrichelte
-                  // „🙂﹢“-Pille in einer eigenen Zeile unter jeder Blase).
-                  React.createElement('button', {
-                    type: 'button',
-                    className: 'chat-action-btn msg-react-add',
-                    'data-testid': 'msg-react-btn',
-                    onClick: () => setReactionPickerMsgId(prev => prev === msg.id ? null : msg.id),
-                    title: 'Reagieren',
-                    'aria-label': 'Auf Nachricht reagieren',
-                    'aria-haspopup': 'dialog',
-                    'aria-expanded': pickerOpen ? 'true' : 'false',
-                    dangerouslySetInnerHTML: { __html: Icons.reactAdd }
-                  }),
-                  React.createElement('button', { type: 'button', className: 'chat-action-btn', 'data-testid': 'chat-reply-btn', onClick: () => setReplyingTo(msg), title: 'Antworten', 'aria-label': 'Auf Nachricht antworten' }, '↩'),
-                  own && !isFileOnly && React.createElement('button', { type: 'button', className: 'chat-action-btn', onClick: () => handleEditMsg(msg), title: 'Bearbeiten', 'aria-label': 'Nachricht bearbeiten' }, '✏️'),
-                  own && React.createElement('button', { type: 'button', className: 'chat-action-btn', onClick: () => handleDeleteMsg(msg.id), title: 'Löschen', 'aria-label': 'Nachricht löschen' }, '🗑️')
-                ),
                 // #11: Reaktionen. Die Zeile gibt es nur, wenn jemand reagiert hat.
                 !editing && msgChips.length > 0 && React.createElement('div', { className: 'chat-reactions', 'data-testid': 'chat-reactions' },
                   msgChips.map(r => {
@@ -10740,9 +10838,36 @@
                 ),
                 pickerOpen && React.createElement(EmojiPicker, {
                   onSelect: (emoji) => handleToggleMsgReaction(msg.id, emoji),
-                  onClose: () => setReactionPickerMsgId(null),
+                  onClose: () => { setReactionPickerMsgId(null); setSelectedMsg(null); },
                   position: { bottom: '60px', right: '24px' }
                 })
+              ),
+              // v4.53.1: Die Leiste ist ein GESCHWISTER der Blase, kein Kind. Als Kind
+              // zog sie auf Touch-Geräten Tipps an, die der Blase galten: Der Browser
+              // korrigiert einen Fingertipp auf das nächste antippbare Element und
+              // bevorzugt dabei Kinder vor ihrem Elternelement. Ein Tipp in die Blase,
+              // 6 px neben der Leiste, landete so auf einem Knopf der Leiste.
+              !editing && React.createElement('div', {
+                  className: 'chat-msg-actions' + (pickerOpen ? ' is-open' : '') + (isSelected ? ' is-selected' : '') + (isSelected && selectedMsg.below ? ' is-below' : ''),
+                  'data-testid': 'chat-msg-actions',
+                  style: isSelected ? Object.assign({ '--krs-bar-top': selectedMsg.top + 'px' }, selectedMsg.y != null ? { '--krs-bar-y': selectedMsg.y + 'px' } : null) : undefined
+                },
+                // v4.52.4: „Reagieren“ steht vorn in der Leiste (vorher: gestrichelte
+                // „🙂﹢“-Pille in einer eigenen Zeile unter jeder Blase).
+                React.createElement('button', {
+                  type: 'button',
+                  className: 'chat-action-btn msg-react-add',
+                  'data-testid': 'msg-react-btn',
+                  onClick: () => setReactionPickerMsgId(prev => prev === msg.id ? null : msg.id),   // Auswahl bleibt, bis die Emoji-Auswahl zugeht
+                  title: 'Reagieren',
+                  'aria-label': 'Auf Nachricht reagieren',
+                  'aria-haspopup': 'dialog',
+                  'aria-expanded': pickerOpen ? 'true' : 'false',
+                  dangerouslySetInnerHTML: { __html: Icons.reactAdd }
+                }),
+                React.createElement('button', { type: 'button', className: 'chat-action-btn', 'data-testid': 'chat-reply-btn', onClick: () => { setSelectedMsg(null); setReplyingTo(msg); }, title: 'Antworten', 'aria-label': 'Auf Nachricht antworten', dangerouslySetInnerHTML: { __html: Icons.chatReply } }),
+                own && !isFileOnly && React.createElement('button', { type: 'button', className: 'chat-action-btn', 'data-testid': 'chat-edit-btn', onClick: () => { setSelectedMsg(null); handleEditMsg(msg); }, title: 'Bearbeiten', 'aria-label': 'Nachricht bearbeiten', dangerouslySetInnerHTML: { __html: Icons.chatEdit } }),
+                own && React.createElement('button', { type: 'button', className: 'chat-action-btn danger', 'data-testid': 'chat-delete-btn', onClick: () => { setSelectedMsg(null); handleDeleteMsg(msg.id); }, title: 'Löschen', 'aria-label': 'Nachricht löschen', dangerouslySetInnerHTML: { __html: Icons.chatDelete } })
               )
             );
           }),
@@ -10756,6 +10881,13 @@
           messages.length === 0 && React.createElement('div', { className: 'chat-empty' },
             React.createElement('div', null, 'Noch keine Nachrichten. Schreib die erste!')
           ),
+          // v4.53.1: nur auf Touch-Geräten sichtbar (CSS), bis zum ersten Antippen.
+          messages.length > 0 && (!tapHintDone || tapHintKeep === tapHintKey) && React.createElement('div', {
+              className: 'chat-tap-hint', 'data-testid': 'chat-tap-hint',
+              style: tapHintDone ? { visibility: 'hidden' } : undefined,
+              'aria-hidden': tapHintDone ? 'true' : undefined
+            },
+            'Tippe eine Nachricht an, um zu reagieren, zu antworten oder sie zu bearbeiten.'),
           React.createElement('div', { ref: messagesEndRef })
         ),
         chatFiles.length > 0 && React.createElement('div', { style: { padding: '8px 16px', borderTop: '1px solid var(--border)', background: 'var(--bg-secondary)', display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' } },
@@ -12358,6 +12490,11 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.53.1', date: '04.10.2026', items: [
+        'Chat auf iPad und iPhone: Die Symbole für Reagieren, Antworten, Bearbeiten und Löschen stehen nicht mehr dauerhaft in jeder Nachricht. Tippe eine Nachricht an oder halte sie gedrückt, dann erscheint die Leiste daneben (auf dem iPhone darüber). Ein Tipp daneben schließt sie wieder.',
+        'Die vier Symbole sind jetzt einheitliche Linien-Symbole. Der Antworten-Pfeil sah auf dem iPad wie ein blaues Kästchen aus.',
+        'Am Rechner bleibt es beim Überfahren mit der Maus.'
+      ]},
       { v: '4.53.0', date: '04.10.2026', items: [
         'Feedback-Board: Unter einer Rückmeldung kann jetzt eine Antwort stehen. Sie sagt kurz, was geändert wurde oder wie es geht.',
         'Die Antworten kommen vom Admin-Team. Ein Teil entsteht automatisch, sobald eine Rückmeldung erledigt ist. Lesen können sie alle, die das Board öffnen.',
