@@ -85,7 +85,7 @@ test.describe('KRS Connect — automatische Aktualisierung', () => {
   test('gleiche Remote-Version zeigt kein Banner und lädt nicht neu', async ({ page }) => {
     let loads = 0;
     page.on('load', () => { loads += 1; });
-    await prepare(page, '4.52.2');
+    await prepare(page, '4.54.0');
     await visibility(page, 'hidden');
     await visibility(page, 'visible', 60_001);
     await expect(page.getByTestId('update-banner')).toHaveCount(0);

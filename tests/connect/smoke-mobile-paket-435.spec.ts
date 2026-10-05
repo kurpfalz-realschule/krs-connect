@@ -12,8 +12,8 @@ test.describe('v4.35.0: Kollegium oben + Konto-Menü', () => {
   test('Kollegium ist erstes sichtbares Team', async ({ page }) => {
     await openConnect(page, { user: 'la' });
     await page.getByTestId('drawer-nav-teams').click();
-    await expect(page.getByTestId('mobile-topnav-menu')).toBeVisible({ timeout: 8_000 });
-    await page.getByTestId('mobile-topnav-menu').click();
+    await expect(page.getByTestId('teams-open-list')).toBeVisible({ timeout: 8_000 });
+    await page.getByTestId('teams-open-list').click();
     const firstVisible = page.getByTestId('team-visible').first();
     await expect(firstVisible).toBeVisible({ timeout: 8_000 });
     await expect(firstVisible).toContainText(/Kollegium/i);
@@ -31,7 +31,7 @@ test.describe('v4.35.0: Kollegium oben + Konto-Menü', () => {
 
     // ☰-Drawer: Merkliste ja, Einstellungen nicht mehr als Drawer-Eintrag außerhalb des Konto-Menüs
     await page.keyboard.press('Escape').catch(() => {});
-    await page.getByTestId('mobile-topnav-menu').click();
+    await page.getByTestId('teams-open-list').click();
     const drawer = page.locator('.drawer-nav, .team-drawer.mobile-open, .mobile-drawer-only.mobile-open').first();
     await expect(drawer).toBeVisible({ timeout: 5_000 });
     // Settings testid sits only in account menu now — when menu closed, settings in drawer absent

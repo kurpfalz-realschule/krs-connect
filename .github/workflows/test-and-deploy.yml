@@ -42,7 +42,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
       - name: Install dependencies
         run: npm ci || npm install
@@ -78,6 +78,8 @@ jobs:
           else
             cp index.html _site/
           fi
+          cp krs-design.js krs-design.css _site/
+          cp -R vendor _site/
           # tenant.js ist PFLICHT (TENANT-SPEC.md Sprint S2): index.html lädt es als
           # erstes Script per <script src="tenant.js"> — fehlt es im Deploy-Verzeichnis,
           # zeigt die Live-Seite für alle Nutzer:innen den Konfig-Screen statt des Logins.

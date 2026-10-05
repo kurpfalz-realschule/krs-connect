@@ -113,10 +113,10 @@ test.describe('KRS Connect — Paket A (4.41.0)', () => {
     if (res.ownHasUrl) expect(res.own).toBe(true);
   });
 
-  test('A3: DOMPurify ≥ 3.2.4 geladen', async ({ connectPage: page }) => {
+  test('A3: DOMPurify ≥ 3.4.16 geladen', async ({ connectPage: page }) => {
     const v = await page.evaluate(() => (window as any).DOMPurify && (window as any).DOMPurify.version);
     expect(v).toBeTruthy();
     const [a, b, c] = String(v).split('.').map(Number);
-    expect(a * 10000 + b * 100 + c).toBeGreaterThanOrEqual(30204);
+    expect(a * 10000 + b * 100 + c).toBeGreaterThanOrEqual(30416);
   });
 });

@@ -1303,27 +1303,120 @@
     .chat-msg { display: flex; gap: 8px; max-width: 75%; min-width: 0; }
     .chat-msg.own { align-self: flex-end; flex-direction: row-reverse; }
     .chat-msg.other { align-self: flex-start; }
-    .chat-bubble { padding: 10px 14px; border-radius: 16px; background: var(--bg-tertiary); word-break: break-word; min-width: 0; max-width: 100%; }
+    .chat-bubble { padding: 10px 14px; border-radius: 16px; background: var(--bg-tertiary); word-break: break-word; min-width: 0; max-width: 100%; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
     .chat-bubble.own { background: var(--accent); color: var(--accent-text, #fff); border-bottom-right-radius: 4px; }
     .chat-bubble.other { border-bottom-left-radius: 4px; }
     .chat-text { font-size: 14px; line-height: 1.5; }
     .chat-time { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
     .chat-bubble.own .chat-time { color: rgba(255,255,255,0.7); }
-    /* DM Bearbeiten/Löschen — am Desktop bei Hover, auf Touch (iPad) immer sichtbar */
-    .chat-msg-actions { position: absolute; top: -12px; right: 6px; display: flex; gap: 2px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 14px; padding: 1px 2px; opacity: 0; transition: opacity .12s; box-shadow: 0 1px 4px var(--shadow); z-index: 2; }
-    .chat-msg:hover .chat-msg-actions, .chat-msg-actions:focus-within { opacity: 1; }
-    /* Feedback #6 (Stresstest 09.07.): Auf Touch-Geräten ✏️/🗑️ UNTER der
-       Nachricht anzeigen (statt schwebend über der Blase) — besser erreichbar. */
+    /* DM Reagieren/Antworten/Bearbeiten/Löschen als schwebende Leiste an der
+       Nachricht. Maus: beim Überfahren. Touch (iPad, iPhone): erst nach Tipp
+       oder langem Druck auf die Nachricht (v4.53.1; in 4.52.4 standen die vier
+       Symbole dort dauerhaft in jeder Blase). */
+    /* v4.52.4: Die Leiste steht NEBEN der Blase (eigene Nachricht: links davon,
+       fremde: rechts davon). Vorher schwebte sie oben rechts auf der Blase und
+       verdeckte dort den Text. Neben der Blase ist immer Platz, weil eine Blase
+       höchstens 75 % der Spalte einnimmt.
+       --krs-bar-y setzt der Tipp-Handler: Die Leiste erscheint auf Höhe des
+       Fingers, bei langen Nachrichten also nicht außerhalb des Bildes. Ohne
+       Wert (Maus) steht sie senkrecht mittig. */
+    .chat-msg-actions { position: absolute; top: var(--krs-bar-y, 50%); right: calc(100% + 6px); transform: translateY(-50%); display: flex; gap: 2px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 16px; padding: 1px 2px; opacity: 0; pointer-events: none; transition: opacity .12s; box-shadow: 0 1px 4px var(--shadow); z-index: 2; }
+    .chat-msg.other > .chat-msg-actions { right: auto; left: calc(100% + 6px); }
+    /* Eigene Nachricht: „Reagieren“ direkt an der Blase, „Löschen“ am weitesten weg. */
+    .chat-msg.own > .chat-msg-actions { flex-direction: row-reverse; }
+    /* Sichtbar UND bedienbar ist die Leiste nur: bei Auswahl per Tipp oder
+       langem Druck (is-selected), bei offener Emoji-Auswahl (is-open), bei
+       Tab-Fokus und (weiter unten) beim Überfahren mit der Maus. Unsichtbar
+       nimmt sie keine Klicks an. Sonst löste ein Tipp neben die Blase einen
+       Knopf aus, den man nicht sieht. */
+    .chat-msg-actions.is-open, .chat-msg-actions.is-selected, .chat-msg-actions:has(:focus-visible) { opacity: 1; pointer-events: auto; }
+    @supports not selector(:has(*)) { .chat-msg-actions:focus-within { opacity: 1; pointer-events: auto; } }
+    .chat-msg { position: relative; }
+    @media (hover: hover) {
+      /* Unsichtbare Zone neben der Blase, so hoch wie die Nachricht. Ohne sie
+         verliert die Nachricht auf dem Weg von der Blase zur Leiste den Hover
+         (6 px Abstand, bei hohen Blasen auch schräg daran vorbei), und die
+         Leiste flackert. Absolut positioniert, also kein Flex-Kind. */
+      .chat-msg::after { content: ''; position: absolute; top: 0; bottom: 0; }
+      .chat-msg.own::after { right: 100%; width: 150px; }
+      .chat-msg.other::after { left: 100%; width: 84px; }
+      .chat-msg:hover .chat-msg-actions { opacity: 1; pointer-events: auto; }
+    }
+    /* Platz für die Leiste links neben einer eigenen Nachricht (vier Knöpfe):
+       Mit Maus rund 140 px, mit Finger-Maß rund 195 px. Die eigene Blase lässt
+       so viel frei; auf breiten Spalten ändert das nichts (25 % sind dann
+       ohnehin mehr), auf schmalen wird die Blase etwas schmaler als 75 %. */
+    @media (hover: hover) and (min-width: 641px) {
+      .chat-msg.own { max-width: min(75%, calc(100% - 146px)); }
+    }
+    @media (hover: none) and (min-width: 641px) {
+      .chat-msg.own { max-width: min(75%, calc(100% - 200px)); }
+    }
+    /* Sehr schmales Fenster mit Maus (bis 640 px): Dort wäre die Blase sonst zu
+       schmal. Die Leiste bleibt bei eigenen Nachrichten oben rechts. */
+    @media (hover: hover) and (max-width: 640px) {
+      .chat-msg.own > .chat-msg-actions { top: -12px; right: 6px; transform: none; }
+    }
+    /* Handy (Touch, bis 640 px): Neben der Blase ist kein Platz. Die Leiste
+       sitzt über dem Finger, bündig an der Außenkante der Blase (--krs-bar-top
+       vom Tipp-Handler; ohne Wert knapp über der Blase). Ist darüber kein Platz
+       (oberste sichtbare Nachricht), setzt der Tipp-Handler is-below und sie
+       sitzt unter der Blase. */
+    @media (hover: none) and (max-width: 640px) {
+      .chat-msg-actions, .chat-msg.other > .chat-msg-actions { top: var(--krs-bar-top, -40px); bottom: auto; transform: none; }
+      .chat-msg.own > .chat-msg-actions { right: 0; flex-direction: row; }
+      /* 36 px = Avatar (28 px) + Abstand (8 px): bündig mit der linken Kante der Blase. */
+      .chat-msg.other > .chat-msg-actions { left: 36px; right: auto; }
+      .chat-msg-actions.is-below, .chat-msg.other > .chat-msg-actions.is-below { top: calc(100% - 6px); }
+      .chat-msg.has-reactions .chat-msg-actions.is-below { top: calc(100% + var(--krs-chip-h) - 6px); }
+    }
+    /* v4.52.4: „Reagieren“ sitzt in dieser Leiste. Vorher hing unter JEDER
+       Blase eine gestrichelte „🙂﹢“-Pille in einer eigenen Zeile.
+       v4.53.1: alle vier Symbole sind Linien-Symbole (SVG). Der Pfeil „↩“
+       erschien auf dem iPad als blaues Emoji-Kästchen, Stift und Mülleimer
+       als bunte Emojis daneben. */
+    .chat-action-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 30px; min-height: 30px; padding: 4px; background: none; border: none; border-radius: 12px; cursor: pointer; font-size: 12px; line-height: 1; color: var(--text-secondary); }
+    .chat-action-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .chat-action-btn.danger:hover { background: var(--danger-bg); color: var(--danger-text); }
+    .chat-action-btn svg { width: 17px; height: 17px; display: block; }
     @media (hover: none) {
-      .chat-msg-actions {
-        position: static;
-        opacity: 1;
-        display: inline-flex;
-        margin-top: 4px;
-        box-shadow: none;
-        background: transparent;
-        border: none;
-      }
+      /* Mit dem Finger getippt: 44 px statt 30 px (Maus-Maß). */
+      .chat-msg-actions { border-radius: 24px; padding: 0 2px; box-shadow: 0 4px 14px rgba(15, 23, 42, 0.16); }
+      .chat-action-btn { min-width: 44px; min-height: 44px; border-radius: 22px; }
+      .chat-action-btn svg { width: 21px; height: 21px; }
+      .chat-action-btn:hover, .chat-action-btn.danger:hover { background: none; color: var(--text-secondary); }
+      .chat-action-btn:active { background: var(--bg-hover); }
+      .chat-action-btn.danger:active { background: var(--danger-bg); color: var(--danger-text); }
+    }
+    /* Ausgewählte Nachricht: Ring mit Abstand, auf grauer und blauer Blase
+       gleich gut zu sehen. Bewusst kein filter/transform an der Blase: Beides
+       machte die Blase zum Bezugsrahmen der Emoji-Auswahl (position: fixed). */
+    .chat-msg.is-selected .chat-bubble { box-shadow: 0 0 0 2px var(--bg-primary), 0 0 0 4px rgba(37, 99, 235, 0.45); }
+    /* Einmaliger Hinweis für Touch-Geräte, bis zum ersten Antippen einer Nachricht. */
+    .chat-tap-hint { align-self: center; margin: 6px 0 2px; padding: 5px 12px; font-size: 12px; line-height: 1.35; color: var(--text-muted); background: var(--bg-tertiary); border-radius: 999px; text-align: center; max-width: 100%; }
+    @media (hover: hover) { .chat-tap-hint { display: none; } }
+
+    /* v4.52.4: Reaktionen als kleine Kärtchen an der Unterkante der Blase.
+       Die Zeile gibt es nur, wenn jemand reagiert hat. Sie bleibt im
+       Textfluss (kein position:absolute), damit viele Reaktionen umbrechen
+       können und die Blase breit genug bleibt. Der negative Rand unten lässt
+       sie 16 px (Touch: 24 px) aus der Blase herausragen; die Blase selbst
+       wird durch eine Reaktion nicht höher. */
+    .chat-msg { --krs-chip-h: 24px; }
+    .chat-msg.has-reactions { margin-bottom: calc(var(--krs-chip-h) - 6px); }
+    /* max-width: Die Zeile darf eine kurze Blase („Ok“) nur begrenzt verbreitern.
+       Ab etwa fünf verschiedenen Reaktionen bricht sie um, statt die Blase
+       über die halbe Spalte zu ziehen. */
+    .chat-reactions { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; max-width: 212px; margin: 2px 0 calc(-1 * (var(--krs-chip-h) + 2px)); }
+    .chat-bubble.own .chat-reactions { justify-content: flex-end; margin-left: auto; }
+    .msg-reaction-chip { display: inline-flex; align-items: center; justify-content: center; gap: 4px; height: var(--krs-chip-h); min-width: 38px; padding: 0 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg-secondary); color: var(--text-secondary); box-shadow: 0 1px 2px var(--shadow); cursor: pointer; font-size: 13px; line-height: 1; font-family: inherit; transition: border-color .12s, background .12s; }
+    .msg-reaction-chip:hover { border-color: var(--accent); }
+    .msg-reaction-chip.mine { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-hover); }
+    .msg-reaction-count { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    @media (hover: none) {
+      .chat-msg { --krs-chip-h: 32px; }
+      .msg-reaction-chip { min-width: 46px; padding: 0 10px; font-size: 15px; }
+      .msg-reaction-count { font-size: 12px; }
     }
 
     /* S12 (22.09.2026, R15): Zitatbalken ueber einer Chat-Antwort. */
@@ -1785,6 +1878,35 @@
     .fb-cat-chip { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--bg-tertiary); color: var(--text-secondary); }
     .fb-status-select { font-size: 12px; padding: 4px 8px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); min-height: 32px; }
     .fb-empty { text-align: center; color: var(--text-muted); padding: 32px 12px; font-size: 14px; }
+    /* v4.53.0 — Antwort des Admin-Teams unter einer Rückmeldung. Lesen alle,
+       schreiben nur Admins (Regel feedback_update_globaladmin in der Datenbank). */
+    .fb-reply { margin: 8px 0; padding: 10px 12px; border-left: 3px solid var(--accent); border-radius: 0 var(--radius) var(--radius) 0; background: var(--bg-secondary); }
+    .fb-reply-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+    .fb-reply-label { font-size: 12px; font-weight: 700; color: var(--text-secondary); }
+    .fb-reply-text { font-size: 14px; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; }
+    .fb-reply-btn { padding: 6px 12px; min-height: 44px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 13px; font-family: inherit; }
+    .fb-reply-btn:hover { border-color: var(--accent); }
+    .fb-reply-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    /* Admin-Zeile unter der Rückmeldung: Antwort-Knopf und Status-Auswahl stehen
+       zusammen rechts, auch wenn sie auf dem Handy umbrechen. */
+    .fb-item-admin { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; align-items: center; margin-top: 8px; }
+    .fb-item-admin .fb-status-select { min-height: 44px; }
+    .fb-reply-editor { margin: 8px 0; }
+    /* 16 px: darunter zoomt iOS beim Antippen die ganze Seite (siehe v4.29.0). */
+    .fb-reply-textarea { width: 100%; min-height: 96px; border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; font-size: 16px; font-family: inherit; resize: vertical; background: var(--bg-secondary); color: var(--text-primary); }
+    .fb-reply-textarea:focus { outline: 2px solid #1D4ED8; outline-offset: 2px; border-color: var(--accent); }
+    .fb-reply-hint { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+    .fb-reply-count { white-space: nowrap; flex-shrink: 0; }
+    .fb-reply-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; align-items: center; justify-content: flex-end; }
+    .fb-reply-actions .feedback-btn { min-height: 44px; }
+    /* „Antwort entfernen“ steht im Dokument zuletzt (letzter Tab-Stopp), am
+       Rechner aber links, getrennt von Abbrechen und Speichern. */
+    .fb-reply-remove { order: -1; margin-right: auto; background: none; border: 1px solid var(--border); color: var(--danger); }
+    .fb-reply-remove:hover { border-color: var(--danger); }
+    @media (max-width: 480px) {
+      .fb-reply-actions .feedback-btn { flex: 1 1 0; padding-left: 10px; padding-right: 10px; }
+      .fb-reply-actions .fb-reply-remove { order: 3; flex: 1 1 100%; margin-right: 0; }
+    }
 
     /* Update-Banner (#13): neue Version verfügbar */
     .update-banner { position: fixed; top: 0; left: 0; right: 0; z-index: 10000; display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; padding: 10px 16px; background: var(--accent, #4f46e5); color: #fff; font-size: 14px; font-weight: 600; box-shadow: 0 2px 10px rgba(0,0,0,0.18); }
@@ -1904,6 +2026,8 @@
   </style>
   <!-- Native iOS-Huelle (krs-ios). Im Browser wirkungslos. -->
   <script src="krs-native-client.js"></script>
+  <link rel="stylesheet" href="krs-design.css">
+  <script src="krs-design.js"></script>
 </head>
 <body>
   <div id="app"><div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#5A5F72"><div style="width:40px;height:40px;border:3px solid #E2E4E8;border-top-color:#5B7B94;border-radius:50%;animation:spin 0.8s linear infinite"></div><div>Wird geladen...</div><style>@keyframes spin{to{transform:rotate(360deg)}}</style></div></div>
@@ -1913,7 +2037,7 @@
   <link rel="preload" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.1/dist/umd/supabase.min.js" as="script">
   <link rel="preload" href="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js" as="script" crossorigin integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z">
   <link rel="preload" href="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js" as="script" crossorigin integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1">
-  <link rel="preload" href="https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js" as="script" crossorigin integrity="sha384-eEu5CTj3qGvu9PdJuS+YlkNi7d2XxQROAFYOr59zgObtlcux1ae1Il3u7jvdCSWu">
+  <link rel="preload" href="https://cdn.jsdelivr.net/npm/dompurify@3.4.16/dist/purify.min.js" as="script" crossorigin integrity="sha384-a7SzOxErzJ3ZpQz0zJ32d67dSitNzPcbfybc/ykU9KJhMgZkwqfSxlhhdJRS+XGL">
 
   <!-- supabase-js resilient laden: Fallback-CDN-Kette + Timeout, damit ein
        CDN-Haenger nicht die ganze App mit "Supabase nicht verfuegbar" killt.
@@ -1963,14 +2087,14 @@
       if (_el) _el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:12px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#5A5F72;text-align:center;padding:24px"><div style="font-size:32px">📡</div><div style="font-weight:600">' + (window.T ? window.T('app.name', 'Die App') : 'Die App') + ' konnte nicht laden</div><div style="font-size:14px;max-width:320px">Bitte Internetverbindung prüfen und die Seite neu laden (auf dem iPad: Seite nach unten ziehen zum Aktualisieren).</div></div>';
     }
   </script>
-  <script crossorigin src="https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js" integrity="sha384-eEu5CTj3qGvu9PdJuS+YlkNi7d2XxQROAFYOr59zgObtlcux1ae1Il3u7jvdCSWu"></script>
+  <script crossorigin src="https://cdn.jsdelivr.net/npm/dompurify@3.4.16/dist/purify.min.js" integrity="sha384-a7SzOxErzJ3ZpQz0zJ32d67dSitNzPcbfybc/ykU9KJhMgZkwqfSxlhhdJRS+XGL"></script>
   <script>
     // DOMPurify CDN-Check mit Fallback
     if (!window.DOMPurify) {
       console.warn('DOMPurify CDN 1 fehlgeschlagen, lade Fallback...');
       var s = document.createElement('script');
-      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.4/purify.min.js';
-      s.crossOrigin = 'anonymous'; s.integrity = 'sha384-eEu5CTj3qGvu9PdJuS+YlkNi7d2XxQROAFYOr59zgObtlcux1ae1Il3u7jvdCSWu';
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.4.16/purify.min.js';
+      s.crossOrigin = 'anonymous'; s.integrity = 'sha384-a7SzOxErzJ3ZpQz0zJ32d67dSitNzPcbfybc/ykU9KJhMgZkwqfSxlhhdJRS+XGL';
       s.onload = function() { console.log('DOMPurify Fallback geladen'); };
       s.onerror = function() {
         console.error('KRITISCH: DOMPurify konnte von keinem CDN geladen werden');
@@ -2435,7 +2559,12 @@
           var i = 0;
           (function tryNext(){
             if (i >= urls.length) { reject(new Error('cdn-fail')); return; }
-            var s = document.createElement('script'); s.src = urls[i++];
+            var item = urls[i++];
+            var src = typeof item === 'string' ? item : item.src;
+            var integrity = typeof item === 'string' ? '' : (item.integrity || '');
+            var s = document.createElement('script');
+            s.src = src;
+            if (integrity) { s.integrity = integrity; s.crossOrigin = 'anonymous'; }
             s.onload = function(){ resolve(); };
             s.onerror = function(){ tryNext(); };
             document.head.appendChild(s);
@@ -2776,7 +2905,22 @@
       // Schlaegt PDF.js fehl (CDN weg, kaputte Datei), faellt es auf das
       // alte iframe zurueck — schlechter, aber nie eine leere Seite.
       // ------------------------------------------------------------------
-      var PDFJS_VER = '3.11.174';
+      // M1: PDF.js 6.3.289 (legacy-Build). Die Eval-Lücke CVE-2024-4367 ist
+      // ab 4.2.67 entfernt; diese Datei enthält kein eval und kein
+      // isEvalSupported mehr. Der Schalter wird trotzdem mitgegeben, damit ein
+      // älterer Ersatz ihn aus lässt. Eigene Dateien zuerst, dann zwei CDNs.
+      var PDFJS_VER = '6.3.289';
+      var PDFJS_BASES = [
+        'vendor/pdfjs-' + PDFJS_VER + '/',
+        'https://cdn.jsdelivr.net/npm/pdfjs-dist@' + PDFJS_VER + '/legacy/build/',
+        'https://unpkg.com/pdfjs-dist@' + PDFJS_VER + '/legacy/build/'
+      ];
+      window.__krsFilePreview = {
+        pdfJsVersion: PDFJS_VER,
+        xlsxVersion: '0.20.3',
+        mammothVersion: '1.13.0',
+        xlsxMaxBytes: 2 * 1024 * 1024
+      };
       function pdfFallbackIframe(body, url, name){
         body.innerHTML = '';
         var ifr = document.createElement('iframe');
@@ -2784,19 +2928,36 @@
         body.appendChild(ifr);
       }
 
+      function loadPdfJs(){
+        if (_loaded.pdfjs) return _loaded.pdfjs;
+        _loaded.pdfjs = new Promise(function(resolve, reject){
+          var i = 0;
+          function tryNext(err){
+            if (i >= PDFJS_BASES.length) { reject(err || new Error('pdfjs-missing')); return; }
+            var base = PDFJS_BASES[i++];
+            var moduleUrl;
+            try { moduleUrl = new URL(base + 'pdf.min.mjs', document.baseURI); }
+            catch (e) { tryNext(e); return; }
+            import(moduleUrl.href).then(function(lib){
+              if (!lib || typeof lib.getDocument !== 'function') {
+                tryNext(new Error('pdfjs-missing'));
+                return;
+              }
+              try {
+                lib.GlobalWorkerOptions.workerSrc = new URL('pdf.worker.min.mjs', moduleUrl).href;
+              } catch (e) {}
+              resolve(lib);
+            }).catch(function(e){ tryNext(e); });
+          }
+          tryNext();
+        });
+        return _loaded.pdfjs;
+      }
+
       function renderPdf(file, body, url){
         body.innerHTML = '<div class="fv-loading">PDF wird geladen…</div>';
-        loadScript('pdfjs', [
-          'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/' + PDFJS_VER + '/pdf.min.js',
-          'https://cdn.jsdelivr.net/npm/pdfjs-dist@' + PDFJS_VER + '/build/pdf.min.js'
-        ]).then(function(){
-          var lib = window.pdfjsLib;
-          if (!lib) throw new Error('pdfjs-missing');
-          try {
-            lib.GlobalWorkerOptions.workerSrc =
-              'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/' + PDFJS_VER + '/pdf.worker.min.js';
-          } catch (e) {}
-          return lib.getDocument({ url: url }).promise;
+        loadPdfJs().then(function(lib){
+          return lib.getDocument({ url: url, isEvalSupported: false }).promise;
         }).then(function(doc){
           buildPdfUi(doc, body, url, file.name);
         }).catch(function(err){
@@ -2872,7 +3033,7 @@
                   pages.appendChild(cv);
                   var ctx = cv.getContext('2d');
                   ctx.scale(dpr, dpr);
-                  return page.render({ canvasContext: ctx, viewport: vp }).promise;
+                  return page.render({ canvasContext: ctx, canvas: null, viewport: vp }).promise;
                 });
               });
             })(i);
@@ -2916,7 +3077,10 @@
             return;
           }
           if (ext === 'docx') {
-            loadScript('mammoth', ['https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js', 'https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js'])
+            loadScript('mammoth', [
+              { src: 'https://cdn.jsdelivr.net/npm/mammoth@1.13.0/mammoth.browser.min.js', integrity: 'sha384-8NWE3bZDrmRI4IePMoQaEoLhAQ1MmRMJkdNgnGiHRFanTqsFKr0TmK6aSZvFJ/PO' },
+              { src: 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.13.0/mammoth.browser.min.js', integrity: 'sha384-8NWE3bZDrmRI4IePMoQaEoLhAQ1MmRMJkdNgnGiHRFanTqsFKr0TmK6aSZvFJ/PO' }
+            ])
               .then(function(){ return fetch(url); }).then(function(r){ return r.arrayBuffer(); })
               .then(function(buf){ return window.mammoth.convertToHtml({ arrayBuffer: buf }); })
               .then(function(out){ body.innerHTML = ''; var d = document.createElement('div'); d.className = 'fv-doc'; d.innerHTML = purify(out.value || '<em>Leeres Dokument</em>'); body.appendChild(d); })
@@ -2924,15 +3088,36 @@
             return;
           }
           if (ext === 'xlsx' || ext === 'xls') {
-            loadScript('xlsx', ['https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'])
+            var XLSX_SRI = 'sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT';
+            var XLSX_MAX_BYTES = 2 * 1024 * 1024;
+            var XLSX_MAX_SHEETS = 5;
+            var XLSX_MAX_ROWS = 200;
+            loadScript('xlsx', [
+              { src: 'vendor/xlsx-0.20.3.full.min.js', integrity: XLSX_SRI },
+              { src: 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js', integrity: XLSX_SRI }
+            ])
               .then(function(){ return fetch(url); }).then(function(r){ return r.arrayBuffer(); })
               .then(function(buf){
-                var wb = window.XLSX.read(buf, { type: 'array' });
+                if (!window.XLSX || String(window.XLSX.version) !== '0.20.3') throw new Error('xlsx-version');
+                if (buf.byteLength > XLSX_MAX_BYTES) {
+                  noPreview(body, 'Die Tabelle ist für eine Vorschau zu groß. Bitte die Datei herunterladen.', file);
+                  return;
+                }
+                var wb = window.XLSX.read(buf, { type: 'array', sheetRows: XLSX_MAX_ROWS, cellFormula: false, cellHTML: false });
+                if (!wb || !wb.SheetNames || !wb.SheetNames.length) {
+                  noPreview(body, 'Excel-Vorschau nicht verfügbar.', file);
+                  return;
+                }
                 body.innerHTML = ''; var wrap = document.createElement('div'); wrap.className = 'fv-doc';
-                wb.SheetNames.forEach(function(sn){
+                wb.SheetNames.slice(0, XLSX_MAX_SHEETS).forEach(function(sn){
                   var h = document.createElement('div'); h.className = 'fv-sheetname'; h.textContent = sn; wrap.appendChild(h);
                   var t = document.createElement('div'); t.innerHTML = purify(window.XLSX.utils.sheet_to_html(wb.Sheets[sn])); wrap.appendChild(t);
                 });
+                if (wb.SheetNames.length > XLSX_MAX_SHEETS) {
+                  var more = document.createElement('div'); more.className = 'fv-sheetname';
+                  more.textContent = 'Weitere Blätter sind in der Datei. Bitte herunterladen, um alle zu sehen.';
+                  wrap.appendChild(more);
+                }
                 body.appendChild(wrap);
               })
               .catch(function(){ noPreview(body, 'Excel-Vorschau nicht verfügbar.', file); });
@@ -3212,7 +3397,9 @@
 
     // Demo-Store für Feedback-Board (#12): Status offen | in_arbeit | erledigt
     let MOCK_FEEDBACK = [
-      { id: 'fb1', user_id: 2, name: 'Lehrkraft B', category: 'verbesserung', rating: 4, message: 'Könnte man Beiträge auch anpinnen?', page: '', status: 'erledigt', created_at: '2026-06-21T09:12:00.000Z' },
+      { id: 'fb1', user_id: 2, name: 'Lehrkraft B', category: 'verbesserung', rating: 4, message: 'Könnte man Beiträge auch anpinnen?', page: '', status: 'erledigt', created_at: '2026-06-21T09:12:00.000Z',
+        // v4.53.0 — Antwort des Admin-Teams (Demo-Beispiel)
+        admin_reply: 'Ja, das geht: Beim Beitrag auf 📌 „Anheften“ tippen. Angeheftete Beiträge stehen im Kanal ganz oben.', admin_reply_at: '2026-06-22T08:00:00.000Z' },
       { id: 'fb2', user_id: 3, name: 'Lehrkraft C', category: 'bug', rating: 0, message: 'Beim Hochladen eines PDFs passiert manchmal nichts.', page: '', status: 'in_arbeit', created_at: '2026-06-21T14:30:00.000Z' },
       { id: 'fb3', user_id: null, name: 'Anonym', category: 'lob', rating: 5, message: 'Viel besser als Teams – danke!', page: '', status: 'offen', created_at: '2026-06-22T07:45:00.000Z' }
     ];
@@ -4326,7 +4513,8 @@
       // ── Feedback-Board (#12) ───────────────────
       async getFeedback() {
         if (this.isDemo) {
-          return [...MOCK_FEEDBACK].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+          // Kopien wie vom Server: Wer die Liste im Zustand hält, darf nicht nebenbei den Demo-Store mitändern.
+          return MOCK_FEEDBACK.map(f => ({ ...f })).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
         }
         try {
           const { data, error } = await this.sb.from('feedback').select('*').order('created_at', { ascending: false });
@@ -4376,6 +4564,32 @@
           if (error) throw error;
           return data;
         } catch (err) { console.error('updateFeedbackStatus error:', err); showToast('Status konnte nicht geändert werden.', 'error'); return null; }
+      }
+
+      // v4.53.0 — Antwort des Admin-Teams auf eine Rückmeldung. Leerer Text
+      // entfernt die Antwort. Spalten feedback.admin_reply / admin_reply_at,
+      // Migration 2026-10-03_feedback-antwort.sql. Wer das darf, entscheidet
+      // die Datenbank (UPDATE nur für globale Admins); den Zeitpunkt setzt
+      // dort ein Trigger, deshalb schickt die App keinen mit.
+      async setFeedbackReply(id, text) {
+        const reply = String(text == null ? '' : text).trim().substring(0, 2000) || null;
+        if (this.isDemo) {
+          const fb = MOCK_FEEDBACK.find(f => String(f.id) === String(id));
+          if (!fb) return null;
+          fb.admin_reply = reply;
+          fb.admin_reply_at = reply ? new Date().toISOString() : null;
+          fb.updated_at = new Date().toISOString();
+          return { ...fb };
+        }
+        try {
+          const { data, error } = await this.sb.from('feedback').update({ admin_reply: reply, updated_at: new Date().toISOString() }).eq('id', id).select('*').single();
+          if (error) throw error;
+          return data;
+        } catch (err) {
+          console.error('setFeedbackReply error:', err);
+          showToast((reply ? 'Antwort konnte nicht gespeichert werden.' : 'Antwort konnte nicht entfernt werden.') + ' Bitte versuche es erneut.', 'error');
+          return null;
+        }
       }
 
       // ── Team-Dateiablage-Links (v4.12.0) ───────────────────
@@ -6231,6 +6445,12 @@
       send: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
       plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
       back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>',
+      // v4.52.4: Gesicht mit Plus — „Reagieren“ in der Aktionsleiste einer Chat-Nachricht.
+      reactAdd: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20.5 12.5a8.5 8.5 0 1 1-9-8.5"/><path d="M8.6 14.2c.8 1.2 2 1.9 3.4 1.9s2.6-.7 3.4-1.9"/><path d="M9.2 9.6v.6M14.8 9.6v.6"/><path d="M18.5 2.5v6M15.5 5.5h6"/></svg>',
+      // v4.53.1: Antworten, Bearbeiten, Löschen als Linien-Symbole passend zu reactAdd.
+      chatReply: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9.5 14.5 4.5 9.5l5-5"/><path d="M4.5 9.5H14a5.5 5.5 0 0 1 5.5 5.5v4"/></svg>',
+      chatEdit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4.5 19.5h3.6L19 8.6a1.8 1.8 0 0 0 0-2.5l-1.1-1.1a1.8 1.8 0 0 0-2.5 0L4.5 15.9z"/><path d="M13.6 6.8l3.6 3.6"/></svg>',
+      chatDelete: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4.5 7h15"/><path d="M9.5 7V4.8h5V7"/><path d="M6.6 7l.9 12.2h9l.9-12.2"/><path d="M10.2 10.8v5M13.8 10.8v5"/></svg>',
       logout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>',
       x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
       search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
@@ -7529,7 +7749,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.52.2';
+    window.KRS_VERSION = '4.54.0';
     // PERF-01: Cold-Boot-Zähler für Hub keep-alive Abnahme (Connect→Hub-Start→Connect → bleibt 1)
     window.__krsConnectBootCount = (window.__krsConnectBootCount || 0) + 1;
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
@@ -8526,7 +8746,7 @@
     // (⋯-Menü → „Als Aufgabe merken“) oder hier von Hand getippt werden.
     // Damit löst die Merkliste das eigenständige Modul „Notizen & Aufgaben“ ab,
     // das in zwei Monaten viermal benutzt wurde.
-    function MerklisteView({ tasks, tasksLoading, savedPosts, oldNotesCount, onAddTask, onToggleTask, onDeleteTask, onRemoveSaved, onOpenMenu }) {
+    function MerklisteView({ tasks, tasksLoading, savedPosts, oldNotesCount, onAddTask, onToggleTask, onDeleteTask, onRemoveSaved, onBack }) {
       const [text, setText] = useState('');
       const [due, setDue] = useState('');
       const [busy, setBusy] = useState(false);
@@ -8575,10 +8795,11 @@
         React.createElement('div', { className: 'mobile-view-header' },
           React.createElement('button', {
             className: 'mobile-menu-btn',
-            onClick: onOpenMenu,
-            'aria-label': 'Menü öffnen',
+            onClick: onBack,
+            'aria-label': 'Zurück zur Liste',
+            'data-testid': 'saved-back',
             style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '22px', color: 'var(--text-secondary)' }
-          }, '\u2630'),
+          }, '‹ Liste'),
           React.createElement('h1', null, 'Merkliste'),
           React.createElement('span', { className: 'spacer' })
         ),
@@ -10193,6 +10414,95 @@
       const [showEmoji, setShowEmoji] = useState(false);
       const [msgReactions, setMsgReactions] = useState(new Map()); // #11: Map<msgId,[{emoji,users,count}]>
       const [reactionPickerMsgId, setReactionPickerMsgId] = useState(null);
+      // v4.53.1: Auf Touch-Geräten erscheint die Aktionsleiste erst nach Tipp
+      // oder langem Druck auf die Nachricht. { id, y, top, below }:
+      //   y     = Höhe des Fingers in der Blase. iPad: Die Leiste steht neben
+      //           der Blase auf dieser Höhe, nicht in der Mitte.
+      //   top   = Handy: Oberkante der Leiste, 70 px über dem Finger, höchstens
+      //           bis knapp über die Blase. So bleibt sie auch bei einer Nachricht
+      //           sichtbar, die höher ist als der Bildschirm.
+      //   below = Handy: darüber ist kein Platz, die Leiste sitzt unter der Blase.
+      const [selectedMsg, setSelectedMsg] = useState(null);
+      const longPressRef = useRef({ timer: null, fired: false, x: 0, y: 0 });
+      const [tapHintDone, setTapHintDone] = useState(() => {
+        try { return localStorage.getItem('krs_chat_tap_hint_done') === '1'; } catch (e) { return true; }
+      });
+      // Nach dem ersten Tipp bleibt der Platz des Hinweises noch reserviert
+      // (unsichtbar), bis sich die Liste ohnehin ändert (neue Nachricht, anderer
+      // Chat). Sonst rutschte die Liste genau in dem Moment, in dem die Leiste
+      // erscheint.
+      const [tapHintKeep, setTapHintKeep] = useState(null);
+      const tapHintKey = String(conversation && conversation.id) + ':' + (messages ? messages.length : 0);
+      // Tipp auf diese Elemente gehört ihnen selbst (Link öffnen, Bild ansehen,
+      // Reaktion umschalten …) und wählt die Nachricht nicht aus.
+      const CHAT_TAP_IGNORE = 'a, button, img, video, audio, input, textarea, select, [contenteditable="true"], [role="button"], .chat-reply-quote, .chat-reactions, .chat-msg-actions, .emoji-picker-overlay';
+      const selectMsgAt = (bubbleEl, msgId, clientY, toggle) => {
+        if (!bubbleEl) return;
+        const r = bubbleEl.getBoundingClientRect();
+        const box = bubbleEl.closest('.chat-messages');
+        const boxTop = box ? box.getBoundingClientRect().top : 0;
+        const tapY = Math.max(0, Math.min(r.height, clientY - r.top));
+        const y = r.height >= 60 ? Math.round(Math.max(23, Math.min(r.height - 23, tapY))) : null;
+        let top = Math.round(Math.max(-40, tapY - 70));
+        let below = false;
+        if (r.top + top < boxTop + 4) {                              // darüber kein sichtbarer Platz
+          if (r.height - tapY > 90) top = Math.round(tapY + 28);     // hohe Blase: unter dem Finger
+          else below = true;                                         // sonst unter der Blase
+        }
+        const next = { id: msgId, y, top, below };
+        setSelectedMsg(prev => (toggle && prev && prev.id === msgId) ? null : next);
+        if (!tapHintDone) {
+          setTapHintDone(true);
+          setTapHintKeep(tapHintKey);
+          try { localStorage.setItem('krs_chat_tap_hint_done', '1'); } catch (e) {}
+        }
+      };
+      const handleBubbleTap = (e, msgId) => {
+        const lp = longPressRef.current;
+        if (lp.fired) { lp.fired = false; return; }   // der lange Druck hat schon ausgewählt
+        // Mit Mauszeiger zeigt sich die Leiste beim Überfahren; ein Klick in die
+        // Blase (z. B. zum Markieren von Text) soll sie nicht festhalten.
+        if (!(window.matchMedia && window.matchMedia('(hover: none)').matches)) return;
+        if (e.target.closest(CHAT_TAP_IGNORE)) return;
+        const sel = window.getSelection && window.getSelection();
+        if (sel && !sel.isCollapsed && String(sel).trim()) return;   // Text ist markiert
+        selectMsgAt(e.currentTarget, msgId, e.clientY, true);
+      };
+      const bubbleLongPress = (msgId) => ({
+        onTouchStart: (e) => {
+          const lp = longPressRef.current;
+          lp.fired = false;
+          clearTimeout(lp.timer);
+          if (e.touches.length !== 1 || e.target.closest(CHAT_TAP_IGNORE)) return;
+          const t = e.touches[0];
+          const el = e.currentTarget;
+          lp.x = t.clientX; lp.y = t.clientY;
+          lp.timer = setTimeout(() => { lp.fired = true; selectMsgAt(el, msgId, lp.y, false); }, 450);
+        },
+        onTouchMove: (e) => {
+          const lp = longPressRef.current;
+          const t = e.touches[0];
+          if (!t || Math.abs(t.clientX - lp.x) > 10 || Math.abs(t.clientY - lp.y) > 10) clearTimeout(lp.timer);
+        },
+        onTouchEnd: () => clearTimeout(longPressRef.current.timer),
+        onTouchCancel: () => clearTimeout(longPressRef.current.timer)
+      });
+      // Eine Berührung irgendwo außerhalb der ausgewählten Nachricht schließt die
+      // Leiste. pointerdown statt click: iOS erzeugt für Tipps auf leere Flächen
+      // (ein div ohne eigenen Klick-Handler) gar kein click. Capture-Phase: läuft
+      // vor dem Tipp-Handler einer anderen Blase, die danach sich selbst auswählt.
+      useEffect(() => {
+        if (!selectedMsg) return;
+        const onDocDown = (ev) => {
+          const host = document.getElementById('krs-msg-' + selectedMsg.id);
+          if (host && host.contains(ev.target)) return;
+          setSelectedMsg(null);
+        };
+        document.addEventListener('pointerdown', onDocDown, true);
+        return () => document.removeEventListener('pointerdown', onDocDown, true);
+      }, [selectedMsg && selectedMsg.id]);
+      useEffect(() => { setSelectedMsg(null); }, [conversation && conversation.id]);
+      useEffect(() => () => clearTimeout(longPressRef.current.timer), []);
       const [chatDragActive, setChatDragActive] = useState(false); // Drag&Drop-Overlay im Chat
       // S12 (22.09.2026, R15): Nachricht, auf die gerade geantwortet wird
       // (volle Original-Nachricht fuer den Bezugs-Balken ueber dem Eingabefeld).
@@ -10301,6 +10611,7 @@
 
       const handleToggleMsgReaction = async (msgId, emoji) => {
         setReactionPickerMsgId(null);
+        setSelectedMsg(null);
         // Optimistisches Update
         setMsgReactions(prev => {
           const next = new Map(prev);
@@ -10529,13 +10840,19 @@
             const own = isOwn(msg);
             const editing = editingMsgId === msg.id;
             const isFileOnly = msg.content && (msg.content.startsWith('📎 ') || msg.content === '📷 Bild');
+            const msgChips = msgReactions.get(msg.id) || [];
+            const pickerOpen = reactionPickerMsgId === msg.id;
+            const isSelected = !editing && !!selectedMsg && selectedMsg.id === msg.id;
             return React.createElement('div', {
               key: msg.id,
               id: 'krs-msg-' + msg.id,
-              className: 'chat-msg ' + (own ? 'own' : 'other')
+              className: 'chat-msg ' + (own ? 'own' : 'other') + (!editing && msgChips.length > 0 ? ' has-reactions' : '') + ((isSelected || pickerOpen) ? ' is-selected' : '')
             },
               !own && React.createElement(Avatar, { user: msg.sender, size: 28 }),
-              React.createElement('div', { className: 'chat-bubble ' + (own ? 'own' : 'other'), style: { position: 'relative' } },
+              React.createElement('div', Object.assign({
+                className: 'chat-bubble ' + (own ? 'own' : 'other'), style: { position: 'relative' },
+                onClick: editing ? undefined : (e) => handleBubbleTap(e, msg.id)
+              }, editing ? null : bubbleLongPress(msg.id)),
                 // S12 (22.09.2026, R15): flacher Zitatbalken -- keine
                 // Einrueckungsebene, ein Tipp springt zur Originalnachricht.
                 msg.reply_to_id && (() => {
@@ -10567,39 +10884,54 @@
                     )
                   : (msg.content && !isFileOnly && React.createElement('div', { className: 'chat-text', dangerouslySetInnerHTML: { __html: sanitizeHtml(msg.content) } })),
                 !editing && React.createElement('div', { className: 'chat-time' }, formatDate(msg.created_at), msg.edited_at && ' (bearbeitet)'),
-                !editing && React.createElement('div', { className: 'chat-msg-actions' },
-                  React.createElement('button', { type: 'button', 'data-testid': 'chat-reply-btn', onClick: () => setReplyingTo(msg), title: 'Antworten', 'aria-label': 'Auf Nachricht antworten', style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', padding: '4px', minWidth: '30px', minHeight: '30px' } }, '↩'),
-                  own && !isFileOnly && React.createElement('button', { type: 'button', onClick: () => handleEditMsg(msg), title: 'Bearbeiten', 'aria-label': 'Nachricht bearbeiten', style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', padding: '4px', minWidth: '30px', minHeight: '30px' } }, '✏️'),
-                  own && React.createElement('button', { type: 'button', onClick: () => handleDeleteMsg(msg.id), title: 'Löschen', 'aria-label': 'Nachricht löschen', style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', padding: '4px', minWidth: '30px', minHeight: '30px' } }, '🗑️')
-                ),
-                // #11: Reaktionen — Chips + „Reagieren"-Button
-                !editing && React.createElement('div', { className: 'chat-reactions', 'data-testid': 'chat-reactions', style: { display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px', alignItems: 'center' } },
-                  (msgReactions.get(msg.id) || []).map(r =>
-                    React.createElement('button', {
+                // #11: Reaktionen. Die Zeile gibt es nur, wenn jemand reagiert hat.
+                !editing && msgChips.length > 0 && React.createElement('div', { className: 'chat-reactions', 'data-testid': 'chat-reactions' },
+                  msgChips.map(r => {
+                    const mine = (r.users || []).includes(currentUser.id);
+                    return React.createElement('button', {
                       key: r.emoji,
                       type: 'button',
-                      className: 'msg-reaction-chip' + ((r.users || []).includes(currentUser.id) ? ' mine' : ''),
+                      className: 'msg-reaction-chip' + (mine ? ' mine' : ''),
                       'data-testid': 'msg-reaction-chip',
                       onClick: () => handleToggleMsgReaction(msg.id, r.emoji),
-                      title: r.count + 'x',
-                      style: { display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '1px 7px', borderRadius: '12px', border: '1px solid ' + ((r.users || []).includes(currentUser.id) ? 'var(--accent)' : 'var(--border)'), background: (r.users || []).includes(currentUser.id) ? 'var(--accent-light)' : 'var(--bg-tertiary)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '12px', lineHeight: '18px' }
-                    }, r.emoji, React.createElement('span', { style: { fontSize: '11px' } }, r.count))
-                  ),
-                  React.createElement('button', {
-                    type: 'button',
-                    className: 'msg-react-add',
-                    'data-testid': 'msg-react-btn',
-                    onClick: () => setReactionPickerMsgId(prev => prev === msg.id ? null : msg.id),
-                    title: 'Reagieren',
-                    'aria-label': 'Auf Nachricht reagieren',
-                    style: { background: 'none', border: '1px dashed var(--border)', borderRadius: '12px', cursor: 'pointer', fontSize: '12px', color: 'var(--text-muted)', padding: '1px 7px', lineHeight: '18px', minHeight: '22px' }
-                  }, '🙂﹢')
+                      title: mine ? 'Deine Reaktion zurücknehmen' : 'Auch so reagieren',
+                      'aria-label': r.emoji + ' ' + r.count + (mine ? ', deine Reaktion zurücknehmen' : ', auch so reagieren'),
+                      'aria-pressed': mine ? 'true' : 'false'
+                    }, r.emoji, React.createElement('span', { className: 'msg-reaction-count' }, r.count));
+                  })
                 ),
-                reactionPickerMsgId === msg.id && React.createElement(EmojiPicker, {
+                pickerOpen && React.createElement(EmojiPicker, {
                   onSelect: (emoji) => handleToggleMsgReaction(msg.id, emoji),
-                  onClose: () => setReactionPickerMsgId(null),
+                  onClose: () => { setReactionPickerMsgId(null); setSelectedMsg(null); },
                   position: { bottom: '60px', right: '24px' }
                 })
+              ),
+              // v4.53.1: Die Leiste ist ein GESCHWISTER der Blase, kein Kind. Als Kind
+              // zog sie auf Touch-Geräten Tipps an, die der Blase galten: Der Browser
+              // korrigiert einen Fingertipp auf das nächste antippbare Element und
+              // bevorzugt dabei Kinder vor ihrem Elternelement. Ein Tipp in die Blase,
+              // 6 px neben der Leiste, landete so auf einem Knopf der Leiste.
+              !editing && React.createElement('div', {
+                  className: 'chat-msg-actions' + (pickerOpen ? ' is-open' : '') + (isSelected ? ' is-selected' : '') + (isSelected && selectedMsg.below ? ' is-below' : ''),
+                  'data-testid': 'chat-msg-actions',
+                  style: isSelected ? Object.assign({ '--krs-bar-top': selectedMsg.top + 'px' }, selectedMsg.y != null ? { '--krs-bar-y': selectedMsg.y + 'px' } : null) : undefined
+                },
+                // v4.52.4: „Reagieren“ steht vorn in der Leiste (vorher: gestrichelte
+                // „🙂﹢“-Pille in einer eigenen Zeile unter jeder Blase).
+                React.createElement('button', {
+                  type: 'button',
+                  className: 'chat-action-btn msg-react-add',
+                  'data-testid': 'msg-react-btn',
+                  onClick: () => setReactionPickerMsgId(prev => prev === msg.id ? null : msg.id),   // Auswahl bleibt, bis die Emoji-Auswahl zugeht
+                  title: 'Reagieren',
+                  'aria-label': 'Auf Nachricht reagieren',
+                  'aria-haspopup': 'dialog',
+                  'aria-expanded': pickerOpen ? 'true' : 'false',
+                  dangerouslySetInnerHTML: { __html: Icons.reactAdd }
+                }),
+                React.createElement('button', { type: 'button', className: 'chat-action-btn', 'data-testid': 'chat-reply-btn', onClick: () => { setSelectedMsg(null); setReplyingTo(msg); }, title: 'Antworten', 'aria-label': 'Auf Nachricht antworten', dangerouslySetInnerHTML: { __html: Icons.chatReply } }),
+                own && !isFileOnly && React.createElement('button', { type: 'button', className: 'chat-action-btn', 'data-testid': 'chat-edit-btn', onClick: () => { setSelectedMsg(null); handleEditMsg(msg); }, title: 'Bearbeiten', 'aria-label': 'Nachricht bearbeiten', dangerouslySetInnerHTML: { __html: Icons.chatEdit } }),
+                own && React.createElement('button', { type: 'button', className: 'chat-action-btn danger', 'data-testid': 'chat-delete-btn', onClick: () => { setSelectedMsg(null); handleDeleteMsg(msg.id); }, title: 'Löschen', 'aria-label': 'Nachricht löschen', dangerouslySetInnerHTML: { __html: Icons.chatDelete } })
               )
             );
           }),
@@ -10613,6 +10945,13 @@
           messages.length === 0 && React.createElement('div', { className: 'chat-empty' },
             React.createElement('div', null, 'Noch keine Nachrichten. Schreib die erste!')
           ),
+          // v4.53.1: nur auf Touch-Geräten sichtbar (CSS), bis zum ersten Antippen.
+          messages.length > 0 && (!tapHintDone || tapHintKeep === tapHintKey) && React.createElement('div', {
+              className: 'chat-tap-hint', 'data-testid': 'chat-tap-hint',
+              style: tapHintDone ? { visibility: 'hidden' } : undefined,
+              'aria-hidden': tapHintDone ? 'true' : undefined
+            },
+            'Tippe eine Nachricht an, um zu reagieren, zu antworten oder sie zu bearbeiten.'),
           React.createElement('div', { ref: messagesEndRef })
         ),
         chatFiles.length > 0 && React.createElement('div', { style: { padding: '8px 16px', borderTop: '1px solid var(--border)', background: 'var(--bg-secondary)', display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' } },
@@ -10737,7 +11076,7 @@
     // APP COMPONENT
     // ============================================================
 
-    function SearchView({ dataService, user, allUsers, teams }) {
+    function SearchView({ dataService, user, allUsers, teams, onBack }) {
       const [query, setQuery] = useState('');
       const [results, setResults] = useState(null);
       const [searching, setSearching] = useState(false);
@@ -10806,6 +11145,7 @@
       return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', height: '100%' } },
         React.createElement('div', { style: { padding: '16px 20px', borderBottom: '1px solid var(--border)' } },
           React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' } },
+            React.createElement('button', { type: 'button', onClick: onBack, 'aria-label': 'Zurück zur Liste', 'data-testid': 'search-back', style: { minWidth: '44px', minHeight: '44px', background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius)', color: 'var(--text-primary)', cursor: 'pointer' } }, '‹ Liste'),
             React.createElement('h2', { style: { margin: 0, fontSize: '18px', fontWeight: '600', flex: 1 } }, 'Suche'),
             React.createElement('button', {
               onClick: () => setShowFilters(!showFilters),
@@ -10991,7 +11331,16 @@
     function teamFileCanDelete(entry, user, isTeamAdmin, entries) {
       return !!(isTeamAdmin || teamFileOwnsSubtree(entry, user, entries));
     }
-    window.__krsTeamFileRights = { canEdit: teamFileCanEdit, canDelete: teamFileCanDelete };
+    // FB-56 (4.52.3): Bei fremden Dateien fehlten Stift und Mülleimer kommentarlos.
+    // Jetzt steht dort ein ⓘ. Antippen zeigt den Text als Meldung, weil ein
+    // title-Tooltip auf iPad und iPhone nicht erscheint.
+    const TEAM_FILE_FOREIGN_HINT = 'Diese Datei hat jemand anderes hochgeladen. Löschen oder umbenennen kann sie nur diese Person oder ein Team-Admin. Deine neue Fassung kannst du daneben hochladen.';
+    window.__krsTeamFileRights = { canEdit: teamFileCanEdit, canDelete: teamFileCanDelete, foreignHint: TEAM_FILE_FOREIGN_HINT };
+    // Im Demo-Modus ist jede Person Team-Admin. Die Mitglieder-Sicht (ⓘ statt
+    // Stift/Mülleimer) wäre dort sonst nicht prüfbar: Tests setzen vor dem Laden
+    // window.__KRS_DEMO_TEAM_ROLE = 'member'. Wirkt nur im Demo-Modus und kann
+    // Rechte nur wegnehmen.
+    function demoTeamRole() { return window.__KRS_DEMO_TEAM_ROLE === 'member' ? 'member' : 'admin'; }
 
     function TeamFileNameModal({ type, entry, onSave, onClose }) {
       const original = entry?.name || '';
@@ -11298,6 +11647,7 @@
           const canEdit = teamFileCanEdit(entry, user, isTeamAdmin);
           const canDelete = teamFileCanDelete(entry, user, isTeamAdmin, entries);
           const blockedOwnFolder = entry.kind === 'folder' && canEdit && !isTeamAdmin && !canDelete;
+          const foreignFile = entry.kind === 'file' && !canEdit && !canDelete;
           return React.createElement('div', { key: entry.id, className: 'tf-item', 'data-testid': 'tf-item', 'data-kind': entry.kind },
             React.createElement('button', { className: 'tf-item-main', onClick: () => openEntry(entry), onKeyDown: e => { if (e.key === ' ') { e.preventDefault(); openEntry(entry); } } },
               React.createElement('span', { className: 'tf-item-icon', 'aria-hidden': 'true' }, entry.kind === 'folder' ? '📁' : window.fvHelpers.iconFor({ name: entry.name, type: entry.mime_type, url: entry.url })),
@@ -11307,7 +11657,8 @@
               entry.kind === 'file' && React.createElement('button', { className: 'icon-btn', 'aria-label': 'Herunterladen', title: 'Herunterladen', 'data-testid': 'tf-download', onClick: e => { e.stopPropagation(); window.__krsDownloadFile({ url: entry.url, name: entry.name, type: entry.mime_type, size: entry.size_bytes }); } }, '⬇'),
               canEdit && React.createElement('button', { className: 'icon-btn', 'aria-label': 'Umbenennen', title: 'Umbenennen', 'data-testid': 'tf-rename', onClick: e => { e.stopPropagation(); setDialog({ type: 'rename', entry }); } }, '✏️'),
               canDelete && React.createElement('button', { className: 'icon-btn', 'aria-label': 'Löschen', title: 'Löschen', 'data-testid': 'tf-delete', onClick: e => { e.stopPropagation(); deleteEntry(entry); } }, '🗑'),
-              blockedOwnFolder && React.createElement('span', { title: 'In diesem Ordner liegen auch Dateien von anderen. Deine eigenen Dateien löschst du darin einzeln. Den ganzen Ordner löscht ein Team-Admin.', 'aria-label': 'In diesem Ordner liegen auch Dateien von anderen. Deine eigenen Dateien löschst du darin einzeln. Den ganzen Ordner löscht ein Team-Admin.', style: { display: 'inline-flex', width: '44px', height: '44px', alignItems: 'center', justifyContent: 'center' } }, 'ⓘ')
+              blockedOwnFolder && React.createElement('span', { title: 'In diesem Ordner liegen auch Dateien von anderen. Deine eigenen Dateien löschst du darin einzeln. Den ganzen Ordner löscht ein Team-Admin.', 'aria-label': 'In diesem Ordner liegen auch Dateien von anderen. Deine eigenen Dateien löschst du darin einzeln. Den ganzen Ordner löscht ein Team-Admin.', style: { display: 'inline-flex', width: '44px', height: '44px', alignItems: 'center', justifyContent: 'center' } }, 'ⓘ'),
+              foreignFile && React.createElement('button', { type: 'button', className: 'icon-btn', 'data-testid': 'tf-foreign-info', title: TEAM_FILE_FOREIGN_HINT, 'aria-label': TEAM_FILE_FOREIGN_HINT, onClick: e => { e.stopPropagation(); showToast(TEAM_FILE_FOREIGN_HINT, 'info'); } }, 'ⓘ')
             )
           );
         })),
@@ -11734,11 +12085,55 @@
       const [items, setItems] = useState(null); // null = lädt
       const [filter, setFilter] = useState('alle');
       const [savingId, setSavingId] = useState(null);
+      // v4.53.0 — Antwort schreiben (nur Admins). Immer nur ein Editor offen.
+      const [replyEdit, setReplyEdit] = useState(null); // { id, text } | null
+      const [replySaving, setReplySaving] = useState(false);
+      const replyEditId = replyEdit ? String(replyEdit.id) : null;
+      // Der Tasten-Effekt unten hängt nur an onClose. Editor- und Speicher-Stand
+      // liest er deshalb über Refs, sonst sähe er für immer den ersten Render.
+      const replyEditRef = useRef(null);
+      replyEditRef.current = replyEdit;
+      const replySavingRef = useRef(false);
+      replySavingRef.current = replySaving;
+      const replyBoxRef = useRef(null);
+      // Nach dem Schließen geht der Fokus zurück auf den Knopf, von dem aus der
+      // Editor geöffnet wurde. Das erledigt der Effekt unten, also erst dann,
+      // wenn der Knopf wieder im Dokument steht.
+      const replyFocusBackRef = useRef(null);
+      const closeReplyEditor = (id) => { replyFocusBackRef.current = String(id); setReplyEdit(null); };
       useEffect(() => {
-        const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+        const onKey = (e) => {
+          if (e.key !== 'Escape') return;
+          // Liegt die Screenshot-Vorschau darüber, gehört Escape ihr allein.
+          if (document.querySelector('.fv-overlay')) return;
+          // Offener Antwort-Editor: Escape schließt nur ihn, nicht das ganze Board.
+          // Während des Speicherns bleibt er offen, sonst wäre der Text bei einem Fehler weg.
+          if (replyEditRef.current) { if (!replySavingRef.current) closeReplyEditor(replyEditRef.current.id); return; }
+          onClose();
+        };
         document.addEventListener('keydown', onKey);
         return () => document.removeEventListener('keydown', onKey);
       }, [onClose]);
+      useEffect(() => {
+        if (replyEditId !== null) {
+          const el = replyBoxRef.current;
+          if (!el) return;
+          el.focus();
+          try { el.setSelectionRange(el.value.length, el.value.length); } catch (e) {}
+          // Die Knöpfe unter dem Feld sollen ohne Scrollen erreichbar sein.
+          try { const box = el.closest('.fb-reply-editor'); if (box && box.scrollIntoView) box.scrollIntoView({ block: 'nearest' }); } catch (e) {}
+          return;
+        }
+        const back = replyFocusBackRef.current;
+        replyFocusBackRef.current = null;
+        if (back === null) return;
+        try {
+          const knopf = Array.from(document.querySelectorAll('[data-fb-reply-btn]')).find(b => b.getAttribute('data-fb-reply-btn') === back);
+          // Steht der Eintrag nicht mehr in der Ansicht (Filter), bleibt der Fokus im Board.
+          const ziel = knopf || document.querySelector('.fb-board-modal .fb-board-filter.active');
+          if (ziel) ziel.focus();
+        } catch (e) {}
+      }, [replyEditId]);
 
       const CAT = { bug: '🐛 Bug', verbesserung: '💡 Verbesserung', lob: '👍 Lob', frage: '❓ Frage', sonstiges: '📝 Sonstiges' };
       const STATUS_LABEL = { offen: 'Offen', in_arbeit: 'In Arbeit', erledigt: 'Erledigt' };
@@ -11761,11 +12156,41 @@
         }
       };
 
+      const applyReply = (id, updated) => setItems(prev => (prev || []).map(it => String(it.id) === String(id)
+        ? { ...it, admin_reply: updated.admin_reply || null, admin_reply_at: updated.admin_reply_at || null }
+        : it));
+      // text === '' entfernt die Antwort.
+      const saveReply = async (id, text) => {
+        if (replySavingRef.current) return;
+        const clean = String(text || '').trim();
+        const vorher = (items || []).find(it => String(it.id) === String(id));
+        const alterText = vorher ? String(vorher.admin_reply || '') : '';
+        setReplySaving(true);
+        const updated = await dataService.setFeedbackReply(id, clean);
+        setReplySaving(false);
+        if (!updated) {
+          // Die Meldung kam schon aus dem DataService. Editor und Text bleiben stehen.
+          setTimeout(() => { try { if (replyBoxRef.current) replyBoxRef.current.focus(); } catch (e) {} }, 0);
+          return;
+        }
+        applyReply(id, updated);
+        closeReplyEditor(id);
+        if (clean) { showToast('Antwort gespeichert', 'success'); return; }
+        // Entfernen fragt nicht nach. Dafür lässt es sich zurücknehmen.
+        showToast('Antwort entfernt', 'success', alterText ? { label: 'Rückgängig', onClick: async () => {
+          const wieder = await dataService.setFeedbackReply(id, alterText);
+          if (wieder) { applyReply(id, wieder); showToast('Antwort wiederhergestellt', 'success'); }
+        } } : null);
+      };
+
       const fmtDate = (d) => { try { return new Date(d).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }); } catch (e) { return ''; } };
-      const filtered = (items || []).filter(it => filter === 'alle' || it.status === filter);
+      const fmtDay = (d) => { try { return new Date(d).toLocaleDateString('de-DE', { dateStyle: 'short' }); } catch (e) { return ''; } };
+      // Der Eintrag, an dem gerade geschrieben wird, bleibt in der Ansicht, auch
+      // wenn Filter oder Status inzwischen nicht mehr passen.
+      const filtered = (items || []).filter(it => filter === 'alle' || it.status === filter || String(it.id) === replyEditId);
       const countBy = (s) => (items || []).filter(it => it.status === s).length;
 
-      return React.createElement('div', { className: 'feedback-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': '📋 Feedback-Board', onClick: (ev) => { if (ev.target === ev.currentTarget) onClose(); } },
+      return React.createElement('div', { className: 'feedback-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': '📋 Feedback-Board', onClick: (ev) => { if (ev.target === ev.currentTarget && !replyEdit) onClose(); } },
         React.createElement('div', { className: 'feedback-modal fb-board-modal' },
           React.createElement('div', { className: 'feedback-title', style: { justifyContent: 'space-between' } },
             React.createElement('span', null, '📋 Feedback-Board ', React.createElement('span', { style: { fontSize: '11px', fontWeight: 800, background: 'var(--accent-orange,#f59e0b)', color: '#fff', padding: '2px 7px', borderRadius: '10px', verticalAlign: 'middle' } }, 'BETA')),
@@ -11804,11 +12229,65 @@
                         style: { maxWidth: '100%', maxHeight: '220px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', margin: '8px 0', cursor: 'pointer', display: 'block' },
                         onClick: () => window.openFileViewer([{ url: it.image_url, name: 'Screenshot', type: 'image/png' }], 0)
                       }),
-                      React.createElement('div', { className: 'fb-item-head', style: { marginBottom: 0 } },
-                        React.createElement('span', { className: 'fb-item-meta' }, fmtDate(it.created_at)),
-                        isAdmin && React.createElement('select', {
+                      // v4.53.0 — das Datum der Rückmeldung steht direkt bei ihr, vor der
+                      // Antwort. Sonst läse es sich wie das Datum der Antwort.
+                      React.createElement('div', { className: 'fb-item-meta' }, fmtDate(it.created_at)),
+                      // Antwort des Admin-Teams: sehen alle. Reiner Text (React maskiert
+                      // ihn), Zeilenumbrüche bleiben erhalten.
+                      it.admin_reply && String(it.id) !== replyEditId && React.createElement('div', { className: 'fb-reply', 'data-testid': 'fb-reply' },
+                        React.createElement('div', { className: 'fb-reply-head' },
+                          React.createElement('span', { className: 'fb-reply-label' }, React.createElement('span', { 'aria-hidden': 'true' }, '💬 '), 'Antwort vom Admin-Team'),
+                          it.admin_reply_at && React.createElement('span', { className: 'fb-item-meta' }, fmtDay(it.admin_reply_at))
+                        ),
+                        React.createElement('div', { className: 'fb-reply-text' }, it.admin_reply)
+                      ),
+                      // Editor: nur für Admins, nur an der gerade gewählten Rückmeldung.
+                      isAdmin && replyEdit && String(it.id) === replyEditId && React.createElement('div', { className: 'fb-reply-editor', 'data-testid': 'fb-reply-editor' },
+                        React.createElement('textarea', {
+                          ref: replyBoxRef,
+                          className: 'fb-reply-textarea',
+                          'aria-label': 'Antwort auf die Rückmeldung von ' + (it.name || 'Anonym'),
+                          'aria-describedby': 'fb-reply-hint-' + String(it.id),
+                          placeholder: 'Kurz und sachlich: was geändert wurde oder wie es geht.',
+                          value: replyEdit.text,
+                          maxLength: 2000,
+                          // readOnly statt disabled: der Fokus bleibt beim Speichern im Feld.
+                          readOnly: replySaving,
+                          onChange: (ev) => { const v = ev.target.value; setReplyEdit(prev => prev ? { ...prev, text: v } : prev); }
+                        }),
+                        React.createElement('div', { className: 'fb-reply-hint' },
+                          React.createElement('span', { id: 'fb-reply-hint-' + String(it.id) }, 'Die Antwort sehen alle, die das Feedback-Board öffnen.'),
+                          React.createElement('span', { className: 'fb-reply-count' }, replyEdit.text.length + ' / 2000')
+                        ),
+                        React.createElement('div', { className: 'fb-reply-actions' },
+                          React.createElement('button', {
+                            type: 'button', className: 'feedback-btn feedback-btn-cancel', disabled: replySaving,
+                            onClick: () => closeReplyEditor(it.id)
+                          }, 'Abbrechen'),
+                          React.createElement('button', {
+                            type: 'button', className: 'feedback-btn feedback-btn-send',
+                            disabled: replySaving || !replyEdit.text.trim() || replyEdit.text.trim() === String(it.admin_reply || ''),
+                            onClick: () => saveReply(it.id, replyEdit.text)
+                          }, replySaving ? 'Speichert…' : 'Antwort speichern'),
+                          it.admin_reply && React.createElement('button', {
+                            type: 'button', className: 'feedback-btn fb-reply-remove', disabled: replySaving,
+                            onClick: () => saveReply(it.id, '')
+                          }, 'Antwort entfernen')
+                        )
+                      ),
+                      isAdmin && React.createElement('div', { className: 'fb-item-admin' },
+                        String(it.id) !== replyEditId && React.createElement('button', {
+                          type: 'button',
+                          className: 'fb-reply-btn',
+                          'data-fb-reply-btn': String(it.id),
+                          // Solange ein Editor offen ist, bleiben die anderen Knöpfe gesperrt:
+                          // ein Tipp daneben würde den angefangenen Text sonst verwerfen.
+                          disabled: replySaving || replyEditId !== null,
+                          'aria-label': (it.admin_reply ? 'Antwort bearbeiten zur Rückmeldung von ' : 'Antworten auf die Rückmeldung von ') + (it.name || 'Anonym'),
+                          onClick: () => setReplyEdit({ id: it.id, text: String(it.admin_reply || '') })
+                        }, it.admin_reply ? '✏️ Antwort bearbeiten' : '💬 Antworten'),
+                        React.createElement('select', {
                           className: 'fb-status-select',
-                          style: { marginLeft: 'auto' },
                           'aria-label': 'Status ändern',
                           value: it.status,
                           disabled: savingId === it.id,
@@ -12076,6 +12555,26 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.54.0', date: '05.10.2026', items: ['Neues Design kann in den Einstellungen freiwillig ausprobiert und wieder ausgeschaltet werden.', 'Dateivorschau und Textschutz verwenden die vorbereiteten geprüften Bibliotheksstände.']},
+      { v: '4.53.1', date: '04.10.2026', items: [
+        'Chat auf iPad und iPhone: Die Symbole für Reagieren, Antworten, Bearbeiten und Löschen stehen nicht mehr dauerhaft in jeder Nachricht. Tippe eine Nachricht an oder halte sie gedrückt, dann erscheint die Leiste daneben (auf dem iPhone darüber). Ein Tipp daneben schließt sie wieder.',
+        'Die vier Symbole sind jetzt einheitliche Linien-Symbole. Der Antworten-Pfeil sah auf dem iPad wie ein blaues Kästchen aus.',
+        'Am Rechner bleibt es beim Überfahren mit der Maus.'
+      ]},
+      { v: '4.53.0', date: '04.10.2026', items: [
+        'Feedback-Board: Unter einer Rückmeldung kann jetzt eine Antwort stehen. Sie sagt kurz, was geändert wurde oder wie es geht.',
+        'Die Antworten kommen vom Admin-Team. Ein Teil entsteht automatisch, sobald eine Rückmeldung erledigt ist. Lesen können sie alle, die das Board öffnen.',
+        'Eine Benachrichtigung gibt es dafür nicht. Die Antwort steht im Feedback-Board bei deiner Rückmeldung.'
+      ]},
+      { v: '4.52.4', date: '03.10.2026', items: [
+        'Chat: Das gestrichelte „🙂+“ unter jeder Nachricht ist weg. Zum Reagieren fährst du am Rechner mit der Maus über die Nachricht: Daneben erscheint eine kleine Leiste, das Gesicht mit dem Plus öffnet die Emojis. Auf iPad und iPhone steht das Symbol unter der Nachricht, vor dem Antworten-Pfeil.',
+        'Reaktionen hängen als kleine Kärtchen unten an der Nachricht. Ein Tipp auf ein Kärtchen reagiert genauso oder nimmt deine Reaktion zurück.',
+        'Am Rechner steht die Leiste mit Antworten, Bearbeiten und Löschen jetzt neben der Nachricht und verdeckt keinen Text mehr. Auf iPad und iPhone sind die Symbole größer und leichter zu treffen.'
+      ]},
+      { v: '4.52.3', date: '03.10.2026', items: [ // FB-56
+        'Dateiablage: Die gesammelt hochgeladenen Elternabend-Unterlagen gehören jetzt den jeweiligen Lehrkräften. Deine eigenen kannst du dort selbst umbenennen und löschen, zum Beispiel um eine neue Fassung an ihre Stelle zu legen.',
+        'Bei Dateien, die jemand anderes hochgeladen hat, steht rechts ein ⓘ. Ein Tipp darauf erklärt, wer sie ändern kann.'
+      ]},
       { v: '4.52.2', date: '03.10.2026', items: [
         'Chat auf dem iPhone: Nachrichten bleiben in der Breite. Eine Antwort auf eine lange Nachricht rutscht nicht mehr aus dem Bild.',
         'Internet-Adressen in Chats, Beiträgen und Antworten lassen sich antippen. In der App öffnet sich die Seite im Browser-Fenster der App.'
@@ -12400,6 +12899,8 @@
     // Bündelt Benachrichtigungen, Lesebestätigungen, Hilfe/Datenschutz und
     // den Changelog an einem Ort. Ersetzt die verstreuten Icons unten links.
     function SettingsPanel({ onClose, canGoBack, notificationsEnabled, notificationPermission, onToggleNotifications, readReceiptsEnabled, onToggleReadReceipts, onOpenHelp, onOpenPrivacy, onOpenFeedback, onChangePassword, dataService, userId }) {
+      const [designV2, setDesignV2] = useState(window.KRSDesign.enabled);
+      useEffect(() => window.KRSDesign.subscribe(setDesignV2), []);
       useEffect(() => {
         const onKey = (e) => { if (e.key === 'Escape') onClose(); };
         document.addEventListener('keydown', onKey);
@@ -12443,6 +12944,7 @@
           onClick: e => e.stopPropagation(),
           style: { background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', maxWidth: '560px', width: '100%', maxHeight: '85vh', overflow: 'auto', padding: '24px 28px', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }
         },
+          React.createElement('div', { style: sectionStyle }, React.createElement('div', { style: rowStyle }, React.createElement('div', null, React.createElement('div', { style: labelStyle }, 'Neues Design ausprobieren'), React.createElement('div', { style: hintStyle }, 'Nur auf diesem Gerät. Jederzeit zurück zum vertrauten Design.')), toggleBtn(designV2, () => window.KRSDesign.setEnabled(!window.KRSDesign.enabled), 'Neues Design ausprobieren'))),
           React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' } },
             React.createElement('h2', { style: { margin: 0, fontSize: '20px' } }, '⚙️ Einstellungen'),
             React.createElement('button', { onClick: onClose, 'aria-label': canGoBack ? 'Zurück' : 'Schließen', title: canGoBack ? 'Zurück' : 'Schließen', style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: canGoBack ? '14px' : '20px', fontWeight: canGoBack ? 600 : 400, color: canGoBack ? 'var(--accent)' : 'var(--text-muted)', padding: '8px', minWidth: '44px', minHeight: '44px', whiteSpace: 'nowrap' } }, canGoBack ? '← Zurück' : '✕')
@@ -12655,6 +13157,7 @@
       const [showCreateTeam, setShowCreateTeam] = useState(false);
       const [showTeamMembers, setShowTeamMembers] = useState(false);
       const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+      useEffect(() => { document.documentElement.classList.toggle('design-list-open', mobileSidebarOpen); return () => document.documentElement.classList.remove('design-list-open'); }, [mobileSidebarOpen]);
       // v4.29.0 — welches Team im Handy-Schubfach aufgeklappt ist. Am Rechner
       // ohne Wirkung (dort steht die Kanal-Spalte daneben).
       const [expandedTeamId, setExpandedTeamId] = useState(null);
@@ -12827,6 +13330,14 @@
     }
 
     function App() {
+      const [designV2, setDesignV2] = useState(window.KRSDesign.enabled);
+      const [designActionsOpen, setDesignActionsOpen] = useState(false);
+      useEffect(() => window.KRSDesign.subscribe(value => { setDesignV2(value); setDesignActionsOpen(false); }), []);
+      useEffect(() => {
+        document.documentElement.classList.toggle('design-actions-open', designActionsOpen);
+        return () => document.documentElement.classList.remove('design-actions-open');
+      }, [designActionsOpen]);
+
       // Start-Guard (TENANT-SPEC.md Sprint-S2-Punkt 3): läuft vor jedem createClient.
       // ?forceMode=demo (E2E-Tests, Live-Demo) überspringt den Guard komplett — dort
       // wird nie ein echter Supabase-Client instanziiert. Sonst: fehlende Pflichtfelder
@@ -13346,7 +13857,7 @@
               })
               .catch(() => setUserTeamRole(null));
           } else {
-            setUserTeamRole('admin'); // Demo: always admin
+            setUserTeamRole(demoTeamRole()); // Demo: Admin (Test-Hook für die Mitglieder-Sicht: demoTeamRole)
           }
 
           try {
@@ -13879,6 +14390,7 @@
       // Clear unread when opening a conversation
       // Phase 7.3: Handler memoizieren — verhindert Re-Renders bei Child-Komponenten
       const handleConversationSelect = useCallback((conv) => {
+        setMobileSidebarOpen(false);
         if (!conv) return;
         setSelectedConversation(conv);
         writeLastConversationId(user?.id, conv.id);
@@ -14031,7 +14543,7 @@
           const me = members.find(m => m.id === user.id);
           setUserTeamRole(me?.role || null);
         } else {
-          setUserTeamRole('admin'); // Demo: always admin
+          setUserTeamRole(demoTeamRole()); // Demo: Admin (Test-Hook für die Mitglieder-Sicht: demoTeamRole)
         }
       };
 
@@ -14219,6 +14731,12 @@
         return await dataService.updatePassword(newPassword);
       }, [dataService]);
 
+      const lastListView = React.useRef('teams');
+      React.useEffect(() => {
+        if (view === 'teams' || view === 'chat') lastListView.current = view;
+      }, [view]);
+      const returnToList = () => { setMobileSidebarOpen(false); setView(lastListView.current); };
+
       if (!setupComplete) {
         return React.createElement(SetupScreen, { onSetupComplete: handleSetupComplete });
       }
@@ -14250,6 +14768,19 @@
       // im Konto-Menü (v4.35.0). data-testid drawer-nav-teams/chat/apps wandern
       // auf die Leiste — bestehende und künftige Tests zeigen weiter dorthin.
       const totalUnreadBadge = unreadChatCount + Array.from(unreadPostChannels.values()).reduce((a, b) => a + b, 0);
+      // D1: Genau ein beschrifteter Listenzugang im Inhaltsbereich.
+      const mobileListButton = (kind) => React.createElement('button', {
+        type: 'button', className: 'mobile-menu-btn',
+        'data-testid': kind === 'teams' ? 'teams-open-list' : 'chat-open-list',
+        'aria-label': kind === 'teams' ? 'Team- und Kanalliste öffnen' : 'Chatliste öffnen',
+        'aria-expanded': mobileSidebarOpen,
+        onClick: () => setMobileSidebarOpen(true),
+        style: { display: 'none', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', gap: '6px', fontSize: '14px', padding: '0 6px', position: 'relative' }
+      },
+        React.createElement('span', { 'aria-hidden': 'true' }, designV2 ? '←' : '☰'),
+        React.createElement('span', null, kind === 'teams' ? 'Teams' : 'Chats'),
+        totalUnreadBadge > 0 && React.createElement('span', { className: 'nav-badge' }, totalUnreadBadge > 9 ? '9+' : totalUnreadBadge)
+      );
       const hubErreichbar = !!(window.__krsIsEmbedded || (window.KRS_HUB_URL && String(window.KRS_HUB_URL).trim()));
       const mobileTopNav = React.createElement('div', {
         className: 'mobile-topnav',
@@ -14257,16 +14788,7 @@
         'aria-label': 'Bereich wechseln',
         'data-testid': 'mobile-topnav'
       },
-        React.createElement('button', {
-          className: 'mobile-menu-btn',
-          onClick: () => setMobileSidebarOpen(true),
-          'aria-label': 'Menü öffnen',
-          'data-testid': 'mobile-topnav-menu',
-          style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '22px', color: 'var(--text-secondary)', position: 'relative', flex: '0 0 auto' }
-        },
-          '\u2630',
-          totalUnreadBadge > 0 && React.createElement('span', { className: 'nav-badge', style: { position: 'absolute', top: '-2px', right: '-6px', fontSize: '10px' } }, totalUnreadBadge > 9 ? '9+' : totalUnreadBadge)
-        ),
+        React.createElement('button', { className: 'design-list-close', 'aria-label': 'Liste schließen', onClick: () => setMobileSidebarOpen(false) }, '← Zurück'),
         React.createElement('div', { className: 'mobile-topnav-switch' },
           React.createElement('button', {
             className: view === 'teams' ? 'active' : '',
@@ -14344,6 +14866,7 @@
       );
 
       const drawerNav = window.__krsIsEmbedded ? React.createElement('div', { className: 'drawer-nav', role: 'navigation', 'aria-label': 'Weitere Bereiche' },
+        designV2 && React.createElement('div', { className: 'design-local-switch' }, ['teams', 'chat', 'search'].map(kind => React.createElement('button', { key: kind, 'aria-current': view === kind ? 'page' : undefined, onClick: () => { setView(kind); setMobileSidebarOpen(false); } }, kind === 'teams' ? 'Teams' : kind === 'chat' ? 'Chats' : 'Suche'))),
         React.createElement('button', {
           className: 'wide' + (view === 'saved' ? ' active' : ''),
           'data-testid': 'drawer-nav-merkliste',
@@ -14356,15 +14879,15 @@
         mobileTopNav,
         mobileSidebarOpen && React.createElement('div', { className: 'mobile-overlay visible', onClick: () => setMobileSidebarOpen(false) }),
         React.createElement('div', { className: 'team-drawer' + (mobileSidebarOpen ? ' mobile-open' : '') },
-          drawerNav,
         React.createElement('div', { className: 'sidebar-content sidebar-teams' },
+          drawerNav,
           React.createElement('div', { className: 'sidebar-header', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
             React.createElement('h2', null, 'Teams'),
             React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
               // v4.10.0: Suche direkt neben der Überschrift
               React.createElement('button', {
                 className: 'feedback-trigger',
-                onClick: () => setView('search'),
+                onClick: () => { setMobileSidebarOpen(false); setView('search'); },
                 title: 'Suche',
                 'aria-label': 'Suche öffnen'
               }, '🔍'),
@@ -14571,14 +15094,8 @@
         )
         ),
         React.createElement('div', { className: 'content' },
-          // Mobiler Einstieg, wenn noch kein Kanal gewählt ist: ohne diesen
-          // Button käme man auf dem Handy nicht an den Teams-/Kanäle-Drawer.
-          !selectedChannel && React.createElement('div', { style: { padding: '16px' } },
-            React.createElement('button', { className: 'mobile-menu-btn', onClick: () => setMobileSidebarOpen(true), style: { display: 'none', alignItems: 'center', gap: '8px', padding: '10px 14px', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', color: 'var(--text-primary)', fontSize: '15px' } },
-              '☰ Team & Kanal wählen',
-              (unreadChatCount + Array.from(unreadPostChannels.values()).reduce((a, b) => a + b, 0)) > 0 && React.createElement('span', { className: 'nav-badge', style: { marginLeft: '4px' } }, (unreadChatCount + Array.from(unreadPostChannels.values()).reduce((a, b) => a + b, 0)) > 9 ? '9+' : (unreadChatCount + Array.from(unreadPostChannels.values()).reduce((a, b) => a + b, 0)))
-            )
-          ),
+          // Auch Dateiablage, Termine und die leere Ansicht brauchen den Listenzugang.
+          (!selectedChannel || (!designV2 && teamTab !== 'posts')) && React.createElement('div', { className: 'mobile-view-header design-team-fallback' + (!selectedChannel ? ' design-empty-channel' : '') }, mobileListButton('teams')),
           // Tab-Leiste pro Team — Beiträge | Dateiablage (Dateien) | Termine
           selectedTeam && React.createElement('div', { className: 'team-tabs', role: 'tablist', 'aria-label': 'Team-Bereiche' },
             [['posts', '💬', 'Beiträge'], ['links', '📁', 'Dateiablage'], ['termine', '📅', 'Termine']].map(([key, icon, label]) =>
@@ -14588,7 +15105,7 @@
                 'aria-selected': teamTab === key ? 'true' : 'false',
                 'data-testid': 'team-tab-' + key,
                 className: 'team-tab' + (teamTab === key ? ' active' : ''),
-                onClick: () => setTeamTab(key)
+                onClick: () => { setTeamTab(key); setDesignActionsOpen(false); }
               },
                 React.createElement('span', { className: 'team-tab-icon', 'aria-hidden': 'true' }, icon + ' '),
                 label
@@ -14598,11 +15115,13 @@
           // 4.50.0: Dateien vorn. Ältere Links nur zugeklappt, und nur wenn welche da sind.
           selectedTeam && teamTab === 'links' && React.createElement(React.Fragment, null,
             React.createElement('div', { className: 'content-header' },
-              React.createElement('h1', null, '📁 Dateiablage — ' + selectedTeam.name)
+              designV2 && mobileListButton('teams'),
+              React.createElement('h1', null, '📁 Dateiablage — ' + selectedTeam.name),
+              designV2 && React.createElement('button', { className: 'design-channel-actions', 'aria-label': 'Team-Bereiche öffnen', 'aria-expanded': designActionsOpen, onClick: () => setDesignActionsOpen(v => !v) }, '…')
             ),
             React.createElement('div', { className: 'content-body' },
               React.createElement('p', { style: { fontSize: '13px', color: 'var(--text-muted)', margin: 0 } },
-                'Dateien und Ordner für dieses Team. Nur Mitglieder sehen sie. Was du selbst hochgeladen hast, löschst du über das Mülleimer-Symbol rechts in der Zeile.'),
+                'Dateien und Ordner für dieses Team. Nur Mitglieder sehen sie. Was du selbst hochgeladen hast, löschst du über das Mülleimer-Symbol rechts in der Zeile. Bei Dateien von anderen steht dort ein ⓘ: Die ändert nur die Person selbst oder ein Team-Admin.'),
               React.createElement(TeamFilesSection, {
                 team: selectedTeam, dataService, user, allUsers,
                 isTeamAdmin: userTeamRole === 'admin' || isAdminRole(user)
@@ -14613,7 +15132,9 @@
           // v4.12.0: Termin-Liste des Teams (bewusst kein Vollkalender)
           selectedTeam && teamTab === 'termine' && React.createElement(React.Fragment, null,
             React.createElement('div', { className: 'content-header' },
-              React.createElement('h1', null, '📅 Termine — ' + selectedTeam.name)
+              designV2 && mobileListButton('teams'),
+              React.createElement('h1', null, '📅 Termine — ' + selectedTeam.name),
+              designV2 && React.createElement('button', { className: 'design-channel-actions', 'aria-label': 'Team-Bereiche öffnen', 'aria-expanded': designActionsOpen, onClick: () => setDesignActionsOpen(v => !v) }, '…')
             ),
             React.createElement('div', { className: 'content-body' },
               React.createElement(TeamTermineSection, {
@@ -14625,12 +15146,10 @@
           teamTab === 'posts' && selectedChannel && React.createElement(React.Fragment, null,
             React.createElement('div', { className: 'content-header', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
               React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
-                React.createElement('button', { className: 'mobile-menu-btn', onClick: () => setMobileSidebarOpen(true), style: { display: 'none', background: 'none', border: 'none', cursor: 'pointer', fontSize: '24px', color: 'var(--text-secondary)', position: 'relative' } },
-                  '\u2630',
-                  (unreadChatCount + Array.from(unreadPostChannels.values()).reduce((a, b) => a + b, 0)) > 0 && React.createElement('span', { className: 'nav-badge', style: { position: 'absolute', top: '-2px', right: '-6px', fontSize: '10px' } }, (unreadChatCount + Array.from(unreadPostChannels.values()).reduce((a, b) => a + b, 0)) > 9 ? '9+' : (unreadChatCount + Array.from(unreadPostChannels.values()).reduce((a, b) => a + b, 0))),
-                ),
-                React.createElement('h1', null, '# ' + selectedChannel.name)
+                mobileListButton('teams'),
+                React.createElement('div', null, React.createElement('div', { className: 'design-team-context' }, selectedTeam?.name), React.createElement('h1', null, '# ' + selectedChannel.name))
               ),
+              designV2 && React.createElement('button', { className: 'design-channel-actions', 'aria-label': 'Team-Bereiche öffnen', 'aria-expanded': designActionsOpen, onClick: () => setDesignActionsOpen(v => !v) }, '…'),
               selectedTeam && React.createElement('button', {
                 className: 'team-members-btn',
                 style: { background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', color: 'var(--text-secondary)', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' },
@@ -14659,16 +15178,7 @@
         // unerreichbar (Drawer ausserhalb des Bildschirms, kein ☰-Knopf) — man sah
         // dauerhaft „Wähle einen Chat“ und kam nicht weiter.
         React.createElement('div', { className: 'mobile-view-header' },
-          React.createElement('button', {
-            className: 'mobile-menu-btn',
-            onClick: () => setMobileSidebarOpen(true),
-            'data-testid': 'chat-open-list',
-            'aria-label': 'Chatliste öffnen',
-            style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '22px', color: 'var(--text-secondary)', position: 'relative' }
-          },
-            '\u2630',
-            (unreadChatCount + Array.from(unreadPostChannels.values()).reduce((a, b) => a + b, 0)) > 0 && React.createElement('span', { className: 'nav-badge', style: { position: 'absolute', top: '-2px', right: '-6px', fontSize: '10px' } }, (unreadChatCount + Array.from(unreadPostChannels.values()).reduce((a, b) => a + b, 0)) > 9 ? '9+' : (unreadChatCount + Array.from(unreadPostChannels.values()).reduce((a, b) => a + b, 0)))
-          ),
+          mobileListButton('chat'),
           React.createElement('h1', null, selectedConversation ? ((selectedConversation.name || (selectedConversation.user || {}).display_name) || 'Chat') : 'Chats'),
           React.createElement('span', { className: 'spacer' })
         ),
@@ -14677,7 +15187,7 @@
           // v4.10.0: Gespeichert & gepinnt — eigener Abschnitt oben in der Chat-Spalte
           React.createElement('button', {
             className: 'saved-section-btn',
-            onClick: () => setView('saved'),
+            onClick: () => { setMobileSidebarOpen(false); setView('saved'); },
             title: 'Merkliste: Aufgaben und gespeicherte Beiträge',
             'aria-label': 'Merkliste öffnen'
           },
@@ -14698,7 +15208,7 @@
             showHiddenChats,
             setShowHiddenChats,
             onToggleHide: handleToggleConvHidden,
-            onSearch: () => setView('search'),
+            onSearch: () => { setMobileSidebarOpen(false); setView('search'); },
             onShowOnline: isAdminRole(user) ? () => setShowOnlinePanel(prev => !prev) : null
           })
         ),
@@ -14710,7 +15220,7 @@
             setConversations,
             dataService,
             currentUser: user,
-            onBack: null,
+            onBack: designV2 ? () => setMobileSidebarOpen(true) : null,
             onlineUsers: isAdminRole(user) ? onlineUsers : null, // PRIV-01
             hasMore: hasMoreMessages,
             onLoadMore: loadMoreMessages,
@@ -14889,7 +15399,7 @@
             // entsteht beim Lesen der Beiträge.
             React.createElement('button', {
               className: 'nav-item' + (view === 'saved' ? ' active' : ''),
-              onClick: () => setView('saved'),
+              onClick: () => { setMobileSidebarOpen(false); setView('saved'); },
               title: 'Merkliste',
               'aria-label': 'Merkliste',
               'data-testid': 'nav-merkliste',
@@ -15006,7 +15516,7 @@
           React.createElement('div', { className: 'sidebar-content mobile-drawer-only' + (mobileSidebarOpen ? ' mobile-open' : '') }, drawerNav)
         ),
         // Main content: Teams oder Chat
-        React.createElement('main', { id: 'main', className: 'main', tabIndex: -1 },
+        React.createElement('main', { id: 'main', className: 'main' + (view === 'chat' && selectedConversation && designV2 ? ' design-chat-view' : ''), tabIndex: -1 },
           view === 'teams' ? React.createElement(ErrorBoundary, { fallbackMessage: 'Der Teams-Bereich hatte einen Fehler.' }, teamsView)
             : view === 'chat' ? React.createElement(ErrorBoundary, { fallbackMessage: 'Der Chat-Bereich hatte einen Fehler.' }, chatView)
             : view === 'saved' ? React.createElement(MerklisteView, {
@@ -15015,9 +15525,9 @@
                 onToggleTask: handleToggleTask,
                 onDeleteTask: handleDeleteTask,
                 onRemoveSaved: toggleSavePost,
-                onOpenMenu: () => setMobileSidebarOpen(true)
+                onBack: returnToList
               })
-            : React.createElement(SearchView, { dataService, user, allUsers, teams })
+            : React.createElement(SearchView, { dataService, user, allUsers, teams, onBack: returnToList })
         ),
         // Thread overlay (nur in Teams-View)
         view === 'teams' && openThread && React.createElement(ThreadPanel, { post: openThread, replies, dataService, user, onClose: () => setOpenThread(null), onReplyCreated: (r) => {

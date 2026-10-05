@@ -1,0 +1,79 @@
+/* Shared, opt-in foundations v1. Legacy selectors are never changed unscoped. */
+html.krs-design-v2 { --primary:#245bc4; --primary-dark:#174796; --primary-light:#e7efff; --accent:#245bc4; --accent-hover:#174796; --accent-light:#e7efff; --radius:8px; --radius-lg:12px; --bg-primary:#f5f7fb; --bg-secondary:#fff; --bg:#f5f7fb; --bg-card:#fff; --card:#fff; --text:#172338; --text-primary:#172338; --text-secondary:#42556e; --text-muted:#52657d; --border:#dce2eb; --shadow:none; font-family:system-ui,-apple-system,sans-serif; }
+html.krs-design-v2 button:focus-visible,html.krs-design-v2 input:focus-visible,html.krs-design-v2 select:focus-visible,html.krs-design-v2 textarea:focus-visible { outline:3px solid #245bc4; outline-offset:2px; }
+html.krs-design-v2 input,html.krs-design-v2 select,html.krs-design-v2 textarea { font-size:16px; }
+html.krs-design-v2 .header { background:#fff; color:#172338; box-shadow:none; border-bottom:1px solid var(--border); min-height:68px; }
+html.krs-design-v2 .header h1 { white-space:normal; overflow-wrap:anywhere; font-size:20px; }
+html.krs-design-v2 .header .btn-icon { color:#172338; }
+html.krs-design-v2 .form-group label { font-size:14px; }
+html.krs-design-v2 .nav-bar { gap:8px; }
+html.krs-design-v2 .header .logo { background:var(--primary); }
+html.krs-design-v2 .post { background:#fff; border:0; border-bottom:1px solid var(--border); border-radius:0; box-shadow:none; padding:20px 0; margin:0; }
+html.krs-design-v2 .post-content { font-size:16px; line-height:1.6; }
+html.krs-design-v2 .post-title { color:var(--text-primary); font-size:18px; }
+html.krs-design-v2 .content-body { padding:8px 24px 16px; background:#fff; }
+html.krs-design-v2 .content-header { background:#fff; min-height:68px; padding:8px 16px; }
+html.krs-design-v2 .content-header h1 { overflow-wrap:anywhere; font-size:20px; }
+html.krs-design-v2 .design-team-context { display:block; font-size:14px; font-weight:400; color:var(--text-muted); margin-top:2px; }
+.design-team-context,.design-channel-actions { display:none; }
+html.krs-design-v2 .design-channel-actions { display:inline-flex; align-items:center; justify-content:center; min-width:44px; min-height:44px; border:0; background:transparent; color:var(--text-primary); font-size:22px; }
+html.krs-design-v2 .chat-messages { background:#f5f7fb; }
+html.krs-design-v2 .chat-input-bar { background:#fff; }
+html.krs-design-v2 .chat-panel > .chat-header { min-height:68px; }
+html.krs-design-v2 .post-actions-menu,.krs-design-v2 .post-actions-inline { color:var(--text-secondary); }
+.design-nav { display:flex; flex-direction:column; width:164px; flex:0 0 auto; gap:8px; padding:16px 12px; border-right:1px solid var(--border); background:#f5f7fb; }
+.design-nav button { min-height:44px; border:0; border-radius:8px; text-align:left; padding:8px 12px; color:var(--text-primary); background:transparent; font:inherit; }
+.design-nav button[aria-current=page] { background:#e7efff; color:#174796; font-weight:600; box-shadow:inset 3px 0 #245bc4; }
+.design-nav .design-nav-brand { padding:8px 12px 16px; font-size:20px; font-weight:700; }
+.design-nav .design-nav-account { margin-top:auto; }
+html.krs-design-v2 .shell > .sidebar { display:none; }
+html.krs-design-v2 .topbar { box-shadow:none; }
+html.krs-design-v2 .shell.design-module-ready .topbar { display:none; }
+html.krs-design-v2 .design-view-switch { gap:8px; }
+html.krs-design-v2 .main { min-width:0; }
+html.krs-design-v2 .app-layout { background:#fff; }
+@media(min-width:768px) {
+ html.krs-design-v2.krs-design-embedded .app-layout > .sidebar { display:none; }
+ html.krs-design-v2 .team-drawer .sidebar-teams { width:245px; }
+ html.krs-design-v2 .team-drawer .sidebar-channels { width:205px; }
+}
+@media(max-width:767px) {
+ .design-nav { order:2; width:100%; flex-direction:row; justify-content:space-around; padding:4px 4px max(4px,env(safe-area-inset-bottom)); border-right:0; border-top:1px solid var(--border); background:#fff; gap:0; }
+ .design-nav button { font-size:12px; padding:8px 4px; text-align:center; min-width:44px; }
+ .design-nav button[aria-current=page] { box-shadow:none; }
+ .design-nav .design-nav-brand,.design-nav .design-nav-account { display:none; }
+ html.krs-design-v2 .shell { flex-direction:column; }
+ html.krs-design-v2 .shell > .main { min-height:0; flex:1; }
+ html.krs-design-v2 .mobile-tabs { display:none!important; }
+ html.krs-design-v2 .content-body { padding:0 16px 16px; }
+ html.krs-design-v2 .team-tabs { display:none; }
+ html.krs-design-v2.design-actions-open .team-tabs { display:flex; position:absolute; top:68px; left:8px; right:8px; z-index:65; min-height:44px; border:1px solid var(--border); border-radius:8px; box-shadow:0 4px 16px #17233822; background:#fff; }
+ html.krs-design-v2 .mobile-topnav { display:none; }
+ html.krs-design-v2.design-list-open .mobile-topnav { display:flex; position:fixed; top:0; left:0; right:0; z-index:62; height:56px; max-height:none; }
+ html.krs-design-v2.design-list-open .team-drawer.mobile-open,html.krs-design-v2.design-list-open .sidebar-content.mobile-open { top:56px; width:100%; max-width:none; height:calc(100dvh - 56px); }
+ html.krs-design-v2.design-list-open .mobile-overlay { display:none; }
+ html.krs-design-v2.design-list-open .mobile-topnav-hub { display:none; }
+ html.krs-design-v2.design-list-open .mobile-topnav::after { content:none; }
+ html.krs-design-v2 .design-list-close { display:flex; }
+ html.krs-design-v2 .mobile-menu-btn { gap:6px; }
+ html.krs-design-v2 .chat-panel > .chat-header .chat-header-name { display:block; }
+ html.krs-design-v2 .design-chat-view > .mobile-view-header { display:none; }
+ html.krs-design-v2 .back-btn { display:inline-flex; min-height:44px; min-width:44px; }
+ html.krs-design-v2 .design-team-fallback { display:none; }
+ html.krs-design-v2 .design-team-fallback.design-empty-channel { display:flex; }
+ html.krs-design-v2.krs-design-embedded .app-layout > .sidebar { display:none; }
+}
+.design-list-close { display:none; min-height:44px; min-width:44px; background:none; border:0; color:var(--text-primary); font-size:22px; }
+@media(prefers-reduced-motion:reduce) { html.krs-design-v2 *,html.krs-design-v2 *::before,html.krs-design-v2 *::after { transition:none!important; animation:none!important; } }
+
+@media(min-width:768px) { html.krs-design-v2.krs-design-embedded .drawer-nav { display:flex; flex-wrap:wrap; gap:6px; padding:8px; } }
+html.krs-design-v2 .design-local-switch { display:flex; flex-wrap:wrap; gap:4px; }
+html.krs-design-v2 .design-local-switch button { min-height:44px; border:0; background:transparent; color:var(--text-primary); padding:8px; }
+html.krs-design-v2 .design-local-switch button[aria-current=page] { color:var(--accent); font-weight:700; }
+html.krs-design-v2 .design-chat-view > .mobile-view-header { display:none; }
+
+@media(max-width:767px) { .design-nav button { display:flex; flex:1; flex-direction:column; align-items:center; justify-content:center; gap:3px; } }
+@media(min-width:768px) { html.krs-design-v2 .design-channel-actions { display:none; } }
+html.krs-design-v2 .drawer-nav > button { min-height:44px; border:0; border-radius:8px; background:#f5f7fb; color:var(--text-primary); padding:8px; }
+
+html.krs-design-v2 .user-menu-item { min-height:44px; }
