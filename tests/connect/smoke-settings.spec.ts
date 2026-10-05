@@ -97,9 +97,12 @@ test.describe('v4.10.0 Einstellungen-Panel (Demo)', () => {
     await btn.click();
     const dialog = page.locator('.modal-overlay[aria-label="Einstellungen"]').first();
     await expect(dialog).toBeVisible({ timeout: 5_000 });
-    const switches = dialog.locator('[role="switch"]');
-    // Benachrichtigungen + Feierabend (D3, 4.45.0) + Lesebestätigungen → 3 Schalter
-    await expect(switches).toHaveCount(3);
+    // Einzelne benannte Bedienelemente prüfen: weitere Optionen dürfen hinzukommen.
+    for (const name of ['Benachrichtigungen umschalten', 'Feierabend-Modus umschalten', 'Lesebestätigungen umschalten', 'Neues Design ausprobieren']) {
+      const toggle = dialog.getByRole('switch', { name, exact: true });
+      await expect(toggle).toBeVisible();
+      await expect(toggle).toHaveAttribute('aria-checked', /^(true|false)$/);
+    }
   });
 });
 
