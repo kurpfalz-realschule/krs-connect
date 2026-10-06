@@ -9,7 +9,7 @@ for (const width of [320, 390, 834, 1440]) {
     await page.evaluate(() => { (window as any).KRSDesign.setEnabled(true); });
     await expect(page.locator('html')).toHaveClass(/krs-design-v2/);
     expect(await page.locator('.post').first().textContent()).toBe(firstPost);
-    if (width < 768) {
+    if (width <= 1024) {
       await page.getByTestId('teams-open-list').click();
       await expect(page.locator('.team-drawer.mobile-open')).toBeVisible();
       await page.getByRole('button', { name: 'Liste schließen', exact: true }).click();

@@ -7749,7 +7749,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.54.0';
+    window.KRS_VERSION = '4.55.0';
     // PERF-01: Cold-Boot-Zähler für Hub keep-alive Abnahme (Connect→Hub-Start→Connect → bleibt 1)
     window.__krsConnectBootCount = (window.__krsConnectBootCount || 0) + 1;
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
@@ -10811,7 +10811,7 @@
 
       return React.createElement('div', { className: 'chat-panel' },
         React.createElement('div', { className: 'chat-header' },
-          onBack && React.createElement('button', { className: 'back-btn', onClick: onBack, 'aria-label': 'Zurück', dangerouslySetInnerHTML: { __html: Icons.back } }),
+          onBack && React.createElement('button', { className: 'back-btn', onClick: onBack, 'aria-label': 'Chatliste öffnen', 'data-testid': 'chat-open-list', dangerouslySetInnerHTML: { __html: Icons.back } }),
           isGroupChat ? React.createElement('div', null,
             React.createElement('span', { className: 'chat-header-name' }, conversation.name || 'Gruppenchat'),
             // Feedback #3: Mitgliederzahl ist jetzt klickbar → Mitglieder ansehen & hinzufügen
@@ -12555,6 +12555,7 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.55.0', date: '06.10.2026', items: ['Team- und Kanalliste lassen sich im neuen Design einzeln einklappen. Auswahl und Entwürfe bleiben erhalten.', 'iPad-Hochformat: Teams und Chats bleiben über beschriftete Listenknöpfe erreichbar, auch ohne ausgewählten Chat.'] },
       { v: '4.54.0', date: '05.10.2026', items: ['Neues Design kann in den Einstellungen freiwillig ausprobiert und wieder ausgeschaltet werden.', 'Dateivorschau und Textschutz verwenden die vorbereiteten geprüften Bibliotheksstände.']},
       { v: '4.53.1', date: '04.10.2026', items: [
         'Chat auf iPad und iPhone: Die Symbole für Reagieren, Antworten, Bearbeiten und Löschen stehen nicht mehr dauerhaft in jeder Nachricht. Tippe eine Nachricht an oder halte sie gedrückt, dann erscheint die Leiste daneben (auf dem iPhone darüber). Ein Tipp daneben schließt sie wieder.',
@@ -13331,6 +13332,17 @@
 
     function App() {
       const [designV2, setDesignV2] = useState(window.KRSDesign.enabled);
+      const requestedListView = useRef(null);
+      const [compactTeams, setCompactTeams] = useState(() => { try { return localStorage.getItem('krs_teams_compact') === '1'; } catch (_) { return false; } });
+      const [compactChannels, setCompactChannels] = useState(() => { try { return localStorage.getItem('krs_channels_compact') === '1'; } catch (_) { return false; } });
+      const collapsePane = (kind) => { const setter = kind === 'teams' ? setCompactTeams : setCompactChannels; setter(value => { try { localStorage.setItem('krs_' + kind + '_compact', value ? '0' : '1'); } catch (_) {} return !value; }); };
+      const paneToggle = kind => designV2 && React.createElement('button', { className: 'design-pane-toggle', 'aria-label': (kind === 'teams' ? 'Teamliste' : 'Kanalliste') + ((kind === 'teams' ? compactTeams : compactChannels) ? ' ausklappen' : ' einklappen'), 'aria-expanded': !(kind === 'teams' ? compactTeams : compactChannels), onClick: () => collapsePane(kind) }, (kind === 'teams' ? compactTeams : compactChannels) ? '»' : '«');
+      const [paneHint, setPaneHint] = useState(null);
+      const hintProps = (label, compact) => ({
+        onMouseEnter: event => { if (designV2 && compact) { const r = event.currentTarget.getBoundingClientRect(); setPaneHint({ label, left: r.right + 8, top: r.top }); } },
+        onFocus: event => { if (designV2 && compact) { const r = event.currentTarget.getBoundingClientRect(); setPaneHint({ label, left: r.right + 8, top: r.top }); } },
+        onMouseLeave: () => setPaneHint(null), onBlur: () => setPaneHint(null)
+      });
       const [designActionsOpen, setDesignActionsOpen] = useState(false);
       useEffect(() => window.KRSDesign.subscribe(value => { setDesignV2(value); setDesignActionsOpen(false); }), []);
       useEffect(() => {
@@ -13598,7 +13610,10 @@
       // v4.25.0: Ansichtswechsel schliesst immer das ☰-Menü. Sonst blieb der
       // graue Schleier über der neuen Ansicht liegen und man musste ihn erst
       // wegtippen, bevor ein Beitrag reagierte.
-      useEffect(() => { setMobileSidebarOpen(false); }, [view]);
+      useEffect(() => {
+        setMobileSidebarOpen(designV2 && requestedListView.current === view && matchMedia('(max-width:768px), (max-width:1024px) and (orientation:portrait)').matches);
+        requestedListView.current = null;
+      }, [view]);
 
       // ── v4.25.0: Merkliste ──
       const reloadTasks = useCallback(async () => {
@@ -14508,6 +14523,7 @@
 
       const handleTeamSelect = async (team) => {
         setSelectedTeam(team);
+        if (designV2) setCompactChannels(false);
         setExpandedTeamId(team.id); // v4.29.0: Kanäle direkt darunter aufklappen
         setTeamTab('posts'); // v4.12.0: Teamwechsel startet immer bei den Beiträgen
         const channelsData = await dataService.getChannels(team.id);
@@ -14769,6 +14785,13 @@
       // auf die Leiste — bestehende und künftige Tests zeigen weiter dorthin.
       const totalUnreadBadge = unreadChatCount + Array.from(unreadPostChannels.values()).reduce((a, b) => a + b, 0);
       // D1: Genau ein beschrifteter Listenzugang im Inhaltsbereich.
+      const isDrawerLayout = () => matchMedia('(max-width:768px), (max-width:1024px) and (orientation:portrait)').matches;
+      const navigateSection = kind => { requestedListView.current = kind; setView(kind); setMobileSidebarOpen(designV2 && kind !== 'search' && isDrawerLayout()); };
+      const openTeamChannels = () => {
+        if (selectedTeam) setExpandedTeamId(selectedTeam.id);
+        setCompactChannels(false);
+        if (isDrawerLayout()) setMobileSidebarOpen(true);
+      };
       const mobileListButton = (kind) => React.createElement('button', {
         type: 'button', className: 'mobile-menu-btn',
         'data-testid': kind === 'teams' ? 'teams-open-list' : 'chat-open-list',
@@ -14803,7 +14826,7 @@
             className: view === 'chat' ? 'active' : '',
             'data-testid': 'drawer-nav-chat',
             'aria-current': view === 'chat' ? 'page' : undefined,
-            onClick: () => { setView('chat'); setMobileSidebarOpen(false); }
+            onClick: () => navigateSection('chat')
           },
             React.createElement('span', { className: 'topnav-icon', 'aria-hidden': 'true' }, '\uD83D\uDCAC'),
             React.createElement('span', { className: 'topnav-label' }, 'Chats'),
@@ -14866,10 +14889,10 @@
       );
 
       const drawerNav = window.__krsIsEmbedded ? React.createElement('div', { className: 'drawer-nav', role: 'navigation', 'aria-label': 'Weitere Bereiche' },
-        designV2 && React.createElement('div', { className: 'design-local-switch' }, ['teams', 'chat', 'search'].map(kind => React.createElement('button', { key: kind, 'aria-current': view === kind ? 'page' : undefined, onClick: () => { setView(kind); setMobileSidebarOpen(false); } }, kind === 'teams' ? 'Teams' : kind === 'chat' ? 'Chats' : 'Suche'))),
+        designV2 && React.createElement('div', { className: 'design-local-switch' }, ['teams', 'chat', 'search'].map(kind => React.createElement('button', { key: kind, 'data-icon': kind === 'teams' ? '▦' : kind === 'chat' ? '💬' : '⌕', title: kind === 'teams' ? 'Teams' : kind === 'chat' ? 'Chats' : 'Suche', 'aria-current': view === kind ? 'page' : undefined, onClick: () => navigateSection(kind) }, kind === 'teams' ? 'Teams' : kind === 'chat' ? 'Chats' : 'Suche'))),
         React.createElement('button', {
           className: 'wide' + (view === 'saved' ? ' active' : ''),
-          'data-testid': 'drawer-nav-merkliste',
+          'data-testid': 'drawer-nav-merkliste', title: 'Merkliste',
           onClick: () => { setView('saved'); setMobileSidebarOpen(false); }
         }, '\uD83D\uDD16', ' Merkliste')
       ) : null;
@@ -14879,7 +14902,8 @@
         mobileTopNav,
         mobileSidebarOpen && React.createElement('div', { className: 'mobile-overlay visible', onClick: () => setMobileSidebarOpen(false) }),
         React.createElement('div', { className: 'team-drawer' + (mobileSidebarOpen ? ' mobile-open' : '') },
-        React.createElement('div', { className: 'sidebar-content sidebar-teams' },
+        React.createElement('div', { className: 'sidebar-content sidebar-teams' + (designV2 && compactTeams ? ' design-pane-compact' : '') },
+          paneToggle('teams'),
           drawerNav,
           React.createElement('div', { className: 'sidebar-header', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
             React.createElement('h2', null, 'Teams'),
@@ -14914,14 +14938,17 @@
                 visibleTeams.map(team => {
                   const isExpanded = expandedTeamId === team.id && selectedTeam?.id === team.id;
                   return React.createElement('div', { key: team.id, className: 'team-group' },
-                  React.createElement('div', { className: 'team-item', 'data-testid': 'team-visible' },
+                  React.createElement('div', { className: 'team-item', 'data-testid': 'team-visible', title: team.name },
                     React.createElement('button', {
                       className: 'list-item' + (selectedTeam?.id === team.id ? ' active' : ''),
                       onClick: () => {
                         // v4.29.0: nochmal auf das offene Team tippen klappt es zu.
-                        if (isExpanded) { setExpandedTeamId(null); return; }
+                        if (isExpanded && !designV2) { setExpandedTeamId(null); return; }
+                        if (designV2) { setCompactChannels(false); setExpandedTeamId(team.id); if (isExpanded) return; }
                         handleTeamSelect(team);
                       },
+                      'aria-label': team.name, title: team.name,
+                      ...hintProps(team.name, compactTeams),
                       'aria-current': selectedTeam?.id === team.id ? 'page' : undefined,
                       'aria-expanded': isExpanded,
                       'data-testid': 'team-toggle',
@@ -14965,6 +14992,7 @@
                             onContextMenu: (e) => handleChannelContextMenu(e, ch),
                             onKeyDown: (e) => { if ((canManageTeam(user, team) || userTeamRole === 'admin') && (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10'))) handleChannelContextMenu(e, ch); },
                             'aria-haspopup': (canManageTeam(user, team) || userTeamRole === 'admin') ? 'menu' : undefined,
+                            'aria-label': ch.name, title: ch.name,
                             'aria-current': selectedChannel?.id === ch.id ? 'page' : undefined,
                             style: { display: 'flex', gap: '8px', alignItems: 'center', width: '100%' }
                           },
@@ -15046,7 +15074,8 @@
             })()
           )
         ),
-        React.createElement('div', { className: 'sidebar-content sidebar-channels' },
+        React.createElement('div', { className: 'sidebar-content sidebar-channels' + (designV2 && compactChannels ? ' design-pane-compact' : '') },
+          paneToggle('channels'),
           selectedTeam && React.createElement(React.Fragment, null,
             React.createElement('div', { className: 'sidebar-header', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
               React.createElement('h2', null, '# Kanäle'),
@@ -15075,6 +15104,7 @@
                 const unreadCount = unreadPostChannels.get(ch.id) || 0;
                 return React.createElement('button', {
                   key: ch.id,
+                  'aria-label': ch.name, title: ch.name, ...hintProps(ch.name, compactChannels),
                   className: 'list-item' + (selectedChannel?.id === ch.id ? ' active' : ''),
                   onClick: () => handleChannelSelect(ch),
                   onContextMenu: (e) => handleChannelContextMenu(e, ch),
@@ -15093,6 +15123,7 @@
           )
         )
         ),
+        paneHint && designV2 && React.createElement('div', { className: 'design-pane-hint', role: 'tooltip', style: { left: paneHint.left, top: paneHint.top } }, paneHint.label),
         React.createElement('div', { className: 'content' },
           // Auch Dateiablage, Termine und die leere Ansicht brauchen den Listenzugang.
           (!selectedChannel || (!designV2 && teamTab !== 'posts')) && React.createElement('div', { className: 'mobile-view-header design-team-fallback' + (!selectedChannel ? ' design-empty-channel' : '') }, mobileListButton('teams')),
@@ -15147,7 +15178,7 @@
             React.createElement('div', { className: 'content-header', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
               React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
                 mobileListButton('teams'),
-                React.createElement('div', null, React.createElement('div', { className: 'design-team-context' }, selectedTeam?.name), React.createElement('h1', null, '# ' + selectedChannel.name))
+                React.createElement('div', null, React.createElement(designV2 ? 'button' : 'div', { className: 'design-team-context' + (designV2 ? ' design-context-trigger' : ''), ...(designV2 ? { type: 'button', onClick: openTeamChannels, 'aria-label': 'Kanäle von ' + (selectedTeam?.name || 'Team') + ' öffnen', 'aria-expanded': isDrawerLayout() ? mobileSidebarOpen : !compactChannels, 'data-testid': 'team-context-open' } : {}) }, selectedTeam?.name, designV2 && ' ▾'), React.createElement('h1', null, '# ' + selectedChannel.name))
               ),
               designV2 && React.createElement('button', { className: 'design-channel-actions', 'aria-label': 'Team-Bereiche öffnen', 'aria-expanded': designActionsOpen, onClick: () => setDesignActionsOpen(v => !v) }, '…'),
               selectedTeam && React.createElement('button', {
@@ -15177,7 +15208,7 @@
         // v4.25.0 — Kopfzeile nur mobil: ohne sie war die Chatliste auf dem Handy
         // unerreichbar (Drawer ausserhalb des Bildschirms, kein ☰-Knopf) — man sah
         // dauerhaft „Wähle einen Chat“ und kam nicht weiter.
-        React.createElement('div', { className: 'mobile-view-header' },
+        (!designV2 || !selectedConversation) && React.createElement('div', { className: 'mobile-view-header design-empty-chat' },
           mobileListButton('chat'),
           React.createElement('h1', null, selectedConversation ? ((selectedConversation.name || (selectedConversation.user || {}).display_name) || 'Chat') : 'Chats'),
           React.createElement('span', { className: 'spacer' })
@@ -15376,7 +15407,7 @@
             ),
             React.createElement('button', {
               className: 'nav-item' + (view === 'teams' ? ' active' : ''),
-              onClick: () => setView('teams'),
+              onClick: () => navigateSection('teams'),
               title: 'Teams & Kanäle',
               'aria-label': 'Teams & Kanäle',
               'aria-current': view === 'teams' ? 'page' : undefined
@@ -15386,7 +15417,7 @@
             ),
             React.createElement('button', {
               className: 'nav-item' + (view === 'chat' ? ' active' : ''),
-              onClick: () => setView('chat'),
+              onClick: () => navigateSection('chat'),
               title: 'Chats',
               'aria-label': 'Chats',
               'aria-current': view === 'chat' ? 'page' : undefined

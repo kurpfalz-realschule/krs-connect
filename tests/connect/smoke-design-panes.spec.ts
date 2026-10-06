@@ -1,0 +1,24 @@
+import { test, expect, openConnect } from '../fixtures/connect';
+test('Teams and channels collapse separately, preserve selected content and survive reload', async ({page}) => {
+  await page.setViewportSize({width:1440,height:900});
+  await page.addInitScript(()=>localStorage.setItem('krs_design_v2','1'));
+  await openConnect(page,{user:'la'});
+  const firstPost=await page.locator('.post').first().textContent();
+  await page.getByRole('button',{name:'Teamliste einklappen',exact:true}).click();
+  await expect(page.locator('.sidebar-teams')).toHaveClass(/design-pane-compact/);
+  await page.getByRole('button',{name:'Kanalliste einklappen',exact:true}).click();
+  await expect(page.locator('.sidebar-channels')).toHaveClass(/design-pane-compact/);
+  expect(await page.locator('.post').first().textContent()).toBe(firstPost);
+  const channel=page.locator('.sidebar-channels .list-item').first();
+  await expect(channel).toHaveAttribute('title',/\S/);
+  await expect(channel).toHaveAttribute('aria-label',/\S/);
+  await channel.focus();
+  await expect(page.getByRole('tooltip')).toHaveText(await channel.getAttribute('title') || '');
+  await page.reload();
+  await expect(page.locator('.sidebar-teams')).toHaveClass(/design-pane-compact/);
+  await expect(page.locator('.sidebar-channels')).toHaveClass(/design-pane-compact/);
+  await page.getByRole('button',{name:'Teamliste ausklappen',exact:true}).click();
+  await page.getByRole('button',{name:'Kanalliste ausklappen',exact:true}).click();
+  await expect(page.locator('.sidebar-teams')).not.toHaveClass(/design-pane-compact/);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+2)).toBe(false);
+});
