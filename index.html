@@ -1190,6 +1190,20 @@
     .user-pick-btn:hover { background: var(--bg-hover); }
 
     .conversation-items { flex: 1; overflow-y: auto; }
+    /* Screenreader: dieselben Stapel als ul/li, ohne Aufzählungszeichen und ohne Extra-Einzug. */
+    ul.sidebar-list,
+    ul.conversation-items,
+    ul.chat-messages,
+    ul.krs-a11y-list { list-style: none; margin: 0; }
+    ul.conversation-items,
+    ul.krs-a11y-list { padding: 0; }
+    ul.sidebar-list > li,
+    ul.conversation-items > li,
+    ul.krs-a11y-list > li { margin: 0; padding: 0; }
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+    }
 
     .conversation-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 16px; border: none; background: none; cursor: pointer; text-align: left; transition: background var(--transition); border-bottom: 1px solid var(--border); }
     .conversation-item:hover { background: var(--bg-hover); }
@@ -1257,7 +1271,7 @@
     .chat-panel { display: flex; flex-direction: column; height: 100%; }
     .chat-header { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); min-width: 0; }
     .chat-header-person { min-width: 0; flex: 1; }
-    .chat-header-name { font-weight: 600; font-size: 16px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .chat-header-name { font-weight: 600; font-size: 16px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0; }
     .back-btn { background: none; border: none; font-size: 15px; font-weight: 600; cursor: pointer; color: #172338; padding: 4px 8px; flex-shrink: 0; white-space: nowrap; min-height: 44px; min-width: 44px; display: inline-flex; align-items: center; gap: 2px; }
     .back-btn svg, .chat-send-btn svg { width: 22px; height: 22px; display: block; flex: 0 0 22px; }
     /* v4.25.0 — Kopfzeile fuer Ansichten ohne eigene Kopfzeile (Chat-Liste).
@@ -6836,6 +6850,11 @@
     // (grep bestätigt: nur diese Funktion nutzt addHook).
     // HTML → reiner Text (für Chat-Vorschau, Benachrichtigungen, Datei-Erkennung).
     // DOMParser lädt keine Ressourcen und führt keine Skripte aus → sicher.
+    // Schmuck-Emoji: sichtbar, aber nicht vorlesen. Der Knopf oder die Überschrift trägt den deutschen Namen.
+    function krsEmoji(char) {
+      return React.createElement('span', { 'aria-hidden': 'true' }, char);
+    }
+
     function htmlToText(html) {
       if (html == null) return '';
       const s = String(html);
@@ -7785,7 +7804,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.57.0';
+    window.KRS_VERSION = '4.58.0';
     // PERF-01: Cold-Boot-Zähler für Hub keep-alive Abnahme (Connect→Hub-Start→Connect → bleibt 1)
     window.__krsConnectBootCount = (window.__krsConnectBootCount || 0) + 1;
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
@@ -10444,7 +10463,7 @@
 
       return React.createElement('div', { className: 'conversation-list' },
         React.createElement('div', { className: 'conversation-header' },
-          React.createElement('h2', null, 'Chats'),
+          React.createElement('h2', { id: 'krs-chats-heading' }, 'Chats'),
           React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
             // v4.10.0: Suche direkt neben der Überschrift
             onSearch && React.createElement('button', {
@@ -10452,7 +10471,7 @@
               onClick: onSearch,
               title: 'Suche',
               'aria-label': 'Suche öffnen'
-            }, '🔍'),
+            }, krsEmoji('🔍')),
             // v4.10.0: Wer ist online — auch aus dem Chat erreichbar
             onShowOnline && React.createElement('button', {
               className: 'feedback-trigger',
@@ -10544,23 +10563,28 @@
             )
           )
         ),
-        React.createElement('div', { className: 'conversation-items' },
+        React.createElement('ul', { className: 'conversation-items', 'aria-labelledby': 'krs-chats-heading' },
           (() => {
             const sortedConvs = sortConversationsByActivity(conversations);
             const visibleConvs = sortedConvs.filter(c => !hiddenSet.has(c.id));
             const hiddenConvs = sortedConvs.filter(c => hiddenSet.has(c.id));
             const renderItem = (conv) => {
               const entwurf = (() => { const d = loadDraft('chat', conv.id); return !!(d && d.html && htmlToText(d.html).trim()); })();
+              const convName = conv.is_group ? (conv.name || 'Gruppenchat') : ((conv.user || {}).display_name || 'Unbekannt');
+              const nameBits = [convName];
+              if (entwurf) nameBits.push('Entwurf');
+              if (conv.unread > 0) nameBits.push(conv.unread + ' ungelesen');
               return React.createElement('button', {
                 key: conv.id,
                 ref: entwurf ? draftRowRef : undefined,
                 className: 'conversation-item' + (selectedId === conv.id ? ' active' : '') + (entwurf ? ' has-draft' : ''),
                 onClick: () => onSelect(conv),
+                'aria-label': nameBits.join(', '),
                 'aria-current': selectedId === conv.id ? 'page' : undefined,
                 'data-testid': entwurf ? 'conversation-draft' : undefined,
                 style: { flex: 1, minWidth: 0 }
               },
-              conv.is_group ? React.createElement('div', { className: 'group-avatar', style: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '40px', height: '40px', borderRadius: '8px', background: 'var(--accent)', color: 'white', fontWeight: '600', fontSize: '18px' } }, '👥') : React.createElement('div', { className: 'avatar-wrapper' },
+              conv.is_group ? React.createElement('div', { className: 'group-avatar', 'aria-hidden': 'true', style: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '40px', height: '40px', borderRadius: '8px', background: 'var(--accent)', color: 'white', fontWeight: '600', fontSize: '18px' } }, '👥') : React.createElement('div', { className: 'avatar-wrapper' },
                 React.createElement(Avatar, { user: conv.user || { display_name: '?', avatar_color: '#757575' }, size: 40 }),
                 onlineUsers && React.createElement('span', { className: 'avatar-status online-dot small' + (onlineUsers.has(Number(conv.user?.id)) ? '' : ' offline') })
               ),
@@ -10576,32 +10600,34 @@
             };
             return React.createElement(React.Fragment, null,
               visibleConvs.map(conv =>
-                React.createElement('div', { key: conv.id, className: 'team-item', 'data-testid': 'conv-visible', style: { display: 'flex', alignItems: 'center' } },
+                React.createElement('li', { key: conv.id, className: 'team-item', 'data-testid': 'conv-visible', style: { display: 'flex', alignItems: 'center' } },
                   renderItem(conv),
                   onToggleHide && React.createElement('button', {
-                    className: 'team-hide-btn', title: 'Chat ausblenden', 'data-testid': 'conv-hide',
+                    className: 'team-hide-btn', title: 'Chat ausblenden', 'aria-label': 'Chat ausblenden', 'data-testid': 'conv-hide',
                     onClick: (e) => { e.stopPropagation(); onToggleHide(conv.id); }
-                  }, '👁')
+                  }, krsEmoji('👁'))
                 )
               ),
-              visibleConvs.length === 0 && hiddenConvs.length === 0 && React.createElement('div', { style: { padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '14px' } }, 'Noch keine Chats. Starte einen neuen Chat!'),
-              hiddenConvs.length > 0 && React.createElement('div', { style: { marginTop: '4px' } },
+              visibleConvs.length === 0 && hiddenConvs.length === 0 && React.createElement('li', { style: { padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '14px' } }, 'Noch keine Chats. Starte einen neuen Chat!'),
+              hiddenConvs.length > 0 && React.createElement('li', { style: { marginTop: '4px' } },
                 React.createElement('button', { className: 'hidden-teams-toggle', 'data-testid': 'hidden-chats-toggle', onClick: () => setShowHiddenChats(prev => !prev) },
-                  React.createElement('span', null, showHiddenChats ? '▾' : '▸'),
+                  React.createElement('span', { 'aria-hidden': 'true' }, showHiddenChats ? '▾' : '▸'),
                   React.createElement('span', null, 'Ausgeblendet (' + hiddenConvs.length + ')')
                 ),
-                showHiddenChats && hiddenConvs.map(conv =>
-                  React.createElement('button', {
-                    key: conv.id, className: 'conversation-item', 'data-testid': 'conv-hidden-item',
-                    style: { opacity: 0.5, width: '100%' },
-                    onClick: () => onToggleHide && onToggleHide(conv.id)
-                  },
-                    React.createElement('div', { className: 'conversation-info' },
-                      React.createElement('div', { className: 'conversation-name' }, conv.is_group ? (conv.name || 'Gruppenchat') : ((conv.user || {}).display_name || 'Unbekannt'))
-                    ),
-                    React.createElement('span', { style: { fontSize: '11px', color: 'var(--text-muted)', marginLeft: 'auto' } }, '👁 Einblenden')
+                showHiddenChats && React.createElement('ul', { className: 'krs-a11y-list' }, hiddenConvs.map(conv =>
+                  React.createElement('li', { key: conv.id },
+                    React.createElement('button', {
+                      className: 'conversation-item', 'data-testid': 'conv-hidden-item',
+                      style: { opacity: 0.5, width: '100%' },
+                      onClick: () => onToggleHide && onToggleHide(conv.id)
+                    },
+                      React.createElement('div', { className: 'conversation-info' },
+                        React.createElement('div', { className: 'conversation-name' }, conv.is_group ? (conv.name || 'Gruppenchat') : ((conv.user || {}).display_name || 'Unbekannt'))
+                      ),
+                      React.createElement('span', { style: { fontSize: '11px', color: 'var(--text-muted)', marginLeft: 'auto' } }, krsEmoji('👁'), ' Einblenden')
+                    )
                   )
-                )
+                ))
               )
             );
           })()
@@ -11014,7 +11040,7 @@
           );
         }
         return React.createElement('div', { className: 'chat-empty', 'data-testid': 'chat-empty-none' },
-          React.createElement('div', { style: { fontSize: '48px' } }, '💬'),
+          React.createElement('div', { style: { fontSize: '48px' }, 'aria-hidden': 'true' }, '💬'),
           React.createElement('div', null, 'Wähle einen Chat oder starte einen neuen')
         );
       }
@@ -11025,7 +11051,7 @@
         React.createElement('div', { className: 'chat-header' },
           onBack && React.createElement('button', { type: 'button', className: 'back-btn', onClick: onBack, 'aria-label': '‹ Chats', 'data-testid': 'chat-back' }, '‹ Chats'),
           isGroupChat ? React.createElement('div', { className: 'chat-header-person' },
-            React.createElement('span', { className: 'chat-header-name' }, conversation.name || 'Gruppenchat'),
+            React.createElement('h2', { className: 'chat-header-name' }, conversation.name || 'Gruppenchat'),
             // Feedback #3: Mitgliederzahl ist jetzt klickbar → Mitglieder ansehen & hinzufügen
             React.createElement('button', {
               type: 'button',
@@ -11041,13 +11067,13 @@
               onlineUsers && React.createElement('span', { className: 'avatar-status online-dot small' + (onlineUsers.has(Number(conversation.user?.id)) ? '' : ' offline') })
             ),
             React.createElement('div', { className: 'chat-header-person' },
-              React.createElement('span', { className: 'chat-header-name' }, (conversation.user || {}).display_name || 'Chat'),
+              React.createElement('h2', { className: 'chat-header-name' }, (conversation.user || {}).display_name || 'Chat'),
               onlineUsers && onlineUsers.has(Number(conversation.user?.id)) && React.createElement('div', { style: { fontSize: '11px', color: 'var(--success)', fontWeight: '500' } }, 'Online')
             )
           )
         ),
-        React.createElement('div', { className: 'chat-messages' + (chatDragActive ? ' drag-active' : ''), onDragOver: handleChatDragOver, onDragLeave: handleChatDragLeave, onDrop: handleChatDrop },
-          chatDragActive && React.createElement('div', { className: 'chat-drop-overlay' }, '📎 Datei hier ablegen zum Senden'),
+        React.createElement('ul', { className: 'chat-messages' + (chatDragActive ? ' drag-active' : ''), 'aria-label': 'Nachrichten', onDragOver: handleChatDragOver, onDragLeave: handleChatDragLeave, onDrop: handleChatDrop },
+          chatDragActive && React.createElement('li', { className: 'chat-drop-overlay' }, krsEmoji('📎 '), 'Datei hier ablegen zum Senden'),
           messages.map(msg => {
             const own = isOwn(msg);
             const editing = editingMsgId === msg.id;
@@ -11055,11 +11081,12 @@
             const msgChips = msgReactions.get(msg.id) || [];
             const pickerOpen = reactionPickerMsgId === msg.id;
             const isSelected = !editing && !!selectedMsg && selectedMsg.id === msg.id;
-            return React.createElement('div', {
+            return React.createElement('li', {
               key: msg.id,
               id: 'krs-msg-' + msg.id,
               className: 'chat-msg ' + (own ? 'own' : 'other') + (!editing && msgChips.length > 0 ? ' has-reactions' : '') + ((isSelected || pickerOpen) ? ' is-selected' : '')
             },
+              own && React.createElement('span', { className: 'sr-only' }, 'Du'),
               !own && React.createElement(Avatar, { user: msg.sender, size: 28 }),
               React.createElement('div', Object.assign({
                 className: 'chat-bubble ' + (own ? 'own' : 'other'), style: { position: 'relative' },
@@ -11147,14 +11174,14 @@
               )
             );
           }),
-          hasMore && React.createElement('div', { style: { textAlign: 'center', padding: '8px 0' } },
+          hasMore && React.createElement('li', { style: { textAlign: 'center', padding: '8px 0' } },
             React.createElement('button', {
               onClick: onLoadMore,
               disabled: loadingMore,
               style: { padding: '4px 16px', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: '12px', cursor: loadingMore ? 'not-allowed' : 'pointer', color: 'var(--text-muted)', fontSize: '12px' }
-            }, loadingMore ? '...' : '↓ Ältere Nachrichten')
+            }, loadingMore ? '...' : React.createElement(React.Fragment, null, krsEmoji('↓ '), 'Ältere Nachrichten'))
           ),
-          messages.length === 0 && React.createElement('div', { className: 'chat-empty' },
+          messages.length === 0 && React.createElement('li', { className: 'chat-empty' },
             React.createElement('div', null, 'Noch keine Nachrichten. Schreib die erste!')
           ),
           // v4.53.1: nur auf Touch-Geräten sichtbar (CSS), bis zum ersten Antippen.
@@ -12767,6 +12794,11 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.58.0', date: '06.10.2026', items: [
+        'Vorleseprogramme bleiben im Lesemodus. Teams, Kanäle, Chats und der Nachrichtenverlauf sind Listen.',
+        'Die Überschriften heißen Teams, Kanäle und Chats. Der offene Chat ist eine eigene Überschrift.',
+        'Emojis in Knöpfen mit deutschem Namen werden nicht mehr mit vorgelesen. Ungelesen, stummgeschaltet und Entwurf stehen im Namen.'
+      ]},
       { v: '4.57.0', date: '06.10.2026', items: ['Auf dem Handy verschwindet die untere Leiste nur, wenn die Bildschirmtastatur offen ist. ‹ Chats bleibt sichtbar.'] },
       { v: '4.56.0', date: '06.10.2026', items: ['Neben dem Namen steht ‹ Chats oder ‹ Teams. Das Flugzeug zum Senden bleibt sichtbar, auch wenn das Feld noch leer ist.', 'In der Liste stehen Teams und Chats nur einmal. Darunter stehen Suche, Merkliste und Neu.', 'Ein angefangener Chat bleibt an diesem Gespräch. In der Liste steht dann Entwurf.', 'Ein zweiter Tipp auf ein Team klappt seine Kanäle wieder zu. Dabei wird kein Kanal geöffnet.'] },
       { v: '4.55.0', date: '06.10.2026', items: ['Team- und Kanalliste lassen sich im neuen Design einzeln einklappen. Auswahl und Entwürfe bleiben erhalten.', 'iPad-Hochformat: Teams und Chats bleiben über beschriftete Listenknöpfe erreichbar, auch ohne ausgewählten Chat.'] },
@@ -15127,17 +15159,17 @@
                 role: 'menuitem',
                 'data-testid': 'drawer-nav-settings',
                 onClick: () => { setShowAccountMenu(false); openModal('settings'); }
-              }, '\u2699\uFE0F', ' Einstellungen'),
+              }, krsEmoji('\u2699\uFE0F'), ' Einstellungen'),
               React.createElement('button', {
                 role: 'menuitem',
                 'data-testid': 'drawer-nav-profile',
                 onClick: () => { setShowAccountMenu(false); setShowProfile(true); }
-              }, '\uD83D\uDC64', ' Profil'),
+              }, krsEmoji('\uD83D\uDC64'), ' Profil'),
               isAdminRole(user) && React.createElement('button', {
                 role: 'menuitem',
                 'data-testid': 'drawer-nav-admin',
                 onClick: () => { setShowAccountMenu(false); setShowAdmin(true); }
-              }, '\uD83D\uDEE0\uFE0F', ' Administration')
+              }, krsEmoji('\uD83D\uDEE0\uFE0F'), ' Administration')
             )
           )
         )
@@ -15149,7 +15181,7 @@
           className: 'wide' + (view === 'saved' ? ' active' : ''),
           'data-testid': 'drawer-nav-merkliste', title: 'Merkliste',
           onClick: () => { setView('saved'); setMobileSidebarOpen(false); }
-        }, '\uD83D\uDD16', ' Merkliste')
+        }, krsEmoji('\uD83D\uDD16'), ' Merkliste')
       ) : null;
 
       // === TEAMS VIEW ===
@@ -15162,7 +15194,7 @@
           drawerNav,
           listToolRow('teams'),
           React.createElement('div', { className: 'sidebar-header', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
-            React.createElement('h2', null, 'Teams'),
+            React.createElement('h2', { id: 'krs-teams-heading' }, 'Teams'),
             React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
               // v4.10.0: Suche direkt neben der Überschrift
               React.createElement('button', {
@@ -15170,14 +15202,14 @@
                 onClick: () => { setMobileSidebarOpen(false); setView('search'); },
                 title: 'Suche',
                 'aria-label': 'Suche öffnen'
-              }, '🔍'),
+              }, krsEmoji('🔍')),
               // Aufräumen (mehrere Teams löschen) — nur globaler Admin
               isAdminRole(user) && React.createElement('button', {
                 className: 'feedback-trigger',
                 onClick: () => setShowBulkTeams(true),
                 title: 'Teams aufräumen (mehrere löschen)',
                 'aria-label': 'Teams aufräumen'
-              }, '🧹'),
+              }, krsEmoji('🧹')),
               React.createElement('button', {
                 className: 'new-chat-btn',
                 onClick: () => setShowCreateTeam(true),
@@ -15186,7 +15218,7 @@
               }, '+')
             )
           ),
-          React.createElement('div', { className: 'sidebar-list' },
+          React.createElement('ul', { className: 'sidebar-list', 'aria-labelledby': 'krs-teams-heading' },
             (() => {
               const visibleTeams = sortTeamsKollegiumFirst(teams.filter(t => !hiddenTeams.has(t.id)));
               const hiddenTeamsList = teams.filter(t => hiddenTeams.has(t.id));
@@ -15198,7 +15230,13 @@
                   const shownChannels = drawerLayout && designV2
                     ? (expandedTeamId === team.id ? (accordionChannels || []) : [])
                     : channels;
-                  return React.createElement('div', { key: team.id, className: 'team-group' },
+                  const teamUnread = Array.from(unreadPostChannels.entries())
+                    .filter(([chId]) => channelTeamMap.get(chId) === team.id)
+                    .reduce((sum, [, count]) => sum + count, 0);
+                  const teamLabel = team.name
+                    + (mutedTeams.has(team.id) ? ', stummgeschaltet' : '')
+                    + (!mutedTeams.has(team.id) && teamUnread > 0 ? ', ' + teamUnread + ' ungelesen' : '');
+                  return React.createElement('li', { key: team.id, className: 'team-group' },
                   React.createElement('div', { className: 'team-item', 'data-testid': 'team-visible', title: team.name },
                     React.createElement('button', {
                       className: 'list-item' + (selectedTeam?.id === team.id ? ' active' : ''),
@@ -15223,7 +15261,7 @@
                         if (designV2) { setCompactChannels(false); setExpandedTeamId(team.id); if (groupOpen) return; }
                         handleTeamSelect(team);
                       },
-                      'aria-label': team.name, title: team.name,
+                      'aria-label': teamLabel, title: team.name,
                       ...hintProps(team.name, compactTeams),
                       'aria-current': selectedTeam?.id === team.id ? 'page' : undefined,
                       'aria-expanded': groupOpen,
@@ -15234,14 +15272,8 @@
                       React.createElement('div', { style: { width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: team.icon_color, borderRadius: 'var(--radius)', color: 'white', fontSize: '12px', fontWeight: '600' } }, team.icon_text),
                       React.createElement('span', { className: 'list-item-text' }, team.name),
                       // v4.19.0: sichtbarer Status — 🔕 neben stummgeschalteten Teams (immer sichtbar, nicht nur bei Hover)
-                      mutedTeams.has(team.id) && React.createElement('span', { title: 'Stummgeschaltet', 'aria-label': 'Stummgeschaltet', style: { fontSize: '11px', flexShrink: 0 } }, '🔕'),
-                      (() => {
-                        const teamUnread = Array.from(unreadPostChannels.entries())
-                          .filter(([chId]) => channelTeamMap.get(chId) === team.id)
-                          .reduce((sum, [, count]) => sum + count, 0);
-                        // v4.19.0: Zähler läuft intern weiter, Badge wird bei Stummschaltung nur nicht angezeigt.
-                        return (teamUnread > 0 && !mutedTeams.has(team.id)) ? React.createElement('span', { className: 'unread-badge', style: { marginLeft: 'auto' }, 'aria-label': teamUnread + ' ungelesene Nachrichten' }, teamUnread) : null;
-                      })()
+                      mutedTeams.has(team.id) && React.createElement('span', { title: 'Stummgeschaltet', 'aria-hidden': 'true', style: { fontSize: '11px', flexShrink: 0 } }, '🔕'),
+                      (teamUnread > 0 && !mutedTeams.has(team.id)) ? React.createElement('span', { className: 'unread-badge', style: { marginLeft: 'auto' }, 'aria-hidden': 'true' }, teamUnread) : null
                     ),
                     React.createElement('button', {
                       className: 'team-mute-btn' + (mutedTeams.has(team.id) ? ' active' : ''),
@@ -15249,8 +15281,8 @@
                       title: mutedTeams.has(team.id) ? 'Stummschaltung aufheben' : 'Stummschalten',
                       'aria-label': mutedTeams.has(team.id) ? 'Stummschaltung aufheben' : 'Team stummschalten',
                       'data-testid': 'team-mute-btn'
-                    }, mutedTeams.has(team.id) ? '🔕' : '🔔'),
-                    React.createElement('button', { className: 'team-hide-btn', onClick: (e) => { e.stopPropagation(); handleToggleTeamHidden(team.id); }, title: 'Team ausblenden', 'aria-label': 'Team „' + team.name + '" ausblenden', 'data-testid': 'team-hide' }, '👁')
+                    }, krsEmoji(mutedTeams.has(team.id) ? '🔕' : '🔔')),
+                    React.createElement('button', { className: 'team-hide-btn', onClick: (e) => { e.stopPropagation(); handleToggleTeamHidden(team.id); }, title: 'Team ausblenden', 'aria-label': 'Team „' + team.name + '" ausblenden', 'data-testid': 'team-hide' }, krsEmoji('👁'))
                   ),
                   // v4.29.0 — Kanäle des aufgeklappten Teams direkt darunter.
                   // Nur im Handy-Layout sichtbar (CSS `.team-children`), am
@@ -15260,32 +15292,32 @@
                       ? React.createElement('div', { className: 'team-children-empty' }, 'Kanäle werden geladen…')
                       : shownChannels.length === 0
                       ? React.createElement('div', { className: 'team-children-empty' }, 'Noch keine Kanäle in diesem Team.')
-                      : shownChannels.map(ch => {
+                      : React.createElement('ul', { className: 'krs-a11y-list' }, shownChannels.map(ch => {
                           const unreadCount = unreadPostChannels.get(ch.id) || 0;
-                          return React.createElement('button', {
-                            key: ch.id,
+                          return React.createElement('li', { key: ch.id }, React.createElement('button', {
                             className: 'list-item' + (selectedChannel?.id === ch.id ? ' active' : ''),
                             'data-testid': 'team-child-channel',
                             onClick: () => handleChannelSelect(ch),
                             onContextMenu: (e) => handleChannelContextMenu(e, ch),
                             onKeyDown: (e) => { if ((canManageTeam(user, team) || userTeamRole === 'admin') && (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10'))) handleChannelContextMenu(e, ch); },
                             'aria-haspopup': (canManageTeam(user, team) || userTeamRole === 'admin') ? 'menu' : undefined,
-                            'aria-label': ch.name, title: ch.name,
+                            'aria-label': ch.name + ((unreadCount > 0 && !mutedTeams.has(team.id)) ? ', ' + unreadCount + ' ungelesen' : ''),
+                            title: ch.name,
                             'aria-current': selectedChannel?.id === ch.id ? 'page' : undefined,
                             style: { display: 'flex', gap: '8px', alignItems: 'center', width: '100%' }
                           },
-                            React.createElement('span', { style: { fontSize: '12px' } }, '#'),
+                            React.createElement('span', { 'aria-hidden': 'true', style: { fontSize: '12px' } }, '#'),
                             React.createElement('span', { className: 'list-item-text' + (unreadCount > 0 ? ' channel-unread' : '') }, ch.name),
                             unreadCount > 0 && !mutedTeams.has(team.id) && React.createElement('span', { className: 'unread-badge', style: { marginLeft: 'auto' } }, unreadCount)
-                          );
-                        }),
+                          ));
+                        })),
                     (canManageTeam(user, team) || userTeamRole === 'admin') && React.createElement('div', { className: 'team-children-tools' },
                       React.createElement('button', {
                         className: 'new-chat-btn',
                         onClick: () => setShowTeamMembers(true),
                         title: 'Team verwalten (Mitglieder, archivieren, löschen)',
                         'aria-label': 'Team verwalten'
-                      }, '⚙'),
+                      }, krsEmoji('⚙')),
                       React.createElement('button', {
                         className: 'new-chat-btn',
                         onClick: () => setShowCreateChannel(true),
@@ -15296,33 +15328,34 @@
                   )
                   );
                 }),
-                hiddenTeamsList.length > 0 && React.createElement('div', { style: { marginTop: '4px' } },
+                hiddenTeamsList.length > 0 && React.createElement('li', { style: { marginTop: '4px' } },
                   React.createElement('button', { className: 'hidden-teams-toggle', 'data-testid': 'hidden-teams-toggle', onClick: () => setShowHiddenTeams(prev => !prev) },
-                    React.createElement('span', null, showHiddenTeams ? '▾' : '▸'),
+                    React.createElement('span', { 'aria-hidden': 'true' }, showHiddenTeams ? '▾' : '▸'),
                     React.createElement('span', null, 'Ausgeblendet (' + hiddenTeamsList.length + ')')
                   ),
-                  showHiddenTeams && hiddenTeamsList.map(team =>
-                    React.createElement('button', {
-                      key: team.id,
-                      className: 'list-item',
-                      'data-testid': 'team-hidden-item',
-                      style: { display: 'flex', gap: '8px', alignItems: 'center', opacity: 0.5 },
-                      onClick: () => { handleToggleTeamHidden(team.id); }
-                    },
-                      React.createElement('div', { style: { width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: team.icon_color, borderRadius: 'var(--radius)', color: 'white', fontSize: '12px', fontWeight: '600' } }, team.icon_text),
-                      React.createElement('span', { className: 'list-item-text' }, team.name),
-                      React.createElement('span', { style: { fontSize: '11px', color: 'var(--text-muted)', marginLeft: 'auto' } }, '👁 Einblenden')
+                  showHiddenTeams && React.createElement('ul', { className: 'krs-a11y-list' }, hiddenTeamsList.map(team =>
+                    React.createElement('li', { key: team.id },
+                      React.createElement('button', {
+                        className: 'list-item',
+                        'data-testid': 'team-hidden-item',
+                        style: { display: 'flex', gap: '8px', alignItems: 'center', opacity: 0.5 },
+                        onClick: () => { handleToggleTeamHidden(team.id); }
+                      },
+                        React.createElement('div', { style: { width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: team.icon_color, borderRadius: 'var(--radius)', color: 'white', fontSize: '12px', fontWeight: '600' } }, team.icon_text),
+                        React.createElement('span', { className: 'list-item-text' }, team.name),
+                        React.createElement('span', { style: { fontSize: '11px', color: 'var(--text-muted)', marginLeft: 'auto' } }, krsEmoji('👁'), ' Einblenden')
+                      )
                     )
-                  )
+                  ))
                 ),
                 // Archiv-Bereich (#8) — eingeklappt, mit Wiederherstellen/Löschen (Admin)
-                archivedTeams.length > 0 && React.createElement('div', { style: { marginTop: '4px' }, 'data-testid': 'archived-teams-section' },
+                archivedTeams.length > 0 && React.createElement('li', { style: { marginTop: '4px' }, 'data-testid': 'archived-teams-section' },
                   React.createElement('button', { className: 'hidden-teams-toggle', 'data-testid': 'archived-teams-toggle', onClick: () => setShowArchivedTeams(prev => !prev) },
-                    React.createElement('span', null, showArchivedTeams ? '▾' : '▸'),
-                    React.createElement('span', null, '🗄 Archiviert (' + archivedTeams.length + ')')
+                    React.createElement('span', { 'aria-hidden': 'true' }, showArchivedTeams ? '▾' : '▸'),
+                    React.createElement('span', null, krsEmoji('🗄'), ' Archiviert (' + archivedTeams.length + ')')
                   ),
-                  showArchivedTeams && archivedTeams.map(team =>
-                    React.createElement('div', {
+                  showArchivedTeams && React.createElement('ul', { className: 'krs-a11y-list' }, archivedTeams.map(team =>
+                    React.createElement('li', {
                       key: team.id,
                       className: 'team-item',
                       'data-testid': 'team-archived-item',
@@ -15336,17 +15369,19 @@
                         className: 'team-hide-btn',
                         'data-testid': 'team-restore-btn',
                         onClick: (e) => { e.stopPropagation(); handleRestoreTeam(team.id); },
-                        title: 'Team wiederherstellen'
-                      }, '♻'),
+                        title: 'Team wiederherstellen',
+                        'aria-label': 'Team wiederherstellen'
+                      }, krsEmoji('♻')),
                       canManageTeam(user, team) && React.createElement('button', {
                         className: 'team-hide-btn',
                         'data-testid': 'team-delete-archived-btn',
                         onClick: (e) => { e.stopPropagation(); handleDeleteTeam(team.id); },
                         title: 'Team endgültig löschen',
+                        'aria-label': 'Team endgültig löschen',
                         style: { color: 'var(--danger, #c33)' }
-                      }, '🗑')
+                      }, krsEmoji('🗑'))
                     )
-                  )
+                  ))
                 )
               );
             })()
@@ -15356,7 +15391,7 @@
           paneToggle('channels'),
           selectedTeam && React.createElement(React.Fragment, null,
             React.createElement('div', { className: 'sidebar-header', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
-              React.createElement('h2', null, '# Kanäle'),
+              React.createElement('h2', { id: 'krs-channels-heading' }, krsEmoji('#'), ' Kanäle'),
               // v4.23.0 — Team-Admins duerfen laut RLS (channels_insert_admin)
               // Kanaele anlegen; die Oberflaeche zeigte das Plus bisher nur
               // globalen Admins. Daneben ein Zahnrad als auffindbarer Weg zur
@@ -15368,7 +15403,7 @@
                   onClick: () => setShowTeamMembers(true),
                   title: 'Team verwalten (Mitglieder, archivieren, löschen)',
                   'aria-label': 'Team verwalten'
-                }, '⚙'),
+                }, krsEmoji('⚙')),
                 React.createElement('button', {
                   className: 'new-chat-btn',
                   onClick: () => setShowCreateChannel(true),
@@ -15377,12 +15412,13 @@
                 }, '+')
               )
             ),
-            React.createElement('div', { className: 'sidebar-list' },
+            React.createElement('ul', { className: 'sidebar-list', 'aria-labelledby': 'krs-channels-heading' },
               channels.map(ch => {
                 const unreadCount = unreadPostChannels.get(ch.id) || 0;
-                return React.createElement('button', {
-                  key: ch.id,
-                  'aria-label': ch.name, title: ch.name, ...hintProps(ch.name, compactChannels),
+                const channelLabel = ch.name + ((unreadCount > 0 && !mutedTeams.has(selectedTeam?.id)) ? ', ' + unreadCount + ' ungelesen' : '');
+                return React.createElement('li', { key: ch.id },
+                  React.createElement('button', {
+                  'aria-label': channelLabel, title: ch.name, ...hintProps(ch.name, compactChannels),
                   className: 'list-item' + (selectedChannel?.id === ch.id ? ' active' : ''),
                   onClick: () => handleChannelSelect(ch),
                   onContextMenu: (e) => handleChannelContextMenu(e, ch),
@@ -15391,11 +15427,11 @@
                   'aria-haspopup': (canManageTeam(user, selectedTeam) || userTeamRole === 'admin') ? 'menu' : undefined,
                   'aria-current': selectedChannel?.id === ch.id ? 'page' : undefined
                 },
-                  React.createElement('span', { style: { fontSize: '12px' } }, '#'),
+                  React.createElement('span', { 'aria-hidden': 'true', style: { fontSize: '12px' } }, '#'),
                   React.createElement('span', { className: 'list-item-text' + (unreadCount > 0 ? ' channel-unread' : '') }, ch.name),
                   // v4.19.0: Team stummgeschaltet ⇒ auch die Kanal-Badges im Team ausblenden (Zähler bleibt intern erhalten)
-                  unreadCount > 0 && !mutedTeams.has(selectedTeam?.id) && React.createElement('span', { className: 'unread-badge' }, unreadCount)
-                );
+                  unreadCount > 0 && !mutedTeams.has(selectedTeam?.id) && React.createElement('span', { className: 'unread-badge', 'aria-hidden': 'true' }, unreadCount)
+                ));
               })
             )
           )
@@ -15425,7 +15461,7 @@
           selectedTeam && teamTab === 'links' && React.createElement(React.Fragment, null,
             React.createElement('div', { className: 'content-header' },
               designV2 && mobileListButton('teams'),
-              React.createElement('h1', null, '📁 Dateiablage — ' + selectedTeam.name),
+              React.createElement('h1', null, krsEmoji('📁 '), 'Dateiablage — ' + selectedTeam.name),
               designV2 && React.createElement('button', { className: 'design-channel-actions', 'aria-label': 'Team-Bereiche öffnen', 'aria-expanded': designActionsOpen, onClick: () => setDesignActionsOpen(v => !v) }, '…')
             ),
             React.createElement('div', { className: 'content-body' },
@@ -15442,7 +15478,7 @@
           selectedTeam && teamTab === 'termine' && React.createElement(React.Fragment, null,
             React.createElement('div', { className: 'content-header' },
               designV2 && mobileListButton('teams'),
-              React.createElement('h1', null, '📅 Termine — ' + selectedTeam.name),
+              React.createElement('h1', null, krsEmoji('📅 '), 'Termine — ' + selectedTeam.name),
               designV2 && React.createElement('button', { className: 'design-channel-actions', 'aria-label': 'Team-Bereiche öffnen', 'aria-expanded': designActionsOpen, onClick: () => setDesignActionsOpen(v => !v) }, '…')
             ),
             React.createElement('div', { className: 'content-body' },
@@ -15456,7 +15492,7 @@
             React.createElement('div', { className: 'content-header', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
               React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
                 mobileListButton('teams'),
-                React.createElement('div', null, React.createElement(designV2 ? 'button' : 'div', { className: 'design-team-context' + (designV2 ? ' design-context-trigger' : ''), ...(designV2 ? { type: 'button', onClick: openTeamChannels, 'aria-label': 'Kanäle von ' + (selectedTeam?.name || 'Team') + ' öffnen', 'aria-expanded': isDrawerLayout() ? mobileSidebarOpen : !compactChannels, 'data-testid': 'team-context-open' } : {}) }, selectedTeam?.name, designV2 && ' ▾'), React.createElement('h1', null, '# ' + selectedChannel.name))
+                React.createElement('div', null, React.createElement(designV2 ? 'button' : 'div', { className: 'design-team-context' + (designV2 ? ' design-context-trigger' : ''), ...(designV2 ? { type: 'button', onClick: openTeamChannels, 'aria-label': 'Kanäle von ' + (selectedTeam?.name || 'Team') + ' öffnen', 'aria-expanded': isDrawerLayout() ? mobileSidebarOpen : !compactChannels, 'data-testid': 'team-context-open' } : {}) }, selectedTeam?.name, designV2 && ' ▾'), React.createElement('h1', null, krsEmoji('# '), selectedChannel.name))
               ),
               designV2 && React.createElement('button', { className: 'design-channel-actions', 'aria-label': 'Team-Bereiche öffnen', 'aria-expanded': designActionsOpen, onClick: () => setDesignActionsOpen(v => !v) }, '…'),
               selectedTeam && React.createElement('button', {
@@ -15641,12 +15677,12 @@
                 const isFirst = idx <= 0;
                 const isLast = idx === -1 || idx >= channels.length - 1;
                 return React.createElement(React.Fragment, null,
-                  !isFirst && React.createElement('button', { role: 'menuitem', 'data-testid': 'channel-move-up', onClick: () => { handleMoveChannel(channelContextMenu.channel, 'up'); closeMenu(); } }, '↑', ' Nach oben'),
-                  !isLast && React.createElement('button', { role: 'menuitem', 'data-testid': 'channel-move-down', onClick: () => { handleMoveChannel(channelContextMenu.channel, 'down'); closeMenu(); } }, '↓', ' Nach unten')
+                  !isFirst && React.createElement('button', { role: 'menuitem', 'data-testid': 'channel-move-up', onClick: () => { handleMoveChannel(channelContextMenu.channel, 'up'); closeMenu(); } }, krsEmoji('↑'), ' Nach oben'),
+                  !isLast && React.createElement('button', { role: 'menuitem', 'data-testid': 'channel-move-down', onClick: () => { handleMoveChannel(channelContextMenu.channel, 'down'); closeMenu(); } }, krsEmoji('↓'), ' Nach unten')
                 );
               })(),
-              React.createElement('button', { role: 'menuitem', onClick: () => { setEditingChannel(channelContextMenu.channel); setChannelContextMenu(null); } }, '✏️', ' Umbenennen'),
-              !channelContextMenu.channel.is_default && React.createElement('button', { role: 'menuitem', className: 'danger', onClick: () => { if (confirm('Kanal „' + channelContextMenu.channel.name + '" wirklich löschen? Alle Beiträge gehen verloren.')) handleDeleteChannel(channelContextMenu.channel); else setChannelContextMenu(null); } }, '🗑', ' Löschen')
+              React.createElement('button', { role: 'menuitem', onClick: () => { setEditingChannel(channelContextMenu.channel); setChannelContextMenu(null); } }, krsEmoji('✏️'), ' Umbenennen'),
+              !channelContextMenu.channel.is_default && React.createElement('button', { role: 'menuitem', className: 'danger', onClick: () => { if (confirm('Kanal „' + channelContextMenu.channel.name + '" wirklich löschen? Alle Beiträge gehen verloren.')) handleDeleteChannel(channelContextMenu.channel); else setChannelContextMenu(null); } }, krsEmoji('🗑'), ' Löschen')
             )
           );
         })(),
@@ -15660,7 +15696,9 @@
           onClose: () => setShowForwardModal(null)
         }),
         // Main app layout
-        React.createElement('div', { className: 'app-layout', role: 'application' },
+        // Kein role=application: das würde den Screenreader aus dem Lesemodus holen.
+        // Landmarks bleiben: nav „Hauptnavigation“, ein main „Inhalt“, die Listen heißen Teams, Kanäle, Chats, Nachrichten.
+        React.createElement('div', { className: 'app-layout' },
         // Skip-Link „Zum Inhalt springen" (WCAG 2.4.1) — erstes fokussierbares Element
         React.createElement('a', { href: '#main', className: 'skip-link' }, 'Zum Inhalt springen'),
         // Sidebar mit View-Switcher
@@ -15684,7 +15722,7 @@
               'aria-label': 'Zur\u00fcck zum KRS Hub',
               'data-testid': 'nav-hub'
             },
-              React.createElement('span', { style: { fontSize: '20px', lineHeight: 1 } }, '🏠')
+              React.createElement('span', { style: { fontSize: '20px', lineHeight: 1 }, 'aria-hidden': 'true' }, '🏠')
             ),
             React.createElement('button', {
               className: 'nav-item' + (view === 'teams' ? ' active' : ''),
@@ -15717,7 +15755,7 @@
               'data-testid': 'nav-merkliste',
               'aria-current': view === 'saved' ? 'page' : undefined
             },
-              React.createElement('span', { style: { fontSize: '18px', lineHeight: 1 } }, '\uD83D\uDD16')
+              React.createElement('span', { style: { fontSize: '18px', lineHeight: 1 }, 'aria-hidden': 'true' }, '\uD83D\uDD16')
             ),
             // v4.10.0: Suche & Gespeichert sind in die Ansichten gewandert (🔍 neben Überschrift, 🔖 oben in der Chat-Spalte)
             // TENANT-SPEC.md Sprint-S2-Punkt 8: nur rendern, wenn links.nextcloudUrl gesetzt ist.
@@ -15752,7 +15790,7 @@
             // Formular öffnet. Dieser hier öffnet das Board.
             'aria-label': 'Feedback-Board \u00f6ffnen',
             'data-testid': 'beta-feedback-btn'
-          }, React.createElement('span', { className: 'beta-icon' }, '\uD83D\uDCE3')),
+          }, React.createElement('span', { className: 'beta-icon', 'aria-hidden': 'true' }, '\uD83D\uDCE3')),
           React.createElement('div', { className: 'app-version' }, (window.T ? window.T('app.name', 'Die App') : 'Die App') + ' v' + window.KRS_VERSION + ' · Beta'),
           // v4.19.0: dezenter Hilfe-Link zur Kollegiums-Anleitung (separates Repo, GitHub Pages)
           React.createElement('a', {
@@ -15763,7 +15801,7 @@
             title: 'Anleitung für das Kollegium (neuer Tab)',
             'aria-label': 'Hilfe / Anleitung öffnen (neuer Tab)',
             'data-testid': 'app-help-link'
-          }, '❓ Hilfe'),
+          }, krsEmoji('❓'), ' Hilfe'),
           React.createElement('div', { className: 'sidebar-bottom' },
             // PRIV-01 (4.47.0): „Wer ist online" nur für Admins/Owner
             isAdminRole(user) && React.createElement('button', {
@@ -15777,12 +15815,13 @@
               React.createElement('span', { className: 'online-count' }, onlineUsers.size || '–')
             ),
             // v4.10.0: Einstellungen (⚙️) bündelt Benachrichtigungen, Lesebestätigungen, Hilfe & „Was ist neu"
-            React.createElement('button', { className: 'feedback-trigger', onClick: () => openModal('settings'), title: 'Einstellungen', 'aria-label': 'Einstellungen öffnen' }, '⚙️'),
+            React.createElement('button', { className: 'feedback-trigger', onClick: () => openModal('settings'), title: 'Einstellungen', 'aria-label': 'Einstellungen öffnen' }, krsEmoji('⚙️')),
             // Admin-Button (nur für Admins sichtbar, Phase 6) — 🛠️ statt ⚙️, kein Konflikt mit Einstellungen
-            isAdminRole(user) && React.createElement('button', { className: 'feedback-trigger', onClick: () => setShowAdmin(true), title: 'Administration', 'aria-label': 'Admin-Panel öffnen' }, '🛠️'),
+            isAdminRole(user) && React.createElement('button', { className: 'feedback-trigger', onClick: () => setShowAdmin(true), title: 'Administration', 'aria-label': 'Admin-Panel öffnen' }, krsEmoji('🛠️')),
             React.createElement('button', {
               onClick: () => setShowProfile(prev => !prev),
               title: 'Profil',
+              'aria-label': 'Profil',
               style: { background: 'none', border: 'none', cursor: 'pointer', padding: '2px', borderRadius: '50%' }
             }, React.createElement(Avatar, { user: user || { display_name: '?', avatar_color: '#757575' }, size: 28 })),
             React.createElement('button', { className: 'icon-btn', onClick: handleLogout, title: 'Abmelden', 'aria-label': 'Abmelden', dangerouslySetInnerHTML: { __html: Icons.logout } })
@@ -15828,7 +15867,7 @@
           React.createElement('div', { className: 'sidebar-content mobile-drawer-only' + (mobileSidebarOpen ? ' mobile-open' : '') }, drawerNav)
         ),
         // Main content: Teams oder Chat
-        React.createElement('main', { id: 'main', className: 'main' + (view === 'chat' && selectedConversation && designV2 ? ' design-chat-view' : ''), tabIndex: -1 },
+        React.createElement('main', { id: 'main', className: 'main' + (view === 'chat' && selectedConversation && designV2 ? ' design-chat-view' : ''), tabIndex: -1, 'aria-label': 'Inhalt' },
           view === 'teams' ? React.createElement(ErrorBoundary, { fallbackMessage: 'Der Teams-Bereich hatte einen Fehler.' }, teamsView)
             : view === 'chat' ? React.createElement(ErrorBoundary, { fallbackMessage: 'Der Chat-Bereich hatte einen Fehler.' }, chatView)
             : view === 'saved' ? React.createElement(MerklisteView, {
