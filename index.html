@@ -1255,9 +1255,11 @@
     .settings-btn:hover { color: var(--accent); background: var(--accent-light); }
 
     .chat-panel { display: flex; flex-direction: column; height: 100%; }
-    .chat-header { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
-    .chat-header-name { font-weight: 600; font-size: 16px; }
-    .back-btn { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-secondary); padding: 4px; }
+    .chat-header { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); min-width: 0; }
+    .chat-header-person { min-width: 0; flex: 1; }
+    .chat-header-name { font-weight: 600; font-size: 16px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .back-btn { background: none; border: none; font-size: 15px; font-weight: 600; cursor: pointer; color: #172338; padding: 4px 8px; flex-shrink: 0; white-space: nowrap; min-height: 44px; min-width: 44px; display: inline-flex; align-items: center; gap: 2px; }
+    .back-btn svg, .chat-send-btn svg { width: 22px; height: 22px; display: block; flex: 0 0 22px; }
     /* v4.25.0 — Kopfzeile fuer Ansichten ohne eigene Kopfzeile (Chat-Liste).
        Auf dem Handy war die Chat-Ansicht ohne Ausweg: die Chatliste liegt als
        Drawer ausserhalb des Bildschirms, und es gab keinen ☰-Knopf, der sie
@@ -1436,9 +1438,9 @@
     .chat-input-bar { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); align-items: flex-end; }
     .chat-input-bar input { flex: 1; padding: 10px 14px; border-radius: 20px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); font-size: 14px; }
     .chat-input-bar input:focus { outline: 2px solid #1D4ED8; outline-offset: 2px; border-color: var(--accent); }
-    .chat-send-btn { width: 40px; height: 40px; border-radius: 50%; background: var(--accent); color: var(--accent-text, #fff); border: none; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; transition: all var(--transition); flex-shrink: 0; }
+    .chat-send-btn { width: 44px; height: 44px; border-radius: 50%; background: var(--accent, #245bc4); color: #fff; border: none; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; transition: all var(--transition); flex-shrink: 0; }
     .chat-send-btn:hover { background: var(--accent-hover); }
-    .chat-send-btn:disabled { background: var(--text-muted); cursor: not-allowed; }
+    .chat-send-btn:disabled, .chat-send-btn:disabled:hover { background: #eef2f7; color: #52657d; cursor: not-allowed; }
     .chat-image-btn svg { width: 22px; height: 22px; }
     .chat-image-btn:hover { color: var(--accent); }
 
@@ -2027,6 +2029,37 @@
   <!-- Native iOS-Huelle (krs-ios). Im Browser wirkungslos. -->
   <script src="krs-native-client.js"></script>
   <link rel="stylesheet" href="krs-design.css">
+  <style>
+    .conversation-preview.is-draft { color: #174796; font-weight: 700; }
+    @media (max-width: 768px), (max-width: 1024px) and (orientation: portrait) {
+      html.krs-design-v2 .design-list-close,
+      html.krs-design-v2 .design-local-switch,
+      html.krs-design-v2.design-list-open .conversation-header > h2,
+      html.krs-design-v2.design-list-open .sidebar-header > h2,
+      html.krs-design-v2.design-list-open .drawer-nav > .wide,
+      html.krs-design-v2.design-list-open .saved-section-btn,
+      html.krs-design-v2.design-list-open .mobile-view-header,
+      html.krs-design-v2.design-list-open .chat-panel > .chat-header,
+      html.krs-design-v2.design-list-open .conversation-header .feedback-trigger,
+      html.krs-design-v2.design-list-open .conversation-header .new-chat-btn,
+      html.krs-design-v2.design-list-open .sidebar-teams > .sidebar-header .feedback-trigger,
+      html.krs-design-v2.design-list-open .sidebar-teams > .sidebar-header .new-chat-btn {
+        display: none !important;
+      }
+      html.krs-design-v2 .list-tool-row {
+        display: flex; flex-wrap: nowrap; align-items: center; gap: 4px;
+        padding: 4px 8px; border-bottom: 1px solid var(--border, #dce2eb); background: #fff;
+      }
+      html.krs-design-v2 .list-tool-row button {
+        flex: 1 1 0; min-width: 0; min-height: 44px; border: 0; background: transparent;
+        color: #172338; font: inherit; font-size: 15px; font-weight: 600;
+        white-space: nowrap; padding: 4px 2px;
+      }
+    }
+    @media (max-width: 360px) {
+      html.krs-design-v2 .list-tool-row button { font-size: 14px; }
+    }
+  </style>
   <script src="krs-design.js"></script>
 </head>
 <body>
@@ -6442,9 +6475,9 @@
     const Icons = {
       teams: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
       chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>',
-      send: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
+      send: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
       plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
-      back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>',
+      back: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>',
       // v4.52.4: Gesicht mit Plus — „Reagieren“ in der Aktionsleiste einer Chat-Nachricht.
       reactAdd: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20.5 12.5a8.5 8.5 0 1 1-9-8.5"/><path d="M8.6 14.2c.8 1.2 2 1.9 3.4 1.9s2.6-.7 3.4-1.9"/><path d="M9.2 9.6v.6M14.8 9.6v.6"/><path d="M18.5 2.5v6M15.5 5.5h6"/></svg>',
       // v4.53.1: Antworten, Bearbeiten, Löschen als Linien-Symbole passend zu reactAdd.
@@ -6860,10 +6893,10 @@
     }
 
     // S11 (22.09.2026): ungesendete Texte je Ziel (Kanal, Antwort-Thread)
-    // ueberleben Reload/Tab-Wechsel. NICHT fuer Direktnachrichten (ChatPanel) --
-    // solange O1 nicht in dieser Datei als erledigt vermerkt ist, bleibt das so
-    // (Sprint 9c, Punkt 4). Jeder Zugriff in try/catch: im privaten Modus wirft
-    // localStorage, das darf die App nie zum Absturz bringen.
+    // ueberleben Reload/Tab-Wechsel. Direktnachrichten nutzen denselben
+    // Geraete-Entwurf mit typ 'chat' und der Gespraechs-ID (Sprint 2, D1c).
+    // Das ist kein neues Datenmodell. Jeder Zugriff in try/catch: im privaten
+    // Modus wirft localStorage, das darf die App nie zum Absturz bringen.
     var KRS_DRAFT_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
     // A5 (4.41.0): Entwürfe pro Person (geteiltes iPad) — Nutzer-ID im Schlüssel.
     function krsDraftKey(typ, zielId) { return 'krs-draft-u' + (window.__krsDraftUid || 'x') + '-' + typ + '-' + zielId; }
@@ -7749,7 +7782,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.55.0';
+    window.KRS_VERSION = '4.56.0';
     // PERF-01: Cold-Boot-Zähler für Hub keep-alive Abnahme (Connect→Hub-Start→Connect → bleibt 1)
     window.__krsConnectBootCount = (window.__krsConnectBootCount || 0) + 1;
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
@@ -10214,9 +10247,19 @@
     // CHAT COMPONENTS
     // ============================================================
 
-    function ConversationList({ conversations, currentUser, selectedId, onSelect, onNewChat, allUsers, onlineUsers, onGroupChat, hiddenConversations, showHiddenChats, setShowHiddenChats, onToggleHide, onSearch, onShowOnline }) {
+    function ConversationList({ conversations, currentUser, selectedId, onSelect, onNewChat, allUsers, onlineUsers, onGroupChat, hiddenConversations, showHiddenChats, setShowHiddenChats, onToggleHide, onSearch, onShowOnline, neuWunsch, listeSichtbar }) {
       const hiddenSet = hiddenConversations || new Set();
       const [showNewChat, setShowNewChat] = useState(false);
+      const draftRowRef = useRef(null);
+      useEffect(() => {
+        if (!neuWunsch) return;
+        setShowNewChat(true);
+        setChatSearch('');
+      }, [neuWunsch]);
+      useEffect(() => {
+        if (!listeSichtbar || !draftRowRef.current) return;
+        draftRowRef.current.scrollIntoView({ block: 'nearest' });
+      }, [listeSichtbar, selectedId]);
       const [showGroupChat, setShowGroupChat] = useState(false);
       const [chatSearch, setChatSearch] = useState('');
       const [groupName, setGroupName] = useState('');
@@ -10350,11 +10393,15 @@
             const sortedConvs = sortConversationsByActivity(conversations);
             const visibleConvs = sortedConvs.filter(c => !hiddenSet.has(c.id));
             const hiddenConvs = sortedConvs.filter(c => hiddenSet.has(c.id));
-            const renderItem = (conv) => React.createElement('button', {
+            const renderItem = (conv) => {
+              const entwurf = (() => { const d = loadDraft('chat', conv.id); return !!(d && d.html && htmlToText(d.html).trim()); })();
+              return React.createElement('button', {
                 key: conv.id,
-                className: 'conversation-item' + (selectedId === conv.id ? ' active' : ''),
+                ref: entwurf ? draftRowRef : undefined,
+                className: 'conversation-item' + (selectedId === conv.id ? ' active' : '') + (entwurf ? ' has-draft' : ''),
                 onClick: () => onSelect(conv),
                 'aria-current': selectedId === conv.id ? 'page' : undefined,
+                'data-testid': entwurf ? 'conversation-draft' : undefined,
                 style: { flex: 1, minWidth: 0 }
               },
               conv.is_group ? React.createElement('div', { className: 'group-avatar', style: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '40px', height: '40px', borderRadius: '8px', background: 'var(--accent)', color: 'white', fontWeight: '600', fontSize: '18px' } }, '👥') : React.createElement('div', { className: 'avatar-wrapper' },
@@ -10363,13 +10410,14 @@
               ),
               React.createElement('div', { className: 'conversation-info' },
                 React.createElement('div', { className: 'conversation-name' }, conv.is_group ? (conv.name || 'Gruppenchat') : ((conv.user || {}).display_name || 'Unbekannt')),
-                React.createElement('div', { className: 'conversation-preview' }, htmlToText(conv.lastMessage || ''))
+                React.createElement('div', { className: 'conversation-preview' + (entwurf ? ' is-draft' : '') }, entwurf ? 'Entwurf' : htmlToText(conv.lastMessage || ''))
               ),
               React.createElement('div', { className: 'conversation-meta' },
                 React.createElement('span', { className: 'conversation-time' }, conv.time),
                 conv.unread > 0 && React.createElement('span', { className: 'unread-badge' }, conv.unread)
               )
             );
+            };
             return React.createElement(React.Fragment, null,
               visibleConvs.map(conv =>
                 React.createElement('div', { key: conv.id, className: 'team-item', 'data-testid': 'conv-visible', style: { display: 'flex', alignItems: 'center' } },
@@ -10407,6 +10455,12 @@
 
     function ChatPanel({ conversation, messages, setMessages, setConversations, dataService, currentUser, onBack, onlineUsers, hasMore, onLoadMore, loadingMore, hasVisibleConversations }) {
       const [input, setInput] = useState('');
+      const chatDraftId = conversation && conversation.id;
+      useEffect(() => {
+        if (!chatDraftId) { setInput(''); return; }
+        const d = loadDraft('chat', chatDraftId);
+        setInput((d && d.html) || '');
+      }, [chatDraftId]);
       const [sending, setSending] = useState(false);
       const [chatFiles, setChatFiles] = useState([]);  // Array of { file, preview }
       const [editingMsgId, setEditingMsgId] = useState(null);
@@ -10721,6 +10775,7 @@
 
       const handleSend = async (e, overrideContent) => {
         if (e) e.preventDefault();
+        const zielId = conversation && conversation.id;
         const rawInput = typeof overrideContent === 'string' ? overrideContent : input;
         if (istComposerLeer(rawInput, chatFiles) || sending) return;
         setSending(true);
@@ -10752,6 +10807,7 @@
             setConversations(prev => updateConversationActivity(prev, sentMsg, { timeLabel: 'Gerade eben' }));
           }
           setInput('');
+          if (zielId) clearDraft('chat', zielId);
           clearChatFiles();
           setReplyingTo(null);
         } catch (err) {
@@ -10811,8 +10867,8 @@
 
       return React.createElement('div', { className: 'chat-panel' },
         React.createElement('div', { className: 'chat-header' },
-          onBack && React.createElement('button', { className: 'back-btn', onClick: onBack, 'aria-label': 'Chatliste öffnen', 'data-testid': 'chat-open-list', dangerouslySetInnerHTML: { __html: Icons.back } }),
-          isGroupChat ? React.createElement('div', null,
+          onBack && React.createElement('button', { type: 'button', className: 'back-btn', onClick: onBack, 'aria-label': '‹ Chats', 'data-testid': 'chat-back' }, '‹ Chats'),
+          isGroupChat ? React.createElement('div', { className: 'chat-header-person' },
             React.createElement('span', { className: 'chat-header-name' }, conversation.name || 'Gruppenchat'),
             // Feedback #3: Mitgliederzahl ist jetzt klickbar → Mitglieder ansehen & hinzufügen
             React.createElement('button', {
@@ -10821,14 +10877,14 @@
               onClick: () => setShowGroupMembers(true),
               title: 'Mitglieder ansehen & hinzufügen',
               'aria-label': 'Gruppenmitglieder verwalten',
-              style: { background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '11px', color: 'var(--accent)', fontWeight: '500', textDecoration: 'underline' }
+              style: { background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px', fontSize: '13px', color: 'var(--accent)', fontWeight: '500', textDecoration: 'underline', minHeight: '44px', display: 'inline-flex', alignItems: 'center' }
             }, (groupMemberIds.length || conversation.members?.length || 0) + ' Mitglieder · verwalten')
           ) : React.createElement(React.Fragment, null,
             React.createElement('div', { className: 'avatar-wrapper' },
               React.createElement(Avatar, { user: conversation.user || { display_name: 'Chat', avatar_color: '#757575' }, size: 32 }),
               onlineUsers && React.createElement('span', { className: 'avatar-status online-dot small' + (onlineUsers.has(Number(conversation.user?.id)) ? '' : ' offline') })
             ),
-            React.createElement('div', null,
+            React.createElement('div', { className: 'chat-header-person' },
               React.createElement('span', { className: 'chat-header-name' }, (conversation.user || {}).display_name || 'Chat'),
               onlineUsers && onlineUsers.has(Number(conversation.user?.id)) && React.createElement('div', { style: { fontSize: '11px', color: 'var(--success)', fontWeight: '500' } }, 'Online')
             )
@@ -10986,7 +11042,7 @@
           React.createElement('div', { style: { flex: 1, minWidth: 0 } },
             React.createElement(MentionTextarea, {
               value: input,
-              onChange: setInput,
+              onChange: (html) => { setInput(html); if (chatDraftId) saveDraft('chat', chatDraftId, { html: html }); },
               editorRef: chatInputRef,
               placeholder: 'Nachricht schreiben...',
               showToolbar: false,
@@ -12555,6 +12611,7 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.56.0', date: '06.10.2026', items: ['Neben dem Namen steht ‹ Chats oder ‹ Teams. Das Flugzeug zum Senden bleibt sichtbar, auch wenn das Feld noch leer ist.', 'In der Liste stehen Teams und Chats nur einmal. Darunter stehen Suche, Merkliste und Neu.', 'Ein angefangener Chat bleibt an diesem Gespräch. In der Liste steht dann Entwurf.', 'Ein zweiter Tipp auf ein Team klappt seine Kanäle wieder zu. Dabei wird kein Kanal geöffnet.'] },
       { v: '4.55.0', date: '06.10.2026', items: ['Team- und Kanalliste lassen sich im neuen Design einzeln einklappen. Auswahl und Entwürfe bleiben erhalten.', 'iPad-Hochformat: Teams und Chats bleiben über beschriftete Listenknöpfe erreichbar, auch ohne ausgewählten Chat.'] },
       { v: '4.54.0', date: '05.10.2026', items: ['Neues Design kann in den Einstellungen freiwillig ausprobiert und wieder ausgeschaltet werden.', 'Dateivorschau und Textschutz verwenden die vorbereiteten geprüften Bibliotheksstände.']},
       { v: '4.53.1', date: '04.10.2026', items: [
@@ -13344,6 +13401,26 @@
         onMouseLeave: () => setPaneHint(null), onBlur: () => setPaneHint(null)
       });
       const [designActionsOpen, setDesignActionsOpen] = useState(false);
+      const [accordionChannels, setAccordionChannels] = useState(null);
+      const accordionToken = useRef(0);
+      const [chatNeuWunsch, setChatNeuWunsch] = useState(0);
+      const [drawerLayout, setDrawerLayout] = useState(() => {
+        try { return window.matchMedia('(max-width:768px), (max-width:1024px) and (orientation:portrait)').matches; }
+        catch (e) { return false; }
+      });
+      useEffect(() => {
+        let mq;
+        try { mq = window.matchMedia('(max-width:768px), (max-width:1024px) and (orientation:portrait)'); }
+        catch (e) { return; }
+        const apply = () => setDrawerLayout(mq.matches);
+        apply();
+        if (mq.addEventListener) mq.addEventListener('change', apply);
+        else if (mq.addListener) mq.addListener(apply);
+        return () => {
+          if (mq.removeEventListener) mq.removeEventListener('change', apply);
+          else if (mq.removeListener) mq.removeListener(apply);
+        };
+      }, []);
       useEffect(() => window.KRSDesign.subscribe(value => { setDesignV2(value); setDesignActionsOpen(false); }), []);
       useEffect(() => {
         document.documentElement.classList.toggle('design-actions-open', designActionsOpen);
@@ -14795,14 +14872,35 @@
       const mobileListButton = (kind) => React.createElement('button', {
         type: 'button', className: 'mobile-menu-btn',
         'data-testid': kind === 'teams' ? 'teams-open-list' : 'chat-open-list',
-        'aria-label': kind === 'teams' ? 'Team- und Kanalliste öffnen' : 'Chatliste öffnen',
+        'aria-label': kind === 'teams' ? '‹ Teams' : '‹ Chats',
         'aria-expanded': mobileSidebarOpen,
         onClick: () => setMobileSidebarOpen(true),
-        style: { display: 'none', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', gap: '6px', fontSize: '14px', padding: '0 6px', position: 'relative' }
+        style: { display: 'none', background: 'none', border: 'none', cursor: 'pointer', color: '#172338', gap: '2px', fontSize: '15px', fontWeight: 600, padding: '0 8px', position: 'relative', flexShrink: 0, whiteSpace: 'nowrap' }
       },
-        React.createElement('span', { 'aria-hidden': 'true' }, designV2 ? '←' : '☰'),
-        React.createElement('span', null, kind === 'teams' ? 'Teams' : 'Chats'),
+        React.createElement('span', null, kind === 'teams' ? '‹ Teams' : '‹ Chats'),
         totalUnreadBadge > 0 && React.createElement('span', { className: 'nav-badge' }, totalUnreadBadge > 9 ? '9+' : totalUnreadBadge)
+      );
+      const phoneTools = designV2 && drawerLayout;
+      const listToolRow = (kind) => !phoneTools ? null : React.createElement('div', { className: 'list-tool-row', 'data-testid': 'list-tool-row' },
+        React.createElement('button', {
+          type: 'button',
+          'aria-label': 'Suche öffnen',
+          onClick: () => { setMobileSidebarOpen(false); setView('search'); }
+        }, 'Suche'),
+        kind === 'chat' && React.createElement('button', {
+          type: 'button',
+          'data-testid': window.__krsIsEmbedded ? 'drawer-nav-merkliste' : undefined,
+          'aria-label': window.__krsIsEmbedded ? 'Merkliste' : 'Merkliste öffnen',
+          onClick: () => { setView('saved'); setMobileSidebarOpen(false); }
+        }, 'Merkliste'),
+        React.createElement('button', {
+          type: 'button',
+          'aria-label': kind === 'teams' ? 'Neues Team erstellen' : 'Neuer Chat',
+          onClick: () => {
+            if (kind === 'teams') { setShowCreateTeam(true); setMobileSidebarOpen(false); }
+            else setChatNeuWunsch(function (n) { return n + 1; });
+          }
+        }, 'Neu')
       );
       const hubErreichbar = !!(window.__krsIsEmbedded || (window.KRS_HUB_URL && String(window.KRS_HUB_URL).trim()));
       const mobileTopNav = React.createElement('div', {
@@ -14890,7 +14988,7 @@
 
       const drawerNav = window.__krsIsEmbedded ? React.createElement('div', { className: 'drawer-nav', role: 'navigation', 'aria-label': 'Weitere Bereiche' },
         designV2 && React.createElement('div', { className: 'design-local-switch' }, ['teams', 'chat', 'search'].map(kind => React.createElement('button', { key: kind, 'data-icon': kind === 'teams' ? '▦' : kind === 'chat' ? '💬' : '⌕', title: kind === 'teams' ? 'Teams' : kind === 'chat' ? 'Chats' : 'Suche', 'aria-current': view === kind ? 'page' : undefined, onClick: () => navigateSection(kind) }, kind === 'teams' ? 'Teams' : kind === 'chat' ? 'Chats' : 'Suche'))),
-        React.createElement('button', {
+        !phoneTools && React.createElement('button', {
           className: 'wide' + (view === 'saved' ? ' active' : ''),
           'data-testid': 'drawer-nav-merkliste', title: 'Merkliste',
           onClick: () => { setView('saved'); setMobileSidebarOpen(false); }
@@ -14905,6 +15003,7 @@
         React.createElement('div', { className: 'sidebar-content sidebar-teams' + (designV2 && compactTeams ? ' design-pane-compact' : '') },
           paneToggle('teams'),
           drawerNav,
+          listToolRow('teams'),
           React.createElement('div', { className: 'sidebar-header', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
             React.createElement('h2', null, 'Teams'),
             React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
@@ -14936,25 +15035,45 @@
               const hiddenTeamsList = teams.filter(t => hiddenTeams.has(t.id));
               return React.createElement(React.Fragment, null,
                 visibleTeams.map(team => {
-                  const isExpanded = expandedTeamId === team.id && selectedTeam?.id === team.id;
+                  const groupOpen = drawerLayout && designV2
+                    ? expandedTeamId === team.id
+                    : expandedTeamId === team.id && selectedTeam?.id === team.id;
+                  const shownChannels = drawerLayout && designV2
+                    ? (expandedTeamId === team.id ? (accordionChannels || []) : [])
+                    : channels;
                   return React.createElement('div', { key: team.id, className: 'team-group' },
                   React.createElement('div', { className: 'team-item', 'data-testid': 'team-visible', title: team.name },
                     React.createElement('button', {
                       className: 'list-item' + (selectedTeam?.id === team.id ? ' active' : ''),
                       onClick: () => {
-                        // v4.29.0: nochmal auf das offene Team tippen klappt es zu.
-                        if (isExpanded && !designV2) { setExpandedTeamId(null); return; }
-                        if (designV2) { setCompactChannels(false); setExpandedTeamId(team.id); if (isExpanded) return; }
+                        if (drawerLayout && designV2) {
+                          if (expandedTeamId === team.id) { setExpandedTeamId(null); return; }
+                          setExpandedTeamId(team.id);
+                          setAccordionChannels(null);
+                          const token = ++accordionToken.current;
+                          Promise.resolve(dataService.getChannels(team.id)).then(function (list) {
+                            if (accordionToken.current !== token) return;
+                            setAccordionChannels(Array.isArray(list) ? list : []);
+                            setChannelTeamMap(function (prev) {
+                              const next = new Map(prev);
+                              (list || []).forEach(function (ch) { next.set(ch.id, team.id); });
+                              return next;
+                            });
+                          }).catch(function () {});
+                          return;
+                        }
+                        if (groupOpen && !designV2) { setExpandedTeamId(null); return; }
+                        if (designV2) { setCompactChannels(false); setExpandedTeamId(team.id); if (groupOpen) return; }
                         handleTeamSelect(team);
                       },
                       'aria-label': team.name, title: team.name,
                       ...hintProps(team.name, compactTeams),
                       'aria-current': selectedTeam?.id === team.id ? 'page' : undefined,
-                      'aria-expanded': isExpanded,
+                      'aria-expanded': groupOpen,
                       'data-testid': 'team-toggle',
                       style: { display: 'flex', gap: '8px', alignItems: 'center', width: '100%' }
                     },
-                      React.createElement('span', { className: 'team-expand-chevron', 'aria-hidden': 'true' }, isExpanded ? '▾' : '▸'),
+                      React.createElement('span', { className: 'team-expand-chevron', 'aria-hidden': 'true' }, groupOpen ? '▾' : '▸'),
                       React.createElement('div', { style: { width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: team.icon_color, borderRadius: 'var(--radius)', color: 'white', fontSize: '12px', fontWeight: '600' } }, team.icon_text),
                       React.createElement('span', { className: 'list-item-text' }, team.name),
                       // v4.19.0: sichtbarer Status — 🔕 neben stummgeschalteten Teams (immer sichtbar, nicht nur bei Hover)
@@ -14979,10 +15098,12 @@
                   // v4.29.0 — Kanäle des aufgeklappten Teams direkt darunter.
                   // Nur im Handy-Layout sichtbar (CSS `.team-children`), am
                   // Rechner steht weiterhin die eigene Kanal-Spalte daneben.
-                  isExpanded && React.createElement('div', { className: 'team-children', 'data-testid': 'team-children' },
-                    channels.length === 0
+                  groupOpen && React.createElement('div', { className: 'team-children', 'data-testid': 'team-children' },
+                    (drawerLayout && designV2 && accordionChannels === null)
+                      ? React.createElement('div', { className: 'team-children-empty' }, 'Kanäle werden geladen…')
+                      : shownChannels.length === 0
                       ? React.createElement('div', { className: 'team-children-empty' }, 'Noch keine Kanäle in diesem Team.')
-                      : channels.map(ch => {
+                      : shownChannels.map(ch => {
                           const unreadCount = unreadPostChannels.get(ch.id) || 0;
                           return React.createElement('button', {
                             key: ch.id,
@@ -15215,6 +15336,7 @@
         ),
         React.createElement('div', { className: 'sidebar-content' + (mobileSidebarOpen ? ' mobile-open' : ''), style: { borderRight: '1px solid var(--border)' } },
           drawerNav,
+          listToolRow('chat'),
           // v4.10.0: Gespeichert & gepinnt — eigener Abschnitt oben in der Chat-Spalte
           React.createElement('button', {
             className: 'saved-section-btn',
@@ -15240,7 +15362,9 @@
             setShowHiddenChats,
             onToggleHide: handleToggleConvHidden,
             onSearch: () => { setMobileSidebarOpen(false); setView('search'); },
-            onShowOnline: isAdminRole(user) ? () => setShowOnlinePanel(prev => !prev) : null
+            onShowOnline: isAdminRole(user) ? () => setShowOnlinePanel(prev => !prev) : null,
+            neuWunsch: chatNeuWunsch,
+            listeSichtbar: mobileSidebarOpen || !drawerLayout
           })
         ),
         React.createElement('div', { className: 'content' },

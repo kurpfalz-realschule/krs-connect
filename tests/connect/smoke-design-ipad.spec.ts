@@ -11,7 +11,7 @@ for (const embedded of [false,true]) for (const width of [768,810,834,1024]) {
     const app=embedded?page.frameLocator('iframe'):page;
     await expect(app.locator('html')).toHaveClass(/krs-design-v2/);
     await app.getByTestId('team-context-open').click();
-    await expect(app.getByRole('button',{name:'Liste schließen',exact:true})).toBeVisible();
+    await expect(app.getByRole('button',{name:'Liste schließen',exact:true})).toHaveCount(0);
     const drawer=app.locator('.team-drawer.mobile-open');
     await expect(drawer).toBeVisible();
     expect((await drawer.boundingBox())!.width).toBeGreaterThan(width-3);
@@ -21,11 +21,12 @@ for (const embedded of [false,true]) for (const width of [768,810,834,1024]) {
     const conversations=app.locator('.conversation-item');
     await expect(conversations.first()).toBeVisible();
     await conversations.first().click();
-    await app.getByTestId('chat-open-list').click();
+    await app.getByTestId('chat-back').click();
     await conversations.nth(1).click();
-    await expect(app.getByTestId('chat-open-list')).toBeVisible();
+    await expect(app.getByTestId('chat-back')).toBeVisible();
+    await expect(app.getByTestId('chat-back')).toContainText('Chats');
     if (width === 834) {
-      await app.getByTestId('chat-open-list').click();
+      await app.getByTestId('chat-back').click();
       await app.getByTestId('drawer-nav-teams').first().click();
       await page.setViewportSize({width:1366,height:834});
       await expect(app.getByRole('button',{name:'Teamliste ausklappen',exact:true})).toBeVisible();

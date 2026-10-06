@@ -35,6 +35,12 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
     {
+      name: 'connect-webkit',
+      testDir: './tests/connect',
+      testMatch: /smoke-design-webkit\.spec\.ts/,
+      use: { ...devices['Desktop Safari'] },
+    },
+    {
       name: 'hub',
       testDir: './tests/hub',
       use: { ...devices['Desktop Chrome'] },

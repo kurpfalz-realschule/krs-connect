@@ -59,6 +59,33 @@ test.describe('Kanal-Akkordeon im Handy-Schubfach (Demo)', () => {
   });
 });
 
+test.describe('Neues Design: zweiter Tipp klappt nur die Gruppe zu', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('Kanal bleibt, Ungelesen-Zeile bleibt, aria-expanded wird false', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('krs_design_v2', '1');
+      localStorage.setItem('krs_onboarding_done', '1');
+    });
+    await page.goto('/index.html?forceMode=demo&forceUser=la');
+    await page.waitForFunction(() => typeof (window as any).KRS_VERSION === 'string');
+    await expect(page.locator('.content-header h1').first()).toBeVisible();
+    const titelVorher = await page.locator('.content-header h1').first().textContent();
+    await page.getByTestId('teams-open-list').click();
+    const team = page.locator('[data-testid="team-visible"] [data-testid="team-toggle"]').nth(1);
+    await expect(team).toBeVisible();
+    const badgeVorher = await team.locator('.unread-badge').count();
+    await team.click();
+    await expect(team).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator('[data-testid="team-child-channel"]').first()).toBeVisible();
+    await team.click();
+    await expect(team).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.locator('[data-testid="team-children"]')).toHaveCount(0);
+    expect(await team.locator('.unread-badge').count()).toBe(badgeVorher);
+    expect(await page.locator('.content-header h1').first().textContent()).toBe(titelVorher);
+  });
+});
+
 test.describe('Am Rechner bleibt die Kanal-Spalte (Demo)', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 

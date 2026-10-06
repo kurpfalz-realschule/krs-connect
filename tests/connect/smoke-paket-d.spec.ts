@@ -113,7 +113,7 @@ test.describe('D2 Kenntnisnahme (Demo)', () => {
     await openConnect(page, { user: 'la' });
     await waitForAppReady(page);
     const r = await page.evaluate(() => (window as any).KRS_VERSION);
-    expect(r).toBe('4.55.0'); // Version bei jedem Release-Bump hier mitziehen
+    expect(r).toBe('4.56.0'); // Version bei jedem Release-Bump hier mitziehen
     await expect(page.locator('[data-testid="ack-bar"]')).toHaveCount(0);
     // Auch der Live-Build hat das Flag aus
     const flag = await page.evaluate(() => document.documentElement.outerHTML.includes('ACK: false,'));

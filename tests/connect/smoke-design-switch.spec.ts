@@ -12,7 +12,14 @@ for (const width of [320, 390, 834, 1440]) {
     if (width <= 1024) {
       await page.getByTestId('teams-open-list').click();
       await expect(page.locator('.team-drawer.mobile-open')).toBeVisible();
-      await page.getByRole('button', { name: 'Liste schließen', exact: true }).click();
+      await expect(page.getByRole('button', { name: 'Liste schließen', exact: true })).toHaveCount(0);
+      const kind = page.locator('[data-testid="team-child-channel"]');
+      if (!(await kind.first().isVisible().catch(() => false))) {
+        await page.locator('[data-testid="team-toggle"]').first().click();
+      }
+      if (await kind.first().isVisible().catch(() => false)) await kind.first().click();
+      else await page.locator('.sidebar-channels .list-item').first().click();
+      await expect(page.locator('.team-drawer.mobile-open')).toHaveCount(0);
       await page.getByRole('button', { name: 'Team-Bereiche öffnen', exact: true }).click();
       await page.getByTestId('team-tab-links').click();
       await expect(page.getByTestId('teams-open-list')).toBeVisible();

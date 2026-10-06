@@ -47,9 +47,11 @@ jobs:
       - name: Install dependencies
         run: npm ci || npm install
       - name: Install Playwright Browsers
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium webkit
       - name: Run Connect smoke tests
         run: npx playwright test --project=connect
+      - name: Run WebKit icon check
+        run: npx playwright test --project=connect-webkit
         env:
           CI: true
       - name: Upload Playwright Report on failure
