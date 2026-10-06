@@ -11185,13 +11185,13 @@
             React.createElement('div', null, 'Noch keine Nachrichten. Schreib die erste!')
           ),
           // v4.53.1: nur auf Touch-Geräten sichtbar (CSS), bis zum ersten Antippen.
-          messages.length > 0 && (!tapHintDone || tapHintKeep === tapHintKey) && React.createElement('div', {
+          messages.length > 0 && (!tapHintDone || tapHintKeep === tapHintKey) && React.createElement('li', {
               className: 'chat-tap-hint', 'data-testid': 'chat-tap-hint',
               style: tapHintDone ? { visibility: 'hidden' } : undefined,
               'aria-hidden': tapHintDone ? 'true' : undefined
             },
             'Tippe eine Nachricht an, um zu reagieren, zu antworten oder sie zu bearbeiten.'),
-          React.createElement('div', { ref: messagesEndRef })
+          React.createElement('li', { ref: messagesEndRef, 'aria-hidden': 'true' })
         ),
         chatFiles.length > 0 && React.createElement('div', { style: { padding: '8px 16px', borderTop: '1px solid var(--border)', background: 'var(--bg-secondary)', display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' } },
           chatFiles.map((sf, idx) =>
