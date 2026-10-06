@@ -2059,6 +2059,9 @@
     @media (max-width: 360px) {
       html.krs-design-v2 .list-tool-row button { font-size: 14px; }
     }
+    @media (max-width: 767px) {
+      html.krs-keyboard-open .sidebar { display: none !important; }
+    }
   </style>
   <script src="krs-design.js"></script>
 </head>
@@ -7782,7 +7785,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.56.0';
+    window.KRS_VERSION = '4.57.0';
     // PERF-01: Cold-Boot-Zähler für Hub keep-alive Abnahme (Connect→Hub-Start→Connect → bleibt 1)
     window.__krsConnectBootCount = (window.__krsConnectBootCount || 0) + 1;
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
@@ -7832,6 +7835,159 @@
     try {
       if (window.__krsIsEmbedded) document.documentElement.classList.add('krs-embedded');
     } catch (e) {}
+
+    // Bildschirmtastatur: nur das oberste Fenster setzt krs-keyboard-open.
+    // Eingebettet geht eine Meldung an die Hub-Origin, ohne Text und ohne Namen.
+    (function () {
+      var requestId = '';
+      try {
+        if (window.crypto && typeof crypto.randomUUID === 'function') requestId = crypto.randomUUID();
+      } catch (e) {}
+      if (!/^[a-f0-9-]{4,80}$/.test(requestId)) {
+        requestId = '';
+        var bytes = new Uint8Array(16);
+        if (window.crypto && crypto.getRandomValues) crypto.getRandomValues(bytes);
+        else for (var i = 0; i < 16; i++) bytes[i] = Math.floor(Math.random() * 256);
+        for (var j = 0; j < 16; j++) requestId += ('0' + bytes[j].toString(16)).slice(-2);
+      }
+      var editorAktiv = false;
+      var rast = false;
+      var versteckt = false;
+      var vvStart = window.visualViewport;
+      var basis = vvStart && typeof vvStart.height === 'number' ? vvStart.height : window.innerHeight;
+      var hideTimer = 0;
+      var showTimer = 0;
+      var graceTimer = 0;
+      function allein() {
+        return window.parent === window || !window.__krsIsEmbedded;
+      }
+      function hubOrigin() {
+        if (window.parent === window || !window.__krsIsEmbedded) return '';
+        var raw = window.KRS_HUB_URL;
+        if (!raw || !String(raw).trim()) return '';
+        try { return new URL(raw, location.href).origin; } catch (e) { return ''; }
+      }
+      function dateiFeld(el) {
+        return !!(el && el.tagName === 'INPUT' && String(el.getAttribute('type') || '').toLowerCase() === 'file');
+      }
+      function schreibfeld(el) {
+        if (!el || dateiFeld(el)) return false;
+        if (el.isContentEditable) return true;
+        return el.tagName === 'TEXTAREA';
+      }
+      function zone(el) {
+        return !!(el && el.closest && el.closest('.chat-input-bar, .thread-footer, .composer-actionbar, .emoji-picker, .emoji-picker-overlay'));
+      }
+      function leistenFrei() {
+        var liste = document.querySelectorAll('.app-layout > .sidebar');
+        for (var i = 0; i < liste.length; i++) liste[i].removeAttribute('aria-hidden');
+      }
+      function klasseWeg() {
+        document.documentElement.classList.remove('krs-keyboard-open');
+        leistenFrei();
+      }
+      function basisNachziehen() {
+        var vv = window.visualViewport;
+        var scale = vv && typeof vv.scale === 'number' ? vv.scale : 1;
+        if (scale <= 1) basis = vv && typeof vv.height === 'number' ? vv.height : window.innerHeight;
+      }
+      function leisteSofort() {
+        window.clearTimeout(hideTimer);
+        window.clearTimeout(showTimer);
+        rast = false;
+        versteckt = false;
+        klasseWeg();
+        basisNachziehen();
+      }
+      function planen(weg) {
+        if (weg) {
+          window.clearTimeout(showTimer);
+          window.clearTimeout(hideTimer);
+          hideTimer = window.setTimeout(function () {
+            versteckt = true;
+            document.documentElement.classList.add('krs-keyboard-open');
+            if (window.matchMedia('(max-width: 767px)').matches) {
+              var liste = document.querySelectorAll('.app-layout > .sidebar');
+              for (var i = 0; i < liste.length; i++) liste[i].setAttribute('aria-hidden', 'true');
+            }
+          }, 100);
+        } else {
+          window.clearTimeout(hideTimer);
+          window.clearTimeout(showTimer);
+          showTimer = window.setTimeout(function () {
+            versteckt = false;
+            klasseWeg();
+          }, 80);
+        }
+      }
+      function anwenden() {
+        if (!allein()) return;
+        if (document.visibilityState === 'hidden') { leisteSofort(); return; }
+        var vv = window.visualViewport;
+        var scale = vv && typeof vv.scale === 'number' ? vv.scale : 1;
+        var hoehe = vv && typeof vv.height === 'number' ? vv.height : window.innerHeight;
+        var offen = false;
+        if (rast) offen = true;
+        else if (scale <= 1 && basis - hoehe >= 150) offen = true;
+        if (!rast && !versteckt && scale <= 1 && !(basis - hoehe >= 150)) basis = hoehe;
+        var schmal = window.matchMedia('(max-width: 767px)').matches;
+        var weg = editorAktiv && offen && scale <= 1 && schmal;
+        if (versteckt) {
+          var offset = basis - hoehe;
+          if (!editorAktiv || scale > 1 || (!rast && offset < 100) || !schmal) weg = false;
+          else weg = true;
+        }
+        planen(weg);
+      }
+      function melden(an) {
+        editorAktiv = !!an;
+        if (allein()) {
+          window.__krsEditorActive = editorAktiv;
+          anwenden();
+          return;
+        }
+        var origin = hubOrigin();
+        if (!origin) return;
+        try {
+          window.parent.postMessage({ type: 'KRS_EDITOR_ACTIVE', version: 1, requestId: requestId, active: editorAktiv }, origin);
+        } catch (e) {}
+      }
+      function hoeheAus(ev) {
+        if (!ev) return 0;
+        if (typeof ev.keyboardHeight === 'number') return ev.keyboardHeight;
+        var d = ev.detail;
+        if (d && typeof d.keyboardHeight === 'number') return d.keyboardHeight;
+        return 0;
+      }
+      document.addEventListener('focusin', function (ev) {
+        var t = ev.target;
+        if (dateiFeld(t)) { window.clearTimeout(graceTimer); melden(false); return; }
+        if (schreibfeld(t) && zone(t)) { window.clearTimeout(graceTimer); melden(true); }
+      });
+      document.addEventListener('focusout', function () {
+        window.clearTimeout(graceTimer);
+        graceTimer = window.setTimeout(function () {
+          var a = document.activeElement;
+          if (dateiFeld(a)) { melden(false); return; }
+          if (zone(a)) return;
+          melden(false);
+        }, 200);
+      });
+      if (allein()) {
+        window.addEventListener('krs-keyboard-will-show', function (ev) {
+          if (hoeheAus(ev) < 150) return;
+          rast = true;
+          anwenden();
+        });
+        window.addEventListener('krs-keyboard-will-hide', leisteSofort);
+        window.addEventListener('krs-keyboard-did-hide', leisteSofort);
+        window.addEventListener('orientationchange', leisteSofort);
+        document.addEventListener('visibilitychange', function () {
+          if (document.visibilityState === 'hidden') leisteSofort();
+        });
+        if (window.visualViewport) window.visualViewport.addEventListener('resize', anwenden);
+      }
+    })();
     // Recovery-Fallback: Reset-Link öffnet die App mit #...type=recovery im Hash.
     // Früh (synchron) merken, bevor supabase-js den Hash beim Init bereinigt.
     try {
@@ -12611,6 +12767,7 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.57.0', date: '06.10.2026', items: ['Auf dem Handy verschwindet die untere Leiste nur, wenn die Bildschirmtastatur offen ist. ‹ Chats bleibt sichtbar.'] },
       { v: '4.56.0', date: '06.10.2026', items: ['Neben dem Namen steht ‹ Chats oder ‹ Teams. Das Flugzeug zum Senden bleibt sichtbar, auch wenn das Feld noch leer ist.', 'In der Liste stehen Teams und Chats nur einmal. Darunter stehen Suche, Merkliste und Neu.', 'Ein angefangener Chat bleibt an diesem Gespräch. In der Liste steht dann Entwurf.', 'Ein zweiter Tipp auf ein Team klappt seine Kanäle wieder zu. Dabei wird kein Kanal geöffnet.'] },
       { v: '4.55.0', date: '06.10.2026', items: ['Team- und Kanalliste lassen sich im neuen Design einzeln einklappen. Auswahl und Entwürfe bleiben erhalten.', 'iPad-Hochformat: Teams und Chats bleiben über beschriftete Listenknöpfe erreichbar, auch ohne ausgewählten Chat.'] },
       { v: '4.54.0', date: '05.10.2026', items: ['Neues Design kann in den Einstellungen freiwillig ausprobiert und wieder ausgeschaltet werden.', 'Dateivorschau und Textschutz verwenden die vorbereiteten geprüften Bibliotheksstände.']},
