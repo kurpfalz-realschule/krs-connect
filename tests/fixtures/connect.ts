@@ -18,6 +18,9 @@ export async function openConnect(page: Page, opts: { user?: string } = {}) {
   // alle Klicks abfangen. Eigene Onboarding-Tests entfernen den Key gezielt.
   await page.addInitScript(() => {
     try { localStorage.setItem('krs_onboarding_done', '1'); } catch (e) {}
+    // 4.59.0: Neues Design ist Standard. Bestehende Smokes prüfen das vertraute
+    // Design; Design-Tests setzen 'krs_design_v2' vorher selbst.
+    try { if (localStorage.getItem('krs_design_v2') === null) localStorage.setItem('krs_design_v2', '0'); } catch (e) {}
   });
   await page.goto(`${CONNECT_PATH}?${params.toString()}`);
 

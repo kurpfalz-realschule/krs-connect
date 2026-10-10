@@ -4,7 +4,10 @@
   const key = 'krs_design_v2';
   const listeners = new Set();
   let enabled = false, embedded = false, parentOrigin = null;
-  try { enabled = localStorage.getItem(key) === '1'; } catch (_) {}
+  // Seit 10.10.2026 ist das neue Design Standard. Wer es in den Einstellungen
+  // ausgeschaltet hat ('0'), behält das vertraute Design.
+  enabled = true;
+  try { enabled = localStorage.getItem(key) !== '0'; } catch (_) {}
   const requestId = Array.from(crypto.getRandomValues(new Uint32Array(4)), n => n.toString(16)).join('-');
   const allowed = new Set([location.origin, 'https://kurpfalz-realschule.github.io']);
   try { ((window.T && window.T('hub.allowedOrigins', [])) || []).forEach(o => { if (typeof o === 'string') allowed.add(o); }); } catch (_) {}

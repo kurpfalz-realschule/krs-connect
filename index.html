@@ -7804,7 +7804,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.58.0';
+    window.KRS_VERSION = '4.59.0';
     // PERF-01: Cold-Boot-Zähler für Hub keep-alive Abnahme (Connect→Hub-Start→Connect → bleibt 1)
     window.__krsConnectBootCount = (window.__krsConnectBootCount || 0) + 1;
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
@@ -12794,6 +12794,11 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.59.0', date: '10.10.2026', items: [
+        'Das neue Design ist für alle eingeschaltet. In den Einstellungen lässt es sich zurückschalten.',
+        'Das Feedback-Board ist im neuen Design erreichbar: über „Feedback“ in der Liste bzw. „Feedback-Board“ über Teams.',
+        'Die Meldung „Benachrichtigungen aktiviert“ erscheint nicht mehr bei jedem Start. Sind Benachrichtigungen aus, erinnert Connect höchstens alle 14 Tage daran.'
+      ]},
       { v: '4.58.0', date: '06.10.2026', items: [
         'Vorleseprogramme bleiben im Lesemodus. Teams, Kanäle, Chats und der Nachrichtenverlauf sind Listen.',
         'Die Überschriften heißen Teams, Kanäle und Chats. Der offene Chat ist eine eigene Überschrift.',
@@ -13438,6 +13443,22 @@
         showSettings, setShowSettings, showAccountMenu, setShowAccountMenu, savedPosts, setSavedPosts };
     }
 
+    // 4.59.0: Erinnerung an Benachrichtigungen höchstens alle 14 Tage.
+    // Vorher kam in der iOS-App bei JEDEM Start „Benachrichtigungen aktiviert!“
+    // oben über der Leiste: Der Shim in krs-native-client.js meldet beim Start
+    // 'default', die automatische Abfrage lief, APNs sagte „erlaubt“ → Toast.
+    const NOTIF_REMINDER_KEY = 'krs_notif_reminder_at';
+    const NOTIF_REMINDER_MS = 14 * 24 * 60 * 60 * 1000;
+    function notifReminderDue() {
+      try {
+        const t = Number(localStorage.getItem(NOTIF_REMINDER_KEY) || 0);
+        return !t || (Date.now() - t) >= NOTIF_REMINDER_MS;
+      } catch (e) { return false; }
+    }
+    function notifReminderMark() {
+      try { localStorage.setItem(NOTIF_REMINDER_KEY, String(Date.now())); } catch (e) {}
+    }
+
     function useNotifications() {
       const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
         try { return localStorage.getItem('krs-notifications') !== 'off'; } catch(e) { return true; }
@@ -13446,9 +13467,12 @@
         return typeof Notification !== 'undefined' ? Notification.permission : 'denied';
       });
 
-      const requestNotifications = useCallback(async () => {
+      // opts.auto = automatischer Aufruf beim Start: kein Erfolgs-Toast,
+      // Hinweis bei fehlender Erlaubnis nur, wenn die 14 Tage um sind.
+      const requestNotifications = useCallback(async (opts) => {
+        const auto = !!(opts && opts.auto === true);
         if (typeof Notification === 'undefined') {
-          showToast('Browser unterstützt keine Benachrichtigungen', 'error');
+          if (!auto) showToast('Browser unterstützt keine Benachrichtigungen', 'error');
           return;
         }
         const perm = await Notification.requestPermission();
@@ -13456,9 +13480,12 @@
         if (perm === 'granted') {
           setNotificationsEnabled(true);
           try { localStorage.setItem('krs-notifications', 'on'); } catch(e) {}
-          showToast('Benachrichtigungen aktiviert!', 'success');
-        } else {
+          if (!auto) showToast('Benachrichtigungen aktiviert!', 'success');
+        } else if (!auto) {
           showToast('Benachrichtigungen wurden blockiert. Bitte in den Browser-Einstellungen erlauben.', 'error');
+        } else if (notifReminderDue()) {
+          notifReminderMark();
+          showToast('Benachrichtigungen sind aus. Erlauben kannst du sie in den Einstellungen des Geräts oder Browsers.', 'info', { label: 'OK', onClick: () => {} });
         }
       }, []);
 
@@ -14595,16 +14622,31 @@
         melden({ count: 0, list: [] });
       }, [unreadChatCount, unreadPostChannels]);
 
-      // Auto-request notification permission on first load
+      // Benachrichtigungen beim Start (4.59.0):
+      // - erlaubt → nichts anzeigen
+      // - iOS-App, Stand unbekannt → still nachfragen (System-Dialog kommt nur
+      //   beim allerersten Mal; registriert nebenbei das Push-Token neu)
+      // - Browser, noch nie gefragt → Browser-Dialog höchstens alle 14 Tage
+      // - Browser, blockiert → Hinweis höchstens alle 14 Tage
+      // - in den Einstellungen selbst ausgeschaltet → nie erinnern
       useEffect(() => {
         if (!user) return;
-        if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
-          // Warte kurz, dann frage nach Permission
-          const timer = setTimeout(() => {
-            if (notificationsEnabled) requestNotifications();
-          }, 3000);
-          return () => clearTimeout(timer);
-        }
+        const timer = setTimeout(() => {
+          if (!notificationsEnabled || typeof Notification === 'undefined') return;
+          const perm = Notification.permission;
+          if (perm === 'granted') return;
+          const nativeApp = document.documentElement.hasAttribute('data-krs-native');
+          if (perm === 'default') {
+            if (nativeApp) { requestNotifications({ auto: true }); return; }
+            if (notifReminderDue()) { notifReminderMark(); requestNotifications({ auto: true }); }
+            return;
+          }
+          if (perm === 'denied' && notifReminderDue()) {
+            notifReminderMark();
+            showToast('Benachrichtigungen sind im Browser blockiert. Erlauben kannst du sie in den Website-Einstellungen.', 'info', { label: 'OK', onClick: () => {} });
+          }
+        }, 3000);
+        return () => clearTimeout(timer);
       }, [user]);
 
       // Demo-Modus: Simulierte Nachrichten für Unread-Badges
@@ -15084,6 +15126,12 @@
         }, 'Merkliste'),
         React.createElement('button', {
           type: 'button',
+          'data-testid': 'list-tool-feedback',
+          'aria-label': 'Feedback-Board öffnen',
+          onClick: () => { setMobileSidebarOpen(false); openModal('feedbackBoard'); }
+        }, 'Feedback'),
+        React.createElement('button', {
+          type: 'button',
           'aria-label': kind === 'teams' ? 'Neues Team erstellen' : 'Neuer Chat',
           onClick: () => {
             if (kind === 'teams') { setShowCreateTeam(true); setMobileSidebarOpen(false); }
@@ -15181,7 +15229,14 @@
           className: 'wide' + (view === 'saved' ? ' active' : ''),
           'data-testid': 'drawer-nav-merkliste', title: 'Merkliste',
           onClick: () => { setView('saved'); setMobileSidebarOpen(false); }
-        }, krsEmoji('\uD83D\uDD16'), ' Merkliste')
+        }, krsEmoji('\uD83D\uDD16'), ' Merkliste'),
+        // 4.59.0: Im neuen Design ist die alte Leiste mit 📣 ausgeblendet.
+        designV2 && React.createElement('button', {
+          className: 'wide',
+          'data-testid': 'design-feedback-board', title: 'Feedback-Board',
+          'aria-label': 'Feedback-Board öffnen',
+          onClick: () => { setMobileSidebarOpen(false); openModal('feedbackBoard'); }
+        }, krsEmoji('\uD83D\uDCE3'), ' Feedback-Board')
       ) : null;
 
       // === TEAMS VIEW ===
