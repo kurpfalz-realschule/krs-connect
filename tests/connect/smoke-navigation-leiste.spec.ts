@@ -28,6 +28,8 @@ test.describe('S19: Navigation-Leiste mobil', () => {
     await page.addInitScript(() => {
       (window as any).__krsIsEmbedded = true;
       try { localStorage.setItem('krs_onboarding_done', '1'); } catch (e) {}
+      // Seit 4.59.0 ist das neue Design Standard; dieser Test prüft die Leiste im vertrauten Design.
+      try { localStorage.setItem('krs_design_v2', '0'); } catch (e) {}
     });
     const params = new URLSearchParams({ forceMode: 'demo', forceUser: 'la' });
     await page.goto(`/index.html?${params.toString()}`);

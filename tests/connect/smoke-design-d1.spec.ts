@@ -7,7 +7,8 @@ for (const embedded of [false, true]) {
   for (const width of [320, 390, 768]) {
     test(`D1 ${embedded ? 'iframe' : 'standalone'} ${width}: lists, tabs and return paths`, async ({ page }) => {
       await page.setViewportSize({ width, height: 844 });
-      await page.addInitScript(() => localStorage.setItem('krs_onboarding_done', '1'));
+      // Seit 4.59.0 ist das neue Design Standard; D1 prüft das vertraute Design.
+      await page.addInitScript(() => { localStorage.setItem('krs_onboarding_done', '1'); localStorage.setItem('krs_design_v2', '0'); });
       if (process.env.D1_SOURCE) {
         const body = readFileSync(process.env.D1_SOURCE, 'utf8');
         await page.route('**/index.html?*', route => route.fulfill({ contentType: 'text/html', body }));

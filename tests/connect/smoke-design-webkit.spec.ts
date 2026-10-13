@@ -82,7 +82,8 @@ for (const width of [320, 390]) {
 
 test('Entwurf bleibt an diesem Gespräch', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.addInitScript(() => localStorage.setItem('krs_onboarding_done', '1'));
+  // Seit 4.59.0 ist das neue Design Standard; dieser Test prüft das vertraute Design.
+  await page.addInitScript(() => { localStorage.setItem('krs_onboarding_done', '1'); localStorage.setItem('krs_design_v2', '0'); });
   await page.goto('/index.html?forceMode=demo&forceUser=la');
   await page.waitForFunction(() => typeof (window as any).KRS_VERSION === 'string');
   await page.getByTestId('drawer-nav-chat').click();
