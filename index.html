@@ -2558,8 +2558,11 @@
   <script>
     (function () {
       // ---- CSS einmalig injizieren ----
+      // v4.59.1: z-index 9999 statt 9000. Das Feedback-Board liegt auf 9998; mit 9000
+      // öffnete sich der Screenshot aus dem Board unsichtbar dahinter. Toasts (10000)
+      // bleiben darüber, der Download-Dialog (10050) auch.
       var css = '' +
-        '.fv-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px}' +
+        '.fv-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px}' +
         '.fv-box{position:relative;background:var(--bg,#fff);color:var(--text-primary,#1a1a1a);width:min(980px,96vw);height:min(90vh,920px);border-radius:12px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.45)}' +
         '.fv-head{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;grid-template-areas:"back title tools close";align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border,#e2e4e8)}' +
         '.fv-title{grid-area:title;font-weight:600;font-size:14px;display:flex;align-items:center;min-width:0}' +
@@ -7804,7 +7807,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.59.0';
+    window.KRS_VERSION = '4.59.1';
     // PERF-01: Cold-Boot-Zähler für Hub keep-alive Abnahme (Connect→Hub-Start→Connect → bleibt 1)
     window.__krsConnectBootCount = (window.__krsConnectBootCount || 0) + 1;
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
@@ -12794,6 +12797,9 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.59.1', date: '13.10.2026', items: [
+        'Feedback-Board: Ein Klick auf einen Screenshot öffnet ihn wieder groß im Vordergrund statt unsichtbar hinter dem Board.'
+      ] },
       { v: '4.59.0', date: '10.10.2026', items: [
         'Das neue Design ist für alle eingeschaltet. In den Einstellungen lässt es sich zurückschalten.',
         'Das Feedback-Board ist im neuen Design erreichbar: über „Feedback“ in der Liste bzw. „Feedback-Board“ über Teams.',
