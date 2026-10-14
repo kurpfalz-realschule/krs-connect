@@ -97,6 +97,17 @@ jobs:
           else
             echo "::error::krs-native-client.js fehlt im Repo — native iOS-Funktionen würden ausfallen." && exit 1
           fi
+          # Versionierte Vorschau-Bibliotheken müssen mit ausgeliefert werden.
+          # cp -R vendor _site/ steht oben. Fehlt eine Pflichtdatei, bricht der Build ab.
+          for f in \
+            vendor/pdfjs-6.3.289/pdf.min.mjs \
+            vendor/pdfjs-6.3.289/pdf.worker.min.mjs \
+            vendor/xlsx-0.20.3.full.min.js
+          do
+            if [ ! -s "$f" ]; then
+              echo "::error::Pflicht-Vendor fehlt oder ist leer: $f" && exit 1
+            fi
+          done
           # B6 (4.42.0): kleine version.json für den Update-Check (statt 800 KB index.html)
           v=$(grep -oE "KRS_VERSION = '[^']+'" index.html | head -1 | sed -E "s/.*'([^']+)'/\1/")
           [ -n "$v" ] || { echo "::error::KRS_VERSION nicht gefunden"; exit 1; }
