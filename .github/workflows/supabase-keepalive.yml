@@ -23,6 +23,6 @@ jobs:
             echo "::error::Anon-Key oder Supabase-URL nicht gefunden (tenant.js/index.html) - Keep-Alive kann nicht pingen. Quelle der Credentials pruefen."
             exit 1
           fi
-          CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "apikey: $ANON" "$URL/rest/v1/users?select=id&limit=1")
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "apikey: $ANON" "$URL/auth/v1/health")
           echo "Keep-Alive-Ping: HTTP $CODE ($URL)"
           [ "$CODE" = "200" ] || { echo "::warning::Supabase nicht erreichbar (HTTP $CODE) - evtl. pausiert!"; exit 1; }
