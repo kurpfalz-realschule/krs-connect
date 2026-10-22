@@ -2042,7 +2042,7 @@
   </style>
   <!-- Native iOS-Huelle (krs-ios). Im Browser wirkungslos. -->
   <script src="krs-native-client.js"></script>
-  <link rel="stylesheet" href="krs-design.css">
+  <link rel="stylesheet" href="krs-design.css?v=4.59.2">
   <style>
     .conversation-preview.is-draft { color: #174796; font-weight: 700; }
     @media (max-width: 768px), (max-width: 1024px) and (orientation: portrait) {
@@ -2077,7 +2077,7 @@
       html.krs-keyboard-open .sidebar { display: none !important; }
     }
   </style>
-  <script src="krs-design.js"></script>
+  <script src="krs-design.js?v=4.59.2"></script>
 </head>
 <body>
   <div id="app"><div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#5A5F72"><div style="width:40px;height:40px;border:3px solid #E2E4E8;border-top-color:#5B7B94;border-radius:50%;animation:spin 0.8s linear infinite"></div><div>Wird geladen...</div><style>@keyframes spin{to{transform:rotate(360deg)}}</style></div></div>
@@ -7807,7 +7807,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.59.1';
+    window.KRS_VERSION = '4.59.2';
     // PERF-01: Cold-Boot-Zähler für Hub keep-alive Abnahme (Connect→Hub-Start→Connect → bleibt 1)
     window.__krsConnectBootCount = (window.__krsConnectBootCount || 0) + 1;
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
@@ -12435,8 +12435,8 @@
       return React.createElement('div', { className: 'feedback-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': '📋 Feedback-Board', onClick: (ev) => { if (ev.target === ev.currentTarget && !replyEdit) onClose(); } },
         React.createElement('div', { className: 'feedback-modal fb-board-modal' },
           React.createElement('div', { className: 'feedback-title', style: { justifyContent: 'space-between' } },
-            React.createElement('span', null, '📋 Feedback-Board ', React.createElement('span', { style: { fontSize: '11px', fontWeight: 800, background: 'var(--accent-orange,#f59e0b)', color: '#fff', padding: '2px 7px', borderRadius: '10px', verticalAlign: 'middle' } }, 'BETA')),
-            React.createElement('button', { onClick: onClose, 'aria-label': canGoBack ? 'Zurück' : 'Schließen', title: canGoBack ? 'Zurück' : 'Schließen', style: { background: 'none', border: 'none', fontSize: canGoBack ? '14px' : '20px', fontWeight: canGoBack ? 600 : 400, cursor: 'pointer', color: canGoBack ? 'var(--accent)' : 'var(--text-muted)', whiteSpace: 'nowrap' } }, canGoBack ? '← Zurück' : '✕')
+            React.createElement('span', null, '📋 Feedback-Board ', React.createElement('span', { className: 'fb-beta', style: { fontSize: '11px', fontWeight: 800, background: 'var(--accent-orange,#f59e0b)', color: '#fff', padding: '2px 7px', borderRadius: '10px', verticalAlign: 'middle' } }, 'BETA')),
+            React.createElement('button', { className: 'fb-board-close', onClick: onClose, 'aria-label': canGoBack ? 'Zurück' : 'Schließen', title: canGoBack ? 'Zurück' : 'Schließen', style: { background: 'none', border: 'none', fontSize: canGoBack ? '14px' : '20px', fontWeight: canGoBack ? 600 : 400, cursor: 'pointer', color: canGoBack ? 'var(--accent)' : 'var(--text-muted)', whiteSpace: 'nowrap' } }, canGoBack ? '← Zurück' : '✕')
           ),
           React.createElement('div', { className: 'fb-board-toolbar' },
             ['alle', 'offen', 'in_arbeit', 'erledigt'].map(f =>
@@ -12447,6 +12447,7 @@
               }, (f === 'alle' ? 'Alle' : STATUS_LABEL[f]) + (f === 'alle' ? ' (' + (items ? items.length : 0) + ')' : ' (' + countBy(f) + ')'))
             ),
             onNewFeedback && React.createElement('button', {
+              className: 'fb-board-new',
               onClick: () => onNewFeedback(),
               style: { marginLeft: 'auto', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--radius)', padding: '6px 12px', minHeight: '36px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }
             }, '＋ Feedback schreiben')
@@ -12797,6 +12798,9 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.59.2', date: '22.10.2026', items: [
+        'Feedback-Board und „Feedback geben“ sehen jetzt auch im neuen Design wie das neue Design aus: klare Kopfzeile, Filter als Reiter, Rückmeldungen als Liste. Auf dem Handy füllt das Board den ganzen Bildschirm.'
+      ] },
       { v: '4.59.1', date: '13.10.2026', items: [
         'Feedback-Board: Ein Klick auf einen Screenshot öffnet ihn wieder groß im Vordergrund statt unsichtbar hinter dem Board.'
       ] },

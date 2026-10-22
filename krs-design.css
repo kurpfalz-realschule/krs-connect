@@ -128,3 +128,53 @@ html.krs-design-v2 .user-menu-item { min-height:44px; }
 @media(max-width:768px), (max-width:1024px) and (orientation:portrait) { html.krs-design-v2 .design-chat-view > .mobile-view-header.design-empty-chat { display:flex; } }
 
 html.krs-design-v2 .design-context-trigger { display:inline-flex; align-items:center; min-height:44px; padding:4px 8px; border:1px solid var(--border); border-radius:8px; background:var(--bg-secondary); color:var(--text-secondary); font:inherit; font-size:14px; cursor:pointer; }
+
+/* v4.59.2 — Feedback-Board und Feedback-Formular im neuen Design.
+   Vorher wechselten dort nur die Farben mit; Rahmen, Kopf, Filter und Karten
+   blieben im vertrauten Design. Inline-Stile im Board brauchen !important. */
+html.krs-design-v2 .feedback-overlay { background:rgba(23,35,56,.45); }
+html.krs-design-v2 .feedback-modal { background:#fff; color:var(--text-primary); border:1px solid var(--border); border-radius:12px; box-shadow:0 8px 32px #17233833; }
+html.krs-design-v2 .feedback-title { font-size:20px; color:var(--text-primary); }
+html.krs-design-v2 .feedback-cat { border-radius:8px; background:#fff; color:var(--text-primary); }
+html.krs-design-v2 .feedback-cat.active { background:#e7efff; color:#174796; border-color:#9db6e6; font-weight:600; box-shadow:inset 0 -3px #245bc4; }
+html.krs-design-v2 .feedback-label { font-size:14px; }
+html.krs-design-v2 .feedback-textarea { font-size:16px; border-radius:8px; background:#fff; }
+html.krs-design-v2 .feedback-btn { min-height:44px; border-radius:8px; }
+html.krs-design-v2 .feedback-btn-cancel { background:#fff; border:1px solid var(--border); }
+html.krs-design-v2 .feedback-btn-cancel:hover { background:#f5f7fb; }
+
+html.krs-design-v2 .fb-board-modal { width:760px; max-width:calc(100vw - 32px); max-height:calc(100vh - 48px); max-height:calc(100dvh - 48px); padding:0; overflow:hidden; }
+html.krs-design-v2 .fb-board-modal > .feedback-title { flex:0 0 auto; margin:0; min-height:68px; padding:8px 12px 8px 24px; border-bottom:1px solid var(--border); background:#fff; }
+html.krs-design-v2 .fb-board-close { display:inline-flex; align-items:center; justify-content:center; min-width:44px; min-height:44px; border-radius:8px; color:var(--text-primary)!important; }
+html.krs-design-v2 .fb-board-close:hover { background:#f5f7fb!important; }
+html.krs-design-v2 .fb-beta { background:#fff0cc!important; color:#813500!important; border:1px solid #ce9b36; border-radius:6px!important; }
+html.krs-design-v2 .fb-board-toolbar { flex:0 0 auto; margin:0; padding:12px 24px; border-bottom:1px solid var(--border); background:#f5f7fb; }
+html.krs-design-v2 .fb-board-filter { min-height:44px; padding:8px 12px; border-radius:8px; border:1px solid var(--border); background:#fff; color:var(--text-primary); font-size:14px; }
+html.krs-design-v2 .fb-board-filter.active { background:#e7efff; color:#174796; border-color:#9db6e6; font-weight:600; box-shadow:inset 0 -3px #245bc4; }
+html.krs-design-v2 .fb-board-new { min-height:44px!important; padding:8px 16px!important; border-radius:8px!important; font-size:14px!important; background:#245bc4!important; }
+html.krs-design-v2 .fb-board-new:hover { background:#174796!important; }
+html.krs-design-v2 .fb-board-list { flex:1 1 auto; min-height:0; gap:0; padding:0 24px 16px; background:#fff; }
+html.krs-design-v2 .fb-item { border:0; border-bottom:1px solid var(--border); border-radius:0; background:#fff; padding:16px 0; }
+html.krs-design-v2 .fb-item:last-child { border-bottom:0; }
+html.krs-design-v2 .fb-item-name { font-size:16px; }
+html.krs-design-v2 .fb-item-msg { font-size:16px; line-height:1.5; }
+html.krs-design-v2 .fb-item-meta { font-size:13px; }
+html.krs-design-v2 .fb-cat-chip { font-size:12px; border-radius:6px; background:#f5f7fb; border:1px solid var(--border); color:var(--text-secondary); }
+html.krs-design-v2 .fb-badge { font-size:12px; border-radius:6px; padding:3px 8px; }
+html.krs-design-v2 .fb-reply { background:#f5f7fb; border-left-color:#245bc4; border-radius:0 8px 8px 0; }
+html.krs-design-v2 .fb-reply-btn { border-radius:8px; border-color:#9db6e6; background:#e7efff; color:#174796; font-size:14px; }
+html.krs-design-v2 .fb-reply-btn:hover { border-color:#245bc4; }
+html.krs-design-v2 .fb-status-select { border-radius:8px; background:#fff; font-size:14px; }
+html.krs-design-v2 .fb-reply-textarea { border-radius:8px; background:#fff; }
+html.krs-design-v2 .fb-empty { padding:48px 12px; }
+@media(max-width:768px), (max-width:1024px) and (orientation:portrait) {
+ html.krs-design-v2 .fb-board-modal { width:100vw; max-width:none; height:100vh; height:100dvh; max-height:none; border:0; border-radius:0; }
+ html.krs-design-v2 .fb-board-modal > .feedback-title { min-height:56px; padding:max(6px,env(safe-area-inset-top)) max(8px,env(safe-area-inset-right)) 6px max(16px,env(safe-area-inset-left)); font-size:18px; }
+ html.krs-design-v2 .fb-board-toolbar { padding:8px 16px; }
+ html.krs-design-v2 .fb-board-list { padding:0 16px max(16px,env(safe-area-inset-bottom)); }
+}
+@media(max-width:600px) {
+ html.krs-design-v2 .fb-board-toolbar { display:grid; grid-template-columns:1fr 1fr; }
+ html.krs-design-v2 .fb-board-new { grid-column:1 / -1; margin-left:0!important; }
+ html.krs-design-v2 .fb-item-admin > * { flex:1 1 auto; }
+}
