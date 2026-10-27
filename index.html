@@ -2042,7 +2042,7 @@
   </style>
   <!-- Native iOS-Huelle (krs-ios). Im Browser wirkungslos. -->
   <script src="krs-native-client.js"></script>
-  <link rel="stylesheet" href="krs-design.css?v=4.59.2">
+  <link rel="stylesheet" href="krs-design.css?v=4.59.4">
   <style>
     .conversation-preview.is-draft { color: #174796; font-weight: 700; }
     @media (max-width: 768px), (max-width: 1024px) and (orientation: portrait) {
@@ -2077,7 +2077,7 @@
       html.krs-keyboard-open .sidebar { display: none !important; }
     }
   </style>
-  <script src="krs-design.js?v=4.59.2"></script>
+  <script src="krs-design.js?v=4.59.4"></script>
 </head>
 <body>
   <div id="app"><div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#5A5F72"><div style="width:40px;height:40px;border:3px solid #E2E4E8;border-top-color:#5B7B94;border-radius:50%;animation:spin 0.8s linear infinite"></div><div>Wird geladen...</div><style>@keyframes spin{to{transform:rotate(360deg)}}</style></div></div>
@@ -7807,7 +7807,7 @@
     // WICHTIG: Bei JEDEM Release erhöhen — der Update-Checker (UpdateBanner)
     // vergleicht diese laufende Version mit der live ausgelieferten index.html
     // und blendet bei Unterschied einen „Neue Version verfügbar"-Hinweis ein.
-    window.KRS_VERSION = '4.59.2';
+    window.KRS_VERSION = '4.59.4';
     // PERF-01: Cold-Boot-Zähler für Hub keep-alive Abnahme (Connect→Hub-Start→Connect → bleibt 1)
     window.__krsConnectBootCount = (window.__krsConnectBootCount || 0) + 1;
     // v4.14.0: Ziel-URL des Hub-Links, als Konstante exponiert — Test-Hook, damit
@@ -12798,6 +12798,9 @@
     // ── Changelog ("Was ist neu") ────────────────────────────────────
     // Neueste Version zuerst. Wird im Einstellungen-Panel angezeigt.
     const KRS_CHANGELOG = [
+      { v: '4.59.4', date: '27.10.2026', items: [
+        'Die App spricht mit dem Server der Schule. Einmal neu laden. Ein Kalender-Abo bitte neu einrichten, der Link steht im Hub.'
+      ] },
       { v: '4.59.2', date: '22.10.2026', items: [
         'Feedback-Board und „Feedback geben“ sehen jetzt auch im neuen Design wie das neue Design aus: klare Kopfzeile, Filter als Reiter, Rückmeldungen als Liste. Auf dem Handy füllt das Board den ganzen Bildschirm.'
       ] },

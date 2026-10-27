@@ -33,9 +33,9 @@
     },
 
     supabase: {
-      url:     'https://ooejsfixxiuobrpqgfqm.supabase.co',
+      url:     'https://krs-api.linkup.school',
       anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9vZWpzZml4eGl1b2JycHFnZnFtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwMjQ5MDYsImV4cCI6MjA4OTYwMDkwNn0.GbAv-sB4B8nNE3IPfiYIjbkMKs0Aq03c_-TUcmFY_5s',
-      region:  'EU (Frankfurt)',  // erscheint im Datenschutzhinweis
+      region:  'Deutschland (Nürnberg)',  // erscheint im Datenschutzhinweis
     },
 
     links: {
@@ -153,6 +153,17 @@
   // Fokus). Der Framing-Schutz oben (window.top-Prüfung, TENANT-SPEC 3.8) bleibt die
   // wirksame Schutzmaßnahme gegen Clickjacking und ist von diesem Befund unabhängig.
 
+  // Nur die Cloud-Form oder dieser eine eigene Host. Kein freier Host, kein Pfad.
+  function erlaubteApiUrl(url) {
+    var u;
+    try { u = new URL(url); } catch (e) { return false; }
+    if (u.protocol !== 'https:') return false;
+    if (u.username || u.password || u.port || u.search || u.hash) return false;
+    if (u.pathname !== '/' && u.pathname !== '') return false;
+    if (/^[a-z0-9.-]+\.supabase\.co$/i.test(u.hostname)) return true;
+    return u.hostname === 'krs-api.linkup.school';
+  }
+
   // ── 3.6 validateTenant() — Sicherheits-Härtung, läuft vor createClient ──
   // Rückgabe: { ok: true } oder { ok: false, reason: '<generischer Text ohne Interna>' }
   window.validateTenantConfig = function () {
@@ -165,7 +176,7 @@
     const anonKey = T.supabase && T.supabase.anonKey;
     const emailDomains = (T.schule && T.schule.emailDomains) || [];
 
-    if (!url || !/^https:\/\/[a-z0-9.-]+\.supabase\.co$/i.test(url)) {
+    if (!url || !erlaubteApiUrl(url)) {
       return fail('supabase.url fehlt oder ungültig (kein Pfad-Anteil erlaubt)');
     }
     if (!anonKey) return fail('supabase.anonKey fehlt');

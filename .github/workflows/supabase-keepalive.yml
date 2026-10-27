@@ -7,7 +7,7 @@ permissions:
   contents: read
 jobs:
   ping:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
@@ -18,7 +18,10 @@ jobs:
           # damit der Ping auch nach weiteren Umbauten robust bleibt.
           FILES="tenant.js index.html"
           ANON=$(grep -hoE 'eyJ[A-Za-z0-9_.-]+|sb_publishable_[A-Za-z0-9_]+' $FILES 2>/dev/null | head -1)
-          URL=$(grep -hoE 'https://[a-z0-9]+\.supabase\.co' $FILES 2>/dev/null | head -1)
+          URL=$(grep -hoE 'https://krs-api\.linkup\.school' $FILES 2>/dev/null | head -1)
+          if [ -z "$URL" ]; then
+            URL=$(grep -hoE 'https://[a-z0-9]+\.supabase\.co' $FILES 2>/dev/null | head -1)
+          fi
           if [ -z "$ANON" ] || [ -z "$URL" ]; then
             echo "::error::Anon-Key oder Supabase-URL nicht gefunden (tenant.js/index.html) - Keep-Alive kann nicht pingen. Quelle der Credentials pruefen."
             exit 1

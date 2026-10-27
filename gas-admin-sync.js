@@ -23,7 +23,7 @@ var SUPABASE_KEY = _props.getProperty('SUPABASE_KEY') || '';
 // === AUTO-SETUP: Beim ersten Start Secrets automatisch speichern ===
 function _autoSetupSecrets() {
   if (SUPABASE_URL && SUPABASE_KEY) return; // Bereits konfiguriert
-  var defaultUrl = 'https://ooejsfixxiuobrpqgfqm.supabase.co';
+  var defaultUrl = 'https://krs-api.linkup.school';
   var defaultKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9vZWpzZml4eGl1b2JycHFnZnFtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwMjQ5MDYsImV4cCI6MjA4OTYwMDkwNn0.GbAv-sB4B8nNE3IPfiYIjbkMKs0Aq03c_-TUcmFY_5s';
   _props.setProperties({ 'SUPABASE_URL': defaultUrl, 'SUPABASE_KEY': defaultKey });
   SUPABASE_URL = defaultUrl;
@@ -421,7 +421,7 @@ function showHelp() {
     '<h3>Feedback:</h3>' +
     '<p>Klicke "Feedback-Sheet einrichten" im Menu, um das Feedback-Tab anzulegen.</p>' +
     '<p>Nach dem Web-App-Deploy empfaengt doPost() automatisch Feedback von der App.</p>' +
-    '<p><small>Supabase: ooejsfixxiuobrpqgfqm.supabase.co</small></p>'
+    '<p><small>Supabase: krs-api.linkup.school</small></p>'
   ).setWidth(400).setHeight(400);
   SpreadsheetApp.getUi().showModalDialog(html, 'Hilfe');
 }
